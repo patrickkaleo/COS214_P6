@@ -1,40 +1,21 @@
-# Prerequisites
+# Prerequisites & Compilers
 *.d
-
-# Compiled Object files
 *.slo
 *.lo
 *.o
 *.obj
-
-# Precompiled Headers
 *.gch
 *.pch
-
-# Linker files
 *.ilk
-
-# Debugger Files
 *.pdb
-
-# Compiled Dynamic libraries
 *.so
 *.dylib
 *.dll
 *.so.*
-
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
 *.lai
 *.la
 *.a
 *.lib
-
-# Executables
 *.exe
 *.out
 *.app
@@ -43,8 +24,7 @@
 build/
 Build/
 build-*/
-
-# CMake generated files
+cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
@@ -52,19 +32,48 @@ Makefile
 install_manifest.txt
 compile_commands.json
 
-# Temporary files
+# IDEs and Editors
+.vscode/
+.vs/
+.idea/
+*.user
+*.suo
+*.sln.docstates
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Office and Document Locks
+~$*
+~*.tmp
 *.tmp
-*.log
+
+# Visual Paradigm & Modeling Backups
+*.vpp.bak*
+*.bak*
 *.bak
+*.vpp.lock
+*.lck
+.*.lck
+hs_err_pid*.log
+vp.log
+
+# Temporary and Log files
+*.log
 *.swp
 *.txt
+!brainstorm.txt
+!ActivityDiagram1_GenericExecution.txt
 
-# vcpkg
+# Package & Debug
 vcpkg_installed/
-
-# debug information files
 *.dwo
-
-# test output & cache
 Testing/
 .cache/
