@@ -77,3 +77,4 @@ vcpkg_installed/
 *.dwo
 Testing/
 .cache/
+.~lock.*
