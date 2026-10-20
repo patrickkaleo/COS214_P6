@@ -9,7 +9,6 @@
 #include "ParticipantDirectory.h"
 #include "Participant.h"
 #include "InstanceData.h"
-#include "Task.h"
 
 DataRuleRouting::DataRuleRouting()
     : field(""), valueToRole(), fallbackRole("") {
