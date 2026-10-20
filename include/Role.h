@@ -1,13 +1,28 @@
 #ifndef ROLE_H
 #define ROLE_H
 
-class Role {
+/**
+ * @file Role.h
+ * @brief Value object representing an organizational qualification or role.
+ * @author Enock Nyamweya
+ * @version 1.0
+ */
 
+#include <string>
+
+class Role {
 private:
-	string name;
+    std::string name;
 
 public:
-	strng getName();
+    Role();
+    explicit Role(const std::string& roleName);
+
+    std::string getName() const;
+    void setName(const std::string& roleName);
+
+    bool operator==(const Role& other) const;
+    bool operator!=(const Role& other) const;
 };
 
-#endif
+#endif // ROLE_H
