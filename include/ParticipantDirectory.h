@@ -1,15 +1,35 @@
 #ifndef PARTICIPANTDIRECTORY_H
 #define PARTICIPANTDIRECTORY_H
 
-class ParticipantDirectory {
+/**
+ * @file ParticipantDirectory.h
+ * @brief Roster managing organizational participants and role-based query services.
+ * @author Enock Nyamweya
+ * @version 1.0
+ */
 
+#include <string>
+#include <vector>
+
+class Participant;
+
+class ParticipantDirectory {
 private:
-	vector<Participants*> participants;
+    std::vector<Participant*> participants; ///< Owned participants roster.
 
 public:
-	vector<Participant*> withRole(string role);
+    ParticipantDirectory();
+    ~ParticipantDirectory();
 
-	Participant* findById(string id);
+    // Prevent accidental copying to enforce strict single ownership of participant memory
+    ParticipantDirectory(const ParticipantDirectory&) = delete;
+    ParticipantDirectory& operator=(const ParticipantDirectory&) = delete;
+
+    void addParticipant(Participant* p);
+    std::vector<Participant*> withRole(const std::string& roleName) const;
+    Participant* findById(const std::string& id) const;
+    size_t size() const;
+    void clear();
 };
 
-#endif
+#endif // PARTICIPANTDIRECTORY_H

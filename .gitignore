@@ -68,8 +68,6 @@ vp.log
 *.log
 *.swp
 *.txt
-!brainstorm.txt
-!ActivityDiagram1_GenericExecution.txt
 
 # Package & Debug
 vcpkg_installed/
