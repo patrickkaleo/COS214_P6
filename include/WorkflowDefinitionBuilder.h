@@ -2,11 +2,12 @@
 #define WORKFLOWDEFINITIONBUILDER_H
 
 #include <string>
+#include <vector>
+#include <memory>
 using namespace std;
 
-#include "WorkflowDefintion.h"
 #include "RoutingStrategy.h"
-#include "WorkItem.h"
+#include "WorkflowDefintion.h"
 
 /**
  * @class WorkflowDefinitionBuilder
@@ -14,22 +15,31 @@ using namespace std;
  */
 class WorkflowDefinitionBuilder
 {
-
 protected:
-	WorkflowDefinition *definition;
+	WorkflowDefinition* definition;
 
 public:
+	WorkflowDefinitionBuilder() = delete;
+	WorkflowDefinitionBuilder(const WorkflowDefinitionBuilder&) = delete;
+	WorkflowDefinitionBuilder& operator=(const WorkflowDefinitionBuilder&) = delete;
+
 	/**
-	 * @brief reset name and version of workflow definition
+	 * @brief reset id, name and version of workflow definition
+	 * @param id new id
 	 * @param name new name
 	 * @param version new version
 	 */
-	void reset(string name, int version);
+	virtual void reset(string id, string name, int version) = 0;
 
 	/**
 	 * @brief
 	 */
-	virtual void buildstructure() = 0;
+	virtual void buildStructure() = 0;
+
+	/**
+	 * @brief
+	 */
+	virtual void buildExtras() = 0;
 
 	/**
 	 * @brief build the relevant dependency rules for the work definition
@@ -45,13 +55,13 @@ public:
 	/**
 	 * @brief build integrations for the workflow definitions
 	 */
-	virtual void buildIntergrations() = 0;
+	virtual void buildIntegrations() = 0;
 
 	/**
 	 * @brief return a workflow definition
 	 * @return WorkflowDefinition*
 	 */
-	WorkflowDefinition *getResult();
+	WorkflowDefinition* getResult();
 
 protected:
 	/**
@@ -64,41 +74,41 @@ protected:
 
 	/**
 	 * @brief add task item to the workflow definition @see WorkItem
-	 * @param id string id of the work item  
-	 * @param name string name of the work item 
+	 * @param id string id of the work item
+	 * @param name string name of the work item
 	 * @param parentid string id of the parent containing this work item
 	 */
 	void addTask(string id, string name, string parentId);
 
 	/**
 	 * @brief add a dependency rule to the workflow definition
-	 * @param fromId string id of where the dependency rule is from 
+	 * @param fromId string id of where the dependency rule is from
 	 * @param toId string id of the dependency rule if going to
-	 * @param outcome string description of the evaluation of the dependenc yrule for a given workflow instance 
+	 * @param outcome string description of the evaluation of the dependenc yrule for a given workflow instance
 	 */
 	void addDependency(string fromId, string toId, string outcome);
 
-	/**
-	 * @brief Build the sequence for execution of the workflow 
-	 * @param ids vector list of ids that have to be executed in the given order 
-	 */
-	void addSequence(vector<string> ids);
+	// /**
+	//  * @brief Build the sequence for execution of the workflow
+	//  * @param ids vector list of ids that have to be executed in the given order
+	//  */
+	// void addSequence(vector<string> ids);
 
 	/**
-	 * @brief set routing strategy for a specific work item 
-	 * @param itemId string id of the work item for which this routing strategy applies 
+	 * @brief set routing strategy for a specific work item
+	 * @param itemId string id of the work item for which this routing strategy applies
 	 * @param strategy RoutingStrategy to be attached to the workitem
 	 */
-	void setRouting(string itemId, RoutingStrategy *strategy);
+	void setRouting(string itemId, RoutingStrategy* strategy);
 
 	/**
-	 * @brief add a service to a workitem 
+	 * @brief add a service to a workitem
 	 * @param itemID WorkItem where the service is to be added
-	 * @param serviceName string name of a service to be added  
+	 * @param serviceName string name of a service to be added
 	 */
 	void setService(string itemId, string serviceName);
 
-	/** 
+	/**
 	 * @brief is this work items to be checkpointed or not?
 	 * @param itemId id of the item to be checkpoint
 	 */
@@ -106,8 +116,8 @@ protected:
 
 	/**
 	 * @brief set the priority of a work item
-	 * @param itemId string id of the work item that is being given a priority 
-	 * @param level int level of the priority 
+	 * @param itemId string id of the work item that is being given a priority
+	 * @param level int level of the priority
 	 */
 	void addPriority(string itemId, int level);
 

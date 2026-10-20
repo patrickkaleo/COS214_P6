@@ -11,7 +11,7 @@ public:
 	 * @brief use workflow definition builder to build a workflow defitinition
 	 * @param WorkflowDefinitionBuildr&
 	 */
-	WorkflowDefinition *construct(WorkflowDefinitionBuilder &b);
+	WorkflowDefinition* construct(WorkflowDefinitionBuilder& b);
 };
 
 #endif

@@ -5,8 +5,9 @@
 #include <vector>
 using namespace std;
 
-#include "SubProcess.h"
 #include "DependencyRule.h"
+#include "SubProcess.h"
+#include "RoutingStrategy.h"
 
 /**
  * @class WorkflowDefition
@@ -14,64 +15,93 @@ using namespace std;
  */
 class WorkflowDefinition
 {
-
 private:
-	string definitonId;
-	vector<string> sequence;
+	string id;
 	string name;
 	int version;
-	SubProcess *rootProcess;
-	vector<DependencyRule *> dependencies;
+	SubProcess* root;
+	vector<DependencyRule> rules;
 
 public:
 	/**
-	 * @brief constructor 
+	 * @brief constructor
+	 * @param id id of workflow defintion
 	 * @param name name of workflow defintion
-	 * @param id of workflow defintion
+	 * @param version version of workflow defintion
 	 */
-	WorkflowDefinition(string name , int id);
-	
+	WorkflowDefinition(string id, string name, int version);
+	~WorkflowDefinition();
+
+	WorkflowDefinition(const WorkflowDefinition&) = delete;
+	WorkflowDefinition& operator=(const WorkflowDefinition&) = delete;
+
 	/**
-	 * @brief return the root Work item / subProcess
-	 * @return SubProcess* 
+	 * @brief return id of the workflow definition
+	 * @return string
 	 */
-	const SubProcess *getRoot();
-	
+	string getId();
+
 	/**
-	 * @brief return the dependency rules for a given workflow definition
-	 * @return vector<DependencyRule*>
+	 * @brief set id of the workflow definition
+	 * @param id new id
 	 */
-	const vector<DependencyRule*> getRules();
-	
+	void setId(string id);
+
+	/**
+	 * @brief return name of the workflow definition
+	 * @return string
+	 */
+	string getName();
+
+	/**
+	 * @brief set name of the workflow definition
+	 * @param name new name
+	 */
+	void setName(string name);
+
 	/**
 	 * @brief return version of the workflowDefinition
 	 * @return int
 	 */
 	int getVersion();
-	
+
 	/**
-	 * @brief start the execution of the tasks in the work flow defition
+	 * @brief set version of the workflow definition
+	 * @param version new version
+	 */
+	void setVersion(int version);
+
+	/**
+	 * @brief return the root Work item / subProcess
 	 * @return SubProcess*
 	 */
-	SubProcess *instantiateTree();
-	
+	SubProcess* getRoot();
+
 	/**
-	 * @brief set root process 
-	 * @param sp subprocess to be added 
+	 * @brief set root process
+	 * @param root subprocess to be added
 	 */
-	void setRoot(SubProcess *sp);
-	
+	void setRoot(SubProcess* root);
+
+	/**
+	 * @brief return the dependency rules for a given workflow definition
+	 * @return vector<DependencyRule>&
+	 */
+	vector<DependencyRule>& getRules();
+
 	/**
 	 * @brief add a dependency rule to the workflow definition
-	 * @param dependency
+	 * @param fromId string id of where the dependency rule is from
+	 * @param toId string id of the dependency rule if going to
+	 * @param outcome string description of the evaluation of the dependenc yrule for a given workflow instance
 	 */
-	void addDendency(DependencyRule *dependency);
-	
+	void addRule(string fromId, string toId, string outcome);
+
 	/**
-	 * @brief set the seuence of excution for the workflow 
-	 * @param ids sequence of ids detailing the order of execution for the workflow definition
+	 * @brief clone and return root process for an instance 
+	 * @return SubProcess*
 	 */
-	void setSequence(vector<string> ids) ;
+	SubProcess* instantiateTree();
 };
 
 #endif
