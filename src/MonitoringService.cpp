@@ -62,12 +62,12 @@ double MonitoringService::getFailureRate() const {
 }
 
 void MonitoringService::printDashboard() const {
-    std::cout << "===== WORKFLOW ENGINE TELEMETRY DASHBOARD =====" << std::endl;
-    std::cout << "Total Events Processed: " << totalEventsProcessed << std::endl;
-    std::cout << "Active Workflows:       " << activeInstances.size() << std::endl;
-    std::cout << "Completed Workflows:    " << completedInstances.size() << std::endl;
-    std::cout << "Failure / Reject Rate:  " << std::fixed << std::setprecision(2) << getFailureRate() << "%" << std::endl;
-    std::cout << "----- Event Distribution -----" << std::endl;
+    std::cout << "Monitoring Dashboard Metrics:\n";
+    std::cout << "  Total Events:      " << totalEventsProcessed << "\n";
+    std::cout << "  Active Workflows:  " << activeInstances.size() << "\n";
+    std::cout << "  Completed:         " << completedInstances.size() << "\n";
+    std::cout << "  Failure Rate:      " << std::fixed << std::setprecision(2) << getFailureRate() << "%\n";
+    std::cout << "  Event Breakdown:\n";
 
     const EventType allTypes[] = {
         EventType::AVAILABLE,
@@ -82,10 +82,9 @@ void MonitoringService::printDashboard() const {
     };
 
     for (EventType t : allTypes) {
-        std::cout << "  " << std::left << std::setw(20) << eventTypeToString(t) 
-                  << ": " << getCountForType(t) << std::endl;
+        std::cout << "    " << std::left << std::setw(20) << eventTypeToString(t) 
+                  << ": " << getCountForType(t) << "\n";
     }
-    std::cout << "===============================================" << std::endl;
 }
 
 void MonitoringService::resetMetrics() {

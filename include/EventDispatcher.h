@@ -1,7 +1,8 @@
 /**
  * @file EventDispatcher.h
  * @brief Concrete Subject class managing observer registrations and event propagation.
- * @details Conforms to the GoF Observer pattern (Subject role) as specified in Section 3.8.
+ * @details Conforms to both the GoF Observer pattern (Subject role, Section 3.8) and
+ *          the GoF Singleton pattern (Creational category, Chapter 28 of course notes).
  * @version 1.0
  */
 
@@ -15,24 +16,42 @@
 
 /**
  * @class EventDispatcher
- * @brief Subject in the GoF Observer pattern responsible for publishing workflow events to listeners.
- * @details Maintains a collection of registered WorkflowEventListener instances and notifies them
- *          synchronously when lifecycle events occur. Does not take ownership of listener lifetimes.
+ * @brief Singleton Subject in the GoF Observer pattern responsible for publishing workflow events to listeners.
+ * @details Implements Meyers' Singleton (C++11 thread-safe, stack-allocated, zero memory leaks).
+ *          Maintains a collection of registered WorkflowEventListener instances and notifies them
+ *          synchronously when lifecycle events occur.
  */
 class EventDispatcher {
 private:
     std::vector<WorkflowEventListener*> listeners; /**< Collection of registered observer pointers. */
 
-public:
     /**
-     * @brief Default constructor initializing an empty listener collection.
+     * @brief Private default constructor to enforce the Singleton pattern.
      */
     EventDispatcher();
+
+public:
+    /**
+     * @brief Deleted copy constructor to prevent cloning the Singleton instance.
+     */
+    EventDispatcher(const EventDispatcher&) = delete;
+
+    /**
+     * @brief Deleted copy assignment operator to prevent assignment of the Singleton.
+     */
+    EventDispatcher& operator=(const EventDispatcher&) = delete;
 
     /**
      * @brief Virtual destructor ensuring clean cleanup of the dispatcher.
      */
     virtual ~EventDispatcher();
+
+    /**
+     * @brief Global static access point for the unique EventDispatcher Singleton instance.
+     * @details Implemented as a Meyers' Singleton (C++11 guaranteed thread-safe static initialization).
+     * @return EventDispatcher& Reference to the unique singleton instance.
+     */
+    static EventDispatcher& getInstance();
 
     /**
      * @brief Subscribes an observer to receive all workflow events.

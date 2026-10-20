@@ -1,6 +1,6 @@
 /**
  * @file EventDispatcher.cpp
- * @brief Implementation of the EventDispatcher Subject class for the Observer pattern.
+ * @brief Implementation of the EventDispatcher Singleton Subject class.
  * @version 1.0
  */
 
@@ -12,6 +12,12 @@ EventDispatcher::EventDispatcher() {
 
 EventDispatcher::~EventDispatcher() {
     listeners.clear();
+}
+
+EventDispatcher& EventDispatcher::getInstance() {
+    // C++11 thread-safe Meyers' Singleton
+    static EventDispatcher instance;
+    return instance;
 }
 
 void EventDispatcher::attachListener(WorkflowEventListener* listener) {

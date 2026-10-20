@@ -1,115 +1,159 @@
 /**
  * @file main.cpp
- * @brief Demonstration driver for the TIVIDY Event & Notification Subsystem (Observer Pattern).
- * @details Conforms to COS 214 Project requirements, testing the EventDispatcher, NotificationService,
- *          AuditLogger, and MonitoringService across diverse workflow event scenarios.
+ * @brief Unit test suite for the Observer and Singleton subsystems.
  * @version 1.0
  */
 
 #include <iostream>
-#include <memory>
+#include <cassert>
 #include "EventDispatcher.h"
 #include "NotificationService.h"
 #include "AuditLogger.h"
 #include "MonitoringService.h"
 
-int main() {
-    std::cout << "===========================================================" << std::endl;
-    std::cout << "  TIVIDY WORKFLOW MANAGEMENT SYSTEM - OBSERVER SUBSYSTEM  " << std::endl;
-    std::cout << "===========================================================\n" << std::endl;
+void testSingletonInstance() {
+    EventDispatcher& d1 = EventDispatcher::getInstance();
+    EventDispatcher& d2 = EventDispatcher::getInstance();
+    assert(&d1 == &d2);
+    std::cout << "[PASS] testSingletonInstance\n";
+}
 
-    // 1. Initialize Subject (EventDispatcher)
-    EventDispatcher dispatcher;
+void testObserverRegistrationAndNotification() {
+    EventDispatcher& dispatcher = EventDispatcher::getInstance();
+    dispatcher.clearListeners();
 
-    // 2. Initialize Concrete Observers
-    NotificationService notifier("ConsoleAlerts", true);
-    AuditLogger auditor(false); // Do not echo each log line immediately; will dump audit trail at end
+    NotificationService notifier("TestChannel", false);
+    AuditLogger auditor(false);
     MonitoringService monitor;
 
-    // 3. Register Observers with Subject
-    std::cout << ">>> Registering Observers (NotificationService, AuditLogger, MonitoringService)..." << std::endl;
     dispatcher.attachListener(&notifier);
     dispatcher.attachListener(&auditor);
     dispatcher.attachListener(&monitor);
-    std::cout << "Active listeners attached: " << dispatcher.getListenerCount() << "\n" << std::endl;
 
-    // 4. Simulate Workflow Instance WF-101 Execution
-    std::cout << ">>> [Scenario 1] Executing Workflow WF-101 (Standard Process with Escalation)..." << std::endl;
-    
-    // Step 1: Document Ingestion
+    assert(dispatcher.getListenerCount() == 3);
+
+    // Dispatch test events
     dispatcher.notifyListeners(WorkflowEvent(
-        EventType::AVAILABLE, "WF-101", "STEP-01", "Document Intake"
+        EventType::AVAILABLE, "WF-001", "TASK-1", "Verification"
+    ));
+    dispatcher.notifyListeners(WorkflowEvent(
+        EventType::STARTED, "WF-001", "TASK-1", "Verification"
+    ));
+    dispatcher.notifyListeners(WorkflowEvent(
+        EventType::COMPLETED, "WF-001", "TASK-1", "Verification", "Verified"
     ));
 
-    dispatcher.notifyListeners(WorkflowEvent(
-        EventType::ASSIGNED, "WF-101", "STEP-01", "Document Intake", "Assigned to Agent_Smith"
-    ));
+    assert(notifier.getNotificationCount() == 3);
+    assert(auditor.getEntryCount() == 3);
+    assert(monitor.getTotalEvents() == 3);
+    assert(monitor.getCountForType(EventType::COMPLETED) == 1);
+
+    dispatcher.clearListeners();
+    std::cout << "[PASS] testObserverRegistrationAndNotification\n";
+}
+
+void testDynamicDetach() {
+    EventDispatcher& dispatcher = EventDispatcher::getInstance();
+    dispatcher.clearListeners();
+
+    NotificationService notifier("TestChannel", false);
+    AuditLogger auditor(false);
+
+    dispatcher.attachListener(&notifier);
+    dispatcher.attachListener(&auditor);
+    assert(dispatcher.getListenerCount() == 2);
 
     dispatcher.notifyListeners(WorkflowEvent(
-        EventType::STARTED, "WF-101", "STEP-01", "Document Intake"
+        EventType::STARTED, "WF-002", "TASK-A", "Step A"
     ));
+    assert(notifier.getNotificationCount() == 1);
+    assert(auditor.getEntryCount() == 1);
 
-    dispatcher.notifyListeners(WorkflowEvent(
-        EventType::COMPLETED, "WF-101", "STEP-01", "Document Intake", "Payload verified successfully"
-    ));
-
-    // Step 2: Policy Compliance Check with Escalation
-    dispatcher.notifyListeners(WorkflowEvent(
-        EventType::AVAILABLE, "WF-101", "STEP-02", "Compliance Review"
-    ));
-
-    dispatcher.notifyListeners(WorkflowEvent(
-        EventType::ESCALATED, "WF-101", "STEP-02", "Compliance Review", "SLA threshold exceeded (48h)"
-    ));
-
-    dispatcher.notifyListeners(WorkflowEvent(
-        EventType::COMPLETED, "WF-101", "STEP-02", "Compliance Review", "Approved by Executive Committee"
-    ));
-
-    // Root instance completion
-    dispatcher.notifyListeners(WorkflowEvent(
-        EventType::INSTANCE_COMPLETED, "WF-101", "ROOT", "Workflow Root", "All stages completed"
-    ));
-
-    std::cout << "\n>>> [Scenario 2] Executing Workflow WF-102 (Failure Scenario)..." << std::endl;
-    dispatcher.notifyListeners(WorkflowEvent(
-        EventType::STARTED, "WF-102", "STEP-01", "External Payment Gateway"
-    ));
-
-    dispatcher.notifyListeners(WorkflowEvent(
-        EventType::FAILED, "WF-102", "STEP-01", "External Payment Gateway", "HTTP 504 Gateway Timeout"
-    ));
-
-    // 5. Demonstrate Dynamic Observer Detachment (Unsubscribe)
-    std::cout << "\n>>> [Scenario 3] Dynamic Detach Test: Unsubscribing NotificationService..." << std::endl;
+    // Detach notifier
     dispatcher.detachListener(&notifier);
-    std::cout << "Active listeners attached after detach: " << dispatcher.getListenerCount() << std::endl;
+    assert(dispatcher.getListenerCount() == 1);
 
-    std::cout << "Dispatching new event (NotificationService should NOT receive this)..." << std::endl;
+    // Dispatch next event; notifier should not receive it
     dispatcher.notifyListeners(WorkflowEvent(
-        EventType::STARTED, "WF-103", "STEP-01", "Background Archival"
+        EventType::COMPLETED, "WF-002", "TASK-A", "Step A", "Success"
     ));
 
-    std::cout << "\n";
+    assert(notifier.getNotificationCount() == 1); // count unchanged
+    assert(auditor.getEntryCount() == 2);         // auditor received both
 
-    // 6. Inspect Audit Trail
-    auditor.printAuditTrail();
+    dispatcher.clearListeners();
+    std::cout << "[PASS] testDynamicDetach\n";
+}
 
-    std::cout << "\n";
+void testAuditTrailFormatting() {
+    AuditLogger auditor(false);
+    WorkflowEvent e(EventType::ESCALATED, "WF-003", "TASK-B", "Review", "SLA Exceeded");
+    
+    auditor.onEvent(e);
+    assert(auditor.getEntryCount() == 1);
 
-    // 7. Inspect Operational Metrics & Monitoring Dashboard
-    monitor.printDashboard();
+    const std::vector<std::string>& log = auditor.getAuditTrail();
+    assert(!log.empty());
+    assert(log[0].find("[AUDIT]") != std::string::npos);
+    assert(log[0].find("WF-003") != std::string::npos);
+    assert(log[0].find("TASK-B") != std::string::npos);
+    assert(log[0].find("ESCALATED") != std::string::npos);
+    assert(log[0].find("SLA Exceeded") != std::string::npos);
 
-    std::cout << "\n>>> Total notifications logged by NotificationService: " 
-              << notifier.getNotificationCount() << std::endl;
-    std::cout << ">>> Total audit records captured: " 
-              << auditor.getEntryCount() << std::endl;
-    std::cout << ">>> Total events monitored: " 
-              << monitor.getTotalEvents() << std::endl;
+    std::cout << "[PASS] testAuditTrailFormatting\n";
+}
 
-    std::cout << "\n===========================================================" << std::endl;
-    std::cout << "  OBSERVER SUBSYSTEM DEMONSTRATION COMPLETE - CLEAN EXIT   " << std::endl;
-    std::cout << "===========================================================" << std::endl;
+void testMonitoringMetricsCalculation() {
+    MonitoringService monitor;
 
+    monitor.onEvent(WorkflowEvent(EventType::STARTED, "WF-10", "T1", "Task 1"));
+    monitor.onEvent(WorkflowEvent(EventType::COMPLETED, "WF-10", "T1", "Task 1"));
+    monitor.onEvent(WorkflowEvent(EventType::FAILED, "WF-10", "T2", "Task 2", "Timeout"));
+    monitor.onEvent(WorkflowEvent(EventType::REJECTED, "WF-10", "T3", "Task 3", "Invalid"));
+
+    assert(monitor.getTotalEvents() == 4);
+    assert(monitor.getCountForType(EventType::STARTED) == 1);
+    assert(monitor.getCountForType(EventType::COMPLETED) == 1);
+    assert(monitor.getCountForType(EventType::FAILED) == 1);
+    assert(monitor.getCountForType(EventType::REJECTED) == 1);
+
+    // 2 failures out of 4 events = 50.0%
+    assert(monitor.getFailureRate() == 50.0);
+
+    monitor.resetMetrics();
+    assert(monitor.getTotalEvents() == 0);
+    assert(monitor.getFailureRate() == 0.0);
+
+    std::cout << "[PASS] testMonitoringMetricsCalculation\n";
+}
+
+void testClearListeners() {
+    EventDispatcher& dispatcher = EventDispatcher::getInstance();
+    dispatcher.clearListeners();
+
+    NotificationService n1("C1", false);
+    NotificationService n2("C2", false);
+
+    dispatcher.attachListener(&n1);
+    dispatcher.attachListener(&n2);
+    assert(dispatcher.getListenerCount() == 2);
+
+    dispatcher.clearListeners();
+    assert(dispatcher.getListenerCount() == 0);
+
+    std::cout << "[PASS] testClearListeners\n";
+}
+
+int main() {
+    std::cout << "Running unit tests for Observer and Singleton subsystems:\n";
+
+    testSingletonInstance();
+    testObserverRegistrationAndNotification();
+    testDynamicDetach();
+    testAuditTrailFormatting();
+    testMonitoringMetricsCalculation();
+    testClearListeners();
+
+    std::cout << "All 6 unit tests passed successfully.\n";
     return 0;
 }

@@ -53,11 +53,9 @@ size_t AuditLogger::getEntryCount() const {
 }
 
 void AuditLogger::printAuditTrail() const {
-    std::cout << "===== WORKFLOW AUDIT TRAIL (" << auditTrail.size() << " records) =====" << std::endl;
     for (const auto& entry : auditTrail) {
-        std::cout << entry << std::endl;
+        std::cout << entry << "\n";
     }
-    std::cout << "=================================================" << std::endl;
 }
 
 void AuditLogger::setEchoToConsole(bool echo) {
