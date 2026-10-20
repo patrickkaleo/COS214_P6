@@ -1,11 +1,17 @@
 #ifndef WORKFLOWDIRECTOR_H
 #define WORKFLOWDIRECTOR_H
 
-class WorkflowDirector {
+#include "WorkflowDefinitionBuilder.h"
 
+class WorkflowDirector
+{
 
 public:
-	WorkflowDefinition* construct(WorkflowDeDefinitionBuilder& b);
+	/**
+	 * @brief use workflow definition builder to build a workflow defitinition
+	 * @param WorkflowDefinitionBuildr&
+	 */
+	WorkflowDefinition *construct(WorkflowDefinitionBuilder &b);
 };
 
 #endif
