@@ -32,6 +32,9 @@
 #include "ParticipantDirectory.h"
 #include "InstanceData.h"
 
+#include "WorkItem.h"
+#include "WorkItemState.h"
+
 // Temporary test harness helper:
 // RoutingStrategy::select() takes a `const Task&` reference.
 // To allow Strategy tests to run independently before the Composite subsystem (Task)
@@ -264,5 +267,226 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
         CHECK(clonedDataRule->getFallbackRole() == "Supervisor");
 
         delete cloned;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// State pattern test helpers
+// ---------------------------------------------------------------------------
+
+/// Minimal concrete WorkItem so the lifecycle can be tested before Task/SubProcess land.
+class LifecycleTestItem : public WorkItem {
+public:
+    int availableHookCalls;
+
+    LifecycleTestItem(const std::string& id, const std::string& itemName)
+        : WorkItem(id, itemName), availableHookCalls(0) {}
+
+    WorkItem* clone() const override { return new LifecycleTestItem(*this); }
+
+protected:
+    void onAvailable() override { ++availableHookCalls; }
+};
+
+/// Records the event types published by work items through the EventDispatcher.
+class EventRecorder : public WorkflowEventListener {
+public:
+    std::vector<WorkflowEvent> events;
+    void onEvent(const WorkflowEvent& e) override { events.push_back(e); }
+};
+
+/// Moves a fresh item to InProgress, assigned to @p p.
+static void driveToInProgress(WorkItem& item, Participant* p) {
+    REQUIRE(item.makeAvailable());
+    REQUIRE(item.assign(p));
+    REQUIRE(item.start());
+}
+
+TEST_SUITE("Angela Ramaboea - State Subsystem") {
+
+    TEST_CASE("State: a new work item starts in Created and is not finished") {
+        LifecycleTestItem item("T1", "Faculty Review");
+        CHECK(item.getStateName() == "Created");
+        CHECK_FALSE(item.isFinished());
+        CHECK(item.getAssignee() == nullptr);
+    }
+
+    TEST_CASE("State: happy path Created -> Available -> Assigned -> InProgress -> Completed") {
+        Participant officer("P1", "Thandi", "FacultyOfficer");
+        LifecycleTestItem item("T1", "Faculty Review");
+
+        CHECK(item.makeAvailable());
+        CHECK(item.getStateName() == "Available");
+        CHECK(item.availableHookCalls == 1);
+
+        CHECK(item.assign(&officer));
+        CHECK(item.getStateName() == "Assigned");
+        CHECK(item.getAssignee() == &officer);
+
+        CHECK(item.start());
+        CHECK(item.getStateName() == "InProgress");
+
+        CHECK(item.complete("approved"));
+        CHECK(item.getStateName() == "Completed");
+        CHECK(item.getOutcome() == "approved");
+        CHECK(item.isFinished());
+    }
+
+    TEST_CASE("State: rejection records the reason and is final") {
+        Participant dean("P2", "Dr Mokoena", "Dean");
+        LifecycleTestItem item("T2", "Admission Decision");
+        driveToInProgress(item, &dean);
+
+        CHECK(item.reject("APS below faculty minimum"));
+        CHECK(item.getStateName() == "Rejected");
+        CHECK(item.getOutcome() == "APS below faculty minimum");
+        CHECK(item.isFinished());
+    }
+
+    TEST_CASE("State: invalid transitions are refused and leave the state unchanged") {
+        Participant clerk("P3", "Sipho", "WarehouseClerk");
+        LifecycleTestItem item("T3", "Log Exception");
+
+        // Created: cannot be assigned, started, completed, rejected or escalated
+        CHECK_FALSE(item.assign(&clerk));
+        CHECK_FALSE(item.start());
+        CHECK_FALSE(item.complete("done"));
+        CHECK_FALSE(item.reject("no"));
+        CHECK_FALSE(item.escalate());
+        CHECK(item.getStateName() == "Created");
+
+        // Available: cannot start or complete before someone is assigned
+        REQUIRE(item.makeAvailable());
+        CHECK_FALSE(item.makeAvailable());
+        CHECK_FALSE(item.start());
+        CHECK_FALSE(item.complete("done"));
+        CHECK(item.getStateName() == "Available");
+
+        // Assigned: cannot complete without starting
+        REQUIRE(item.assign(&clerk));
+        CHECK_FALSE(item.complete("done"));
+        CHECK(item.getStateName() == "Assigned");
+    }
+
+    TEST_CASE("State: assigning a null participant is refused") {
+        LifecycleTestItem item("T4", "Classify Severity");
+        REQUIRE(item.makeAvailable());
+        CHECK_FALSE(item.assign(nullptr));
+        CHECK(item.getStateName() == "Available");
+    }
+
+    TEST_CASE("State: final states refuse every request") {
+        Participant p("P5", "Lerato", "Dispatcher");
+        LifecycleTestItem item("T5", "Reroute Shipment");
+        driveToInProgress(item, &p);
+        REQUIRE(item.complete("rerouted"));
+
+        CHECK_FALSE(item.makeAvailable());
+        CHECK_FALSE(item.assign(&p));
+        CHECK_FALSE(item.start());
+        CHECK_FALSE(item.complete("again"));
+        CHECK_FALSE(item.reject("late"));
+        CHECK_FALSE(item.cancel());
+        CHECK_FALSE(item.escalate());
+        CHECK(item.getStateName() == "Completed");
+        CHECK(item.getOutcome() == "rerouted");
+    }
+
+    TEST_CASE("State: escalation releases the assignee and re-assignment resumes work") {
+        Participant officer("P6", "Naledi", "FinancialAidOfficer");
+        Participant manager("P7", "Mr Botha", "FinancialAidManager");
+        LifecycleTestItem item("T6", "Approve Bursary");
+        driveToInProgress(item, &officer);
+
+        CHECK(item.escalate());
+        CHECK(item.getStateName() == "Escalated");
+        CHECK(item.getAssignee() == nullptr);
+        CHECK(item.getEscalationLevel() == 1);
+
+        // Escalated work must be re-assigned before it can continue
+        CHECK_FALSE(item.start());
+        CHECK_FALSE(item.complete("approved"));
+        CHECK(item.assign(&manager));
+        CHECK(item.getStateName() == "Assigned");
+        CHECK(item.getAssignee() == &manager);
+
+        CHECK(item.start());
+        CHECK(item.complete("approved"));
+        CHECK(item.isFinished());
+    }
+
+    TEST_CASE("State: delegation re-assigns an Assigned item to another participant") {
+        Participant a("P8", "Kabelo", "Registrar");
+        Participant b("P9", "Zanele", "Registrar");
+        LifecycleTestItem item("T7", "Verify Documents");
+        REQUIRE(item.makeAvailable());
+        REQUIRE(item.assign(&a));
+
+        CHECK(item.assign(&b));
+        CHECK(item.getStateName() == "Assigned");
+        CHECK(item.getAssignee() == &b);
+    }
+
+    TEST_CASE("State: cancellation is allowed from every non-final state") {
+        Participant p("P10", "Ayanda", "CustomerService");
+
+        LifecycleTestItem created("C1", "Created item");
+        CHECK(created.cancel());
+        CHECK(created.getStateName() == "Cancelled");
+        CHECK(created.isFinished());
+
+        LifecycleTestItem available("C2", "Available item");
+        REQUIRE(available.makeAvailable());
+        CHECK(available.cancel());
+
+        LifecycleTestItem inProgress("C3", "In-progress item");
+        driveToInProgress(inProgress, &p);
+        CHECK(inProgress.cancel());
+
+        LifecycleTestItem escalated("C4", "Escalated item");
+        REQUIRE(escalated.makeAvailable());
+        REQUIRE(escalated.escalate());
+        CHECK(escalated.cancel());
+        CHECK(escalated.getStateName() == "Cancelled");
+    }
+
+    TEST_CASE("State: each transition publishes the matching event through the dispatcher") {
+        EventDispatcher& dispatcher = EventDispatcher::getInstance();
+        dispatcher.clearListeners();
+        EventRecorder recorder;
+        dispatcher.attachListener(&recorder);
+
+        Participant p("P11", "Musa", "Dean");
+        LifecycleTestItem item("T8", "Admission Decision");
+        item.setInstanceId("UNI-001");
+        driveToInProgress(item, &p);
+        item.complete("approved");
+        item.start(); // refused, must not publish
+
+        REQUIRE(recorder.events.size() == 4);
+        CHECK(recorder.events[0].type == EventType::AVAILABLE);
+        CHECK(recorder.events[1].type == EventType::ASSIGNED);
+        CHECK(recorder.events[2].type == EventType::STARTED);
+        CHECK(recorder.events[3].type == EventType::COMPLETED);
+        CHECK(recorder.events[3].outcome == "approved");
+        CHECK(recorder.events[3].instanceId == "UNI-001");
+        CHECK(recorder.events[3].itemId == "T8");
+
+        dispatcher.clearListeners();
+    }
+
+    TEST_CASE("State: a cloned item has its own independent state") {
+        Participant p("P12", "Palesa", "Registrar");
+        LifecycleTestItem original("T9", "Registration");
+        REQUIRE(original.makeAvailable());
+
+        WorkItem* copy = original.clone();
+        CHECK(copy->getStateName() == "Available");
+
+        REQUIRE(copy->assign(&p));
+        CHECK(copy->getStateName() == "Assigned");
+        CHECK(original.getStateName() == "Available");
+
+        delete copy;
     }
 }
