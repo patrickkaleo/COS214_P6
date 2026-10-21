@@ -35,6 +35,13 @@
 #include "WorkItem.h"
 #include "WorkItemState.h"
 
+#include "ExternalService.h"
+#include "ServiceRegistry.h"
+#include "GovernmentIDAdapter.h"
+#include "BankGatewayAdapter.h"
+#include "TrackingServiceAdapter.h"
+#include "CarrierAdapter.h"
+
 // Temporary test harness helper:
 // RoutingStrategy::select() takes a `const Task&` reference.
 // To allow Strategy tests to run independently before the Composite subsystem (Task)
@@ -488,5 +495,190 @@ TEST_SUITE("Angela Ramaboea - State Subsystem") {
         CHECK(original.getStateName() == "Available");
 
         delete copy;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Adapter pattern tests
+// ---------------------------------------------------------------------------
+
+/// Builds a request from key/value pairs, as a task would from its InstanceData.
+static ServiceRequest makeRequest(const std::string& op,
+                                  const std::map<std::string, std::string>& params) {
+    return ServiceRequest(op, params);
+}
+
+TEST_SUITE("Angela Ramaboea - Adapter Subsystem") {
+
+    TEST_CASE("Adapter: registry resolves adapters by the names used in workflow definitions") {
+        ServiceRegistry registry;
+        registry.add(new GovernmentIDAdapter());
+        registry.add(new BankGatewayAdapter());
+        registry.add(new TrackingServiceAdapter());
+        registry.add(new CarrierAdapter());
+
+        CHECK(registry.size() == 4);
+        CHECK(registry.has("DocumentVerificationService"));
+        CHECK(registry.has("PaymentGateway"));
+        CHECK(registry.has("TrackingService"));
+        CHECK(registry.has("CarrierAdapter"));
+        CHECK(registry.find("NoSuchService") == nullptr);
+
+        // The engine only ever sees the Target interface
+        ExternalService* svc = registry.find("TrackingService");
+        REQUIRE(svc != nullptr);
+        CHECK(svc->name() == "TrackingService");
+    }
+
+    TEST_CASE("Adapter: registering a service under an existing name replaces it") {
+        ServiceRegistry registry;
+        GovernmentIDAdapter* first = new GovernmentIDAdapter();
+        GovernmentIDAdapter* second = new GovernmentIDAdapter();
+        registry.add(first);
+        registry.add(second);
+        registry.add(nullptr);
+
+        CHECK(registry.size() == 1);
+        CHECK(registry.find("DocumentVerificationService") == second);
+    }
+
+    TEST_CASE("Adapter: GovernmentIDAdapter verifies a matching identity") {
+        GovernmentIDAdapter adapter;
+        ServiceResult r = adapter.invoke(makeRequest("verifyIdentity",
+            {{"idNumber", "0501015800087"}, {"surname", "mokoena"}}));
+
+        CHECK(r.success);
+        CHECK(r.outputs["identityVerified"] == "true");
+        CHECK(r.outputs["identityStatus"] == "VERIFIED");
+    }
+
+    TEST_CASE("Adapter: GovernmentIDAdapter reports negative answers as data, not failures") {
+        GovernmentIDAdapter adapter;
+
+        ServiceResult mismatch = adapter.invoke(makeRequest("verifyIdentity",
+            {{"idNumber", "0501015800087"}, {"surname", "Naidoo"}}));
+        CHECK(mismatch.success);
+        CHECK(mismatch.outputs["identityVerified"] == "false");
+        CHECK(mismatch.outputs["identityStatus"] == "SURNAME_MISMATCH");
+
+        ServiceResult unknown = adapter.invoke(makeRequest("verifyIdentity",
+            {{"idNumber", "9999999999999"}, {"surname", "Smith"}}));
+        CHECK(unknown.outputs["identityStatus"] == "NOT_FOUND");
+
+        ServiceResult deceased = adapter.invoke(makeRequest("verifyIdentity",
+            {{"idNumber", "4808105009083"}, {"surname", "Dlamini"}}));
+        CHECK(deceased.outputs["identityStatus"] == "DECEASED");
+    }
+
+    TEST_CASE("Adapter: GovernmentIDAdapter fails on bad input or registry outage") {
+        GovernmentIDAdapter adapter;
+
+        CHECK_FALSE(adapter.invoke(makeRequest("verifyIdentity", {{"surname", "Mokoena"}})).success);
+        CHECK_FALSE(adapter.invoke(makeRequest("verifyIdentity",
+            {{"idNumber", "12AB"}, {"surname", "Mokoena"}})).success);
+
+        adapter.getRegistry().setOnline(false);
+        ServiceResult down = adapter.invoke(makeRequest("verifyIdentity",
+            {{"idNumber", "0501015800087"}, {"surname", "Mokoena"}}));
+        CHECK_FALSE(down.success);
+        CHECK(down.message == "Identity registry unavailable");
+    }
+
+    TEST_CASE("Adapter: BankGatewayAdapter converts rands to an EFT and returns a reference") {
+        BankGatewayAdapter adapter;
+        ServiceResult r = adapter.invoke(makeRequest("pay",
+            {{"accountNumber", "62012345678"}, {"branchCode", "250655"},
+             {"amount", "45000.50"}, {"reference", "BURSARY-UNI-001"}}));
+
+        CHECK(r.success);
+        CHECK(r.outputs["paymentStatus"] == "PAID");
+        CHECK(r.outputs["paymentReference"].find("EFT") == 0);
+    }
+
+    TEST_CASE("Adapter: BankGatewayAdapter maps bank rejections to failures") {
+        BankGatewayAdapter adapter(new BankPaymentGateway(5000000LL)); // R50 000 limit
+
+        ServiceResult overLimit = adapter.invoke(makeRequest("pay",
+            {{"accountNumber", "62012345678"}, {"branchCode", "250655"}, {"amount", "60000"}}));
+        CHECK_FALSE(overLimit.success);
+        CHECK(overLimit.message == "Amount exceeds the gateway transfer limit");
+
+        ServiceResult badAccount = adapter.invoke(makeRequest("pay",
+            {{"accountNumber", "12"}, {"branchCode", "250655"}, {"amount", "100"}}));
+        CHECK_FALSE(badAccount.success);
+
+        ServiceResult badAmount = adapter.invoke(makeRequest("pay",
+            {{"accountNumber", "62012345678"}, {"branchCode", "250655"}, {"amount", "ten"}}));
+        CHECK_FALSE(badAmount.success);
+
+        adapter.getGateway().setOnline(false);
+        ServiceResult down = adapter.invoke(makeRequest("pay",
+            {{"accountNumber", "62012345678"}, {"branchCode", "250655"}, {"amount", "100"}}));
+        CHECK_FALSE(down.success);
+        CHECK(down.message == "Bank gateway unavailable");
+    }
+
+    TEST_CASE("Adapter: TrackingServiceAdapter parses the courier reply into named data") {
+        TrackingServiceAdapter adapter;
+        ServiceResult r = adapter.invoke(makeRequest("track", {{"waybill", "WB1002"}}));
+
+        CHECK(r.success);
+        CHECK(r.outputs["shipmentStatus"] == "DELAYED");
+        CHECK(r.outputs["lastLocation"] == "Bloemfontein Depot");
+        CHECK(r.outputs["delayHours"] == "9");
+
+        adapter.getApi().registerParcel("WB2000", "IN_TRANSIT", "Polokwane", 61);
+        CHECK(adapter.invoke(makeRequest("track", {{"waybill", "WB2000"}})).outputs["delayHours"] == "2");
+    }
+
+    TEST_CASE("Adapter: TrackingServiceAdapter fails for unknown waybills and outages") {
+        TrackingServiceAdapter adapter;
+        CHECK_FALSE(adapter.invoke(makeRequest("track", {{"waybill", "WB404"}})).success);
+        CHECK_FALSE(adapter.invoke(makeRequest("track", {})).success);
+
+        adapter.getApi().setOnline(false);
+        ServiceResult down = adapter.invoke(makeRequest("track", {{"waybill", "WB1001"}}));
+        CHECK_FALSE(down.success);
+        CHECK(down.message == "Courier tracking service unavailable");
+    }
+
+    TEST_CASE("Adapter: CarrierAdapter maps hub names to codes and returns the confirmation") {
+        CarrierAdapter adapter;
+        ServiceResult r = adapter.invoke(makeRequest("reroute",
+            {{"waybill", "WB1003"}, {"destinationHub", "Cape Town"}}));
+
+        CHECK(r.success);
+        CHECK(r.outputs["newHub"] == "Cape Town");
+        CHECK(r.outputs["rerouteReference"] == "RB21-WB1003-001");
+    }
+
+    TEST_CASE("Adapter: CarrierAdapter fails for unknown hubs, full hubs and outages") {
+        CarrierAdapter adapter;
+        CHECK_FALSE(adapter.invoke(makeRequest("reroute",
+            {{"waybill", "WB1003"}, {"destinationHub", "Atlantis"}})).success);
+
+        adapter.getCarrier().setHubFull(CarrierBookingSystem::HUB_DURBAN, true);
+        ServiceResult full = adapter.invoke(makeRequest("reroute",
+            {{"waybill", "WB1003"}, {"destinationHub", "Durban"}}));
+        CHECK_FALSE(full.success);
+        CHECK(full.message == "No carrier capacity at Durban");
+
+        adapter.getCarrier().setOnline(false);
+        CHECK_FALSE(adapter.invoke(makeRequest("reroute",
+            {{"waybill", "WB1003"}, {"destinationHub", "Johannesburg"}})).success);
+    }
+
+    TEST_CASE("Adapter: service outputs are written into the instance data") {
+        InstanceData data;
+        data.set("waybill", "WB1001");
+
+        TrackingServiceAdapter adapter;
+        ServiceResult r = adapter.invoke(ServiceRequest("track", data.getMap()));
+        REQUIRE(r.success);
+        r.applyTo(data);
+
+        CHECK(data.get("shipmentStatus") == "IN_TRANSIT");
+        CHECK(data.get("lastLocation") == "Durban Hub");
+        CHECK(data.get("waybill") == "WB1001");
     }
 }
