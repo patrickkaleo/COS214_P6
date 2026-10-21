@@ -10,8 +10,8 @@
 
 #include <string>
 #include <map>
-
-class ExternalService;
+#include <memory>
+#include "ExternalService.h"
 
 /**
  * @class ServiceRegistry
@@ -23,15 +23,12 @@ class ExternalService;
  */
 class ServiceRegistry {
 private:
-    std::map<std::string, ExternalService*> services; ///< Owned adapters keyed by name().
+    std::map<std::string, std::unique_ptr<ExternalService>> services; ///< Owned adapters keyed by name().
 
 public:
     ServiceRegistry() = default;
     ServiceRegistry(const ServiceRegistry&) = delete;
     ServiceRegistry& operator=(const ServiceRegistry&) = delete;
-
-    /// Deletes every registered adapter.
-    ~ServiceRegistry();
 
     /**
      * @brief Registers an adapter under its name(), taking ownership.

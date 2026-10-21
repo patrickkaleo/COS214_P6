@@ -8,6 +8,7 @@
  * @version 1.0
  */
 
+#include <memory>
 #include <string>
 #include "WorkflowEvent.h"
 
@@ -36,7 +37,7 @@ protected:
     std::string name;          ///< Human-readable name, e.g. "Faculty Review".
     std::string instanceId;    ///< Owning workflow instance, stamped onto published events.
     std::string outcome;       ///< Completion outcome or rejection reason.
-    WorkItemState* state;      ///< Current lifecycle state (owned).
+    std::unique_ptr<WorkItemState> state; ///< Current lifecycle state (owned).
     Participant* assignee;     ///< Participant currently responsible (not owned).
     int escalationLevel;       ///< Number of times the item has been escalated.
     SubProcess* parent;        ///< Enclosing sub-process, nullptr for the root (not owned).
@@ -56,6 +57,7 @@ public:
 
     WorkItem& operator=(const WorkItem&) = delete;
 
+    /// Defined in WorkItem.cpp, where WorkItemState is a complete type for unique_ptr.
     virtual ~WorkItem();
 
     /// @name Lifecycle requests (delegated to the current WorkItemState)

@@ -6,33 +6,22 @@
  */
 
 #include "ServiceRegistry.h"
-#include "ExternalService.h"
-
-ServiceRegistry::~ServiceRegistry() {
-    for (std::map<std::string, ExternalService*>::iterator it = services.begin(); it != services.end(); ++it) {
-        delete it->second;
-    }
-}
 
 void ServiceRegistry::add(ExternalService* service) {
     if (service == nullptr) {
         return;
     }
 
-    std::string key = service->name();
-    std::map<std::string, ExternalService*>::iterator existing = services.find(key);
-    if (existing != services.end()) {
-        if (existing->second == service) {
-            return;
-        }
-        delete existing->second;
+    // Resetting the slot deletes any adapter previously registered under this name
+    std::unique_ptr<ExternalService>& slot = services[service->name()];
+    if (slot.get() != service) {
+        slot.reset(service);
     }
-    services[key] = service;
 }
 
 ExternalService* ServiceRegistry::find(const std::string& name) const {
-    std::map<std::string, ExternalService*>::const_iterator it = services.find(name);
-    return it == services.end() ? nullptr : it->second;
+    std::map<std::string, std::unique_ptr<ExternalService>>::const_iterator it = services.find(name);
+    return it == services.end() ? nullptr : it->second.get();
 }
 
 bool ServiceRegistry::has(const std::string& name) const {

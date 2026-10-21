@@ -32,9 +32,7 @@ WorkItem::WorkItem(const WorkItem& other)
       parent(nullptr) { // the copying composite re-links its children
 }
 
-WorkItem::~WorkItem() {
-    delete state;
-}
+WorkItem::~WorkItem() = default;
 
 bool WorkItem::makeAvailable() {
     if (!state->makeAvailable(*this)) {
@@ -69,9 +67,7 @@ bool WorkItem::escalate() {
 }
 
 void WorkItem::changeState(WorkItemState* next, EventType event) {
-    WorkItemState* previous = state;
-    state = next;
-    delete previous;
+    state.reset(next); // deletes the previous state
 
     EventDispatcher::getInstance().notifyListeners(
         WorkflowEvent(event, instanceId, itemID, name, outcome));
