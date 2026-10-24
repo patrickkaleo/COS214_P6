@@ -1,58 +1,116 @@
 /**
  * @file Task.h
- * @brief Composite pattern for the TIVIDY generic workflow engine (Leaf Participant).
- *
- * WorkItem  – abstract Component
- * Task      – Leaf
- * SubProcess – Composite
+ * @brief Leaf of the Composite pattern – atomic work item.
+ * @details Holds routing strategy, assignee, service name, checkpoint flag and
+ *          escalation level.
+ * @version 1.0
  */
 
 #ifndef TASK_H
 #define TASK_H
 
 #include "WorkItem.h"
-class RoutingStrategy;
+#include <string>
+
+// Forward declarations
 class Participant;
+class RoutingStrategy;
 class InstanceContext;
 
-using namespace std;
-
 /**
- * @brief Leaf of the Composite.  Represents an atomic work item.
+ * @class Task
+ * @brief Concrete leaf WorkItem. Represents a single unit of work that can be
+ *        routed, assigned, started and completed.
  */
 class Task : public WorkItem {
 public:
-    Task(const string& id, const string& name);
-    ~Task() override;
-
-    void onAvailable() override;
-    WorkItem* clone() const override;
-
-    // Task-specific
-    void setRouting(RoutingStrategy* r);// takes ownership
-    RoutingStrategy* getRouting() const { return routing_; }
-    void setServiceName(const string& s) { serviceName_ = s; }
-    string getServiceName() const { return serviceName_; }
-    void setCheckpoint(bool c) { checkpoint_ = c; }
-    bool isCheckpoint() const { return checkpoint_; }
-    void setEscalationLevel(int l) { escalationLevel_ = l; }
-    int getEscalationLevel() const { return escalationLevel_; }
-
-    Participant* getAssignee() const { return assignee_; }
-    void setAssignee(Participant* p) { assignee_ = p; } // not owned
+    /**
+     * @brief Constructs a Task with the given identity.
+     * @param id   Unique identifier.
+     * @param name Human-readable name.
+     */
+    Task(const std::string& id, const std::string& name);
 
     /**
-     * @brief Perform the actual work of the task (may call an ExternalService).
-     * Real implementation will use InstanceContext.
+     * @brief Destructor. Deletes the owned RoutingStrategy.
+     */
+    ~Task() override;
+
+    /**
+     * @brief Hook: ask the routing strategy for a participant, then assign.
+     *        Called by AvailableState after makeAvailable succeeds.
+     */
+    void onAvailable() override;
+
+    /**
+     * @brief Deep-copy this task (including a clone of its routing strategy).
+     * @return Newly allocated Task*; caller owns it.
+     */
+    WorkItem* clone() const override;
+
+    // Task-specific API
+
+    /**
+     * @brief Install a routing strategy (takes ownership).
+     * @param r Strategy to use when this task becomes available.
+     */
+    void setRouting(RoutingStrategy* r);
+
+    /**
+     * @return The current routing strategy (owned by this Task).
+     */
+    RoutingStrategy* getRouting() const { return routing_; }
+
+    /**
+     * @brief Name of the external service this task may invoke (via ServiceRegistry).
+     * @param s Service key string.
+     */
+    void setServiceName(const std::string& s) { serviceName_ = s; }
+
+    /** @return Configured service name, or empty if none. */
+    std::string getServiceName() const { return serviceName_; }
+
+    /**
+     * @brief Mark whether a Memento snapshot must be taken before performWork.
+     * @param c true = checkpoint.
+     */
+    void setCheckpoint(bool c) { checkpoint_ = c; }
+
+    /** @return true if this task is a checkpoint. */
+    bool isCheckpoint() const { return checkpoint_; }
+
+    /**
+     * @brief Current escalation level (used by ApprovalRouting / Chain of Responsibility).
+     * @param l Level index (0 = first handler).
+     */
+    void setEscalationLevel(int l) { escalationLevel_ = l; }
+
+    /** @return Current escalation level. */
+    int getEscalationLevel() const { return escalationLevel_; }
+
+    /**
+     * @return Participant currently assigned to this task (not owned).
+     */
+    Participant* getAssignee() const { return assignee_; }
+
+    /**
+     * @brief Record the assignee (not owned; lives in ParticipantDirectory).
+     * @param p Participant pointer.
+     */
+    void setAssignee(Participant* p) { assignee_ = p; }
+
+    /**
+     * @brief Execute the actual work of the task (may call an ExternalService).
+     * @param context Runtime context carrying instance data, services, etc.
      */
     virtual void performWork(InstanceContext& context);
 
 private:
-    Participant* assignee_;// not owned
-    RoutingStrategy* routing_;// owned
-    string serviceName_;
-    bool checkpoint_;
-    int escalationLevel_;
+    Participant* assignee_;          /**< Not owned. */
+    RoutingStrategy* routing_;       /**< Owned. */
+    std::string serviceName_;        /**< Key into ServiceRegistry. */
+    bool checkpoint_;                /**< Take Memento before external call. */
+    int escalationLevel_;            /**< For approval / escalation chains. */
 };
 
-#endif
+#endif // TASK_H
