@@ -906,3 +906,234 @@ TEST_SUITE("Angelo Anthony - Composite & Iterator Subsystem") {
     }
 }
 
+TEST_SUITE("Angelo Anthony - Mediator Subsystem") {
+
+    TEST_CASE("Mediator: registerTree links every item to the mediator") {
+        std::unique_ptr<SubProcess> root(buildShipmentExceptionTree());
+        DependencyMediator mediator(shipmentExceptionRules());
+        mediator.registerTree(*root);
+
+        std::unique_ptr<WorkItemIterator> it = root->createIterator();
+        int count = 0;
+        for (it->first(); !it->isDone(); it->next()) {
+            CHECK(it->current()->getMediator() == &mediator);
+            CHECK(mediator.findItem(it->current()->getId()) == it->current());
+            ++count;
+        }
+        CHECK(count == 11);
+        CHECK(mediator.findItem("UNKNOWN") == nullptr);
+    }
+
+    TEST_CASE("Mediator: starting the root opens only entry items, and routing assigns them") {
+        ParticipantDirectory directory;
+        addLogisticsStaff(directory);
+        std::unique_ptr<SubProcess> definition(buildShipmentExceptionTree());
+        TestInstance inst(*definition, shipmentExceptionRules(), directory);
+
+        REQUIRE(inst.root->makeAvailable());
+        CHECK(inst.state("SHIP_EX") == "InProgress");
+        CHECK(inst.state("REPORT") == "InProgress");
+        CHECK(inst.state("LOG_EXCEPTION") == "Assigned");
+        CHECK(inst.item("LOG_EXCEPTION")->getAssignee()->getName() == "Sipho Ndlovu");
+        CHECK(inst.state("CLASSIFY") == "Created");   // waits for LOG_EXCEPTION
+        CHECK(inst.state("HANDLE") == "Created");     // waits for REPORT
+        CHECK(inst.state("CLOSE") == "Created");
+    }
+
+    TEST_CASE("Mediator: completion path runs the reroute branch and skips hold") {
+        ParticipantDirectory directory;
+        addLogisticsStaff(directory);
+        std::unique_ptr<SubProcess> definition(buildShipmentExceptionTree());
+        TestInstance inst(*definition, shipmentExceptionRules(), directory);
+        REQUIRE(inst.root->makeAvailable());
+
+        REQUIRE(finishWith(inst.item("LOG_EXCEPTION"), "logged"));
+        CHECK(inst.state("CLASSIFY") == "Assigned");
+
+        REQUIRE(finishWith(inst.item("CLASSIFY"), "high"));
+        CHECK(inst.state("REPORT") == "Completed");
+        CHECK(inst.state("HANDLE") == "InProgress");
+        CHECK(inst.state("ASSESS") == "Assigned");
+        CHECK(inst.state("REROUTE") == "Created");
+
+        REQUIRE(finishWith(inst.item("ASSESS"), "reroute"));
+        CHECK(inst.state("REROUTE") == "Assigned");
+        CHECK(inst.item("REROUTE")->getAssignee()->getName() == "Lerato Mokoena");
+        CHECK(inst.state("HOLD") == "Cancelled");     // branch not taken
+        CHECK(inst.state("HANDLE") == "InProgress");
+
+        REQUIRE(finishWith(inst.item("REROUTE"), "rerouted"));
+        CHECK(inst.state("HANDLE") == "Completed");
+        CHECK(inst.state("NOTIFY_CUSTOMER") == "Assigned");
+
+        REQUIRE(finishWith(inst.item("NOTIFY_CUSTOMER"), "sent"));
+        REQUIRE(finishWith(inst.item("CLOSE_CASE"), "closed"));
+        CHECK(inst.state("CLOSE") == "Completed");
+        CHECK(inst.state("SHIP_EX") == "Completed");
+    }
+
+    TEST_CASE("Mediator: the other outcome opens hold and skips reroute") {
+        ParticipantDirectory directory;
+        addLogisticsStaff(directory);
+        std::unique_ptr<SubProcess> definition(buildShipmentExceptionTree());
+        TestInstance inst(*definition, shipmentExceptionRules(), directory);
+        REQUIRE(inst.root->makeAvailable());
+        REQUIRE(finishWith(inst.item("LOG_EXCEPTION"), "logged"));
+        REQUIRE(finishWith(inst.item("CLASSIFY"), "low"));
+
+        REQUIRE(finishWith(inst.item("ASSESS"), "hold"));
+        CHECK(inst.state("HOLD") == "Assigned");
+        CHECK(inst.item("HOLD")->getAssignee()->getName() == "Pieter Botha");
+        CHECK(inst.state("REROUTE") == "Cancelled");
+    }
+
+    TEST_CASE("Mediator: parallel entry items join before the next item opens") {
+        ParticipantDirectory directory;
+        addBursaryApprovers(directory);
+        directory.addParticipant(new Participant("U1", "Kabelo Moloi", "AdmissionsOfficer"));
+        directory.addParticipant(new Participant("U2", "Dr. Pillay", "FacultyReviewer"));
+
+        SubProcess definition("REVIEW", "Application Review");
+        definition.add(roleTask("VERIFY_DOCS", "Verify Documents", "AdmissionsOfficer"));
+        definition.add(roleTask("ACADEMIC", "Academic Review", "FacultyReviewer"));
+        definition.add(roleTask("DECIDE", "Final Decision", "BursaryCommittee"));
+        std::vector<DependencyRule> rules = {
+            DependencyRule("VERIFY_DOCS", "DECIDE", "*"),
+            DependencyRule("ACADEMIC", "DECIDE", "*")};
+        TestInstance inst(definition, rules, directory);
+
+        REQUIRE(inst.root->makeAvailable());
+        CHECK(inst.state("VERIFY_DOCS") == "Assigned");  // both entry items run in parallel
+        CHECK(inst.state("ACADEMIC") == "Assigned");
+        CHECK(inst.state("DECIDE") == "Created");
+
+        REQUIRE(finishWith(inst.item("ACADEMIC"), "meets-requirements"));
+        CHECK(inst.state("DECIDE") == "Created");        // still waiting on VERIFY_DOCS
+
+        REQUIRE(finishWith(inst.item("VERIFY_DOCS"), "verified"));
+        CHECK(inst.state("DECIDE") == "Assigned");
+        CHECK(inst.state("REVIEW") == "InProgress");
+    }
+
+    TEST_CASE("Mediator: a join after an either/or branch opens once the taken branch finishes") {
+        ParticipantDirectory directory;
+        addLogisticsStaff(directory);
+
+        SubProcess definition("HANDLE", "Exception Handling");
+        definition.add(roleTask("ASSESS", "Assess Impact", "LogisticsCoordinator"));
+        definition.add(roleTask("REROUTE", "Reroute Shipment", "Dispatcher"));
+        definition.add(roleTask("HOLD", "Hold Shipment", "WarehouseSupervisor"));
+        definition.add(roleTask("NOTIFY_CUSTOMER", "Notify Customer", "CustomerService"));
+        std::vector<DependencyRule> rules = {
+            DependencyRule("ASSESS", "REROUTE", "reroute"),
+            DependencyRule("ASSESS", "HOLD", "hold"),
+            DependencyRule("REROUTE", "NOTIFY_CUSTOMER", "*"),
+            DependencyRule("HOLD", "NOTIFY_CUSTOMER", "*")};
+        TestInstance inst(definition, rules, directory);
+
+        REQUIRE(inst.root->makeAvailable());
+        REQUIRE(finishWith(inst.item("ASSESS"), "hold"));
+        CHECK(inst.state("REROUTE") == "Cancelled");
+        CHECK(inst.state("NOTIFY_CUSTOMER") == "Created"); // HOLD still running
+
+        REQUIRE(finishWith(inst.item("HOLD"), "held"));
+        CHECK(inst.state("NOTIFY_CUSTOMER") == "Assigned");
+    }
+
+    TEST_CASE("Mediator: an unhandled rejection fails the branch and cancels the rest") {
+        ParticipantDirectory directory;
+        addLogisticsStaff(directory);
+        std::unique_ptr<SubProcess> definition(buildShipmentExceptionTree());
+        TestInstance inst(*definition, shipmentExceptionRules(), directory);
+        REQUIRE(inst.root->makeAvailable());
+
+        WorkItem* log = inst.item("LOG_EXCEPTION");
+        REQUIRE(log->start());
+        REQUIRE(log->reject("waybill not found"));
+
+        CHECK(inst.state("CLASSIFY") == "Cancelled");
+        CHECK(inst.state("REPORT") == "Rejected");
+        CHECK(inst.item("REPORT")->getOutcome() == "Log Exception rejected: waybill not found");
+        CHECK(inst.state("SHIP_EX") == "Rejected");
+        CHECK(inst.state("HANDLE") == "Cancelled");
+        CHECK(inst.state("ASSESS") == "Cancelled");
+        CHECK(inst.state("CLOSE") == "Cancelled");
+    }
+
+    TEST_CASE("Mediator: a 'rejected' rule recovers from rejection and skips the normal path") {
+        ParticipantDirectory directory;
+        addBursaryApprovers(directory);
+        directory.addParticipant(new Participant("U1", "Kabelo Moloi", "AdmissionsOfficer"));
+
+        SubProcess definition("FUNDING", "Bursary Funding");
+        definition.add(roleTask("APPROVE", "Approve Bursary", "FinanceManager"));
+        definition.add(roleTask("PAY", "Pay Bursary", "BursaryOfficer"));
+        definition.add(roleTask("APPEAL", "Notify Appeal Options", "AdmissionsOfficer"));
+        std::vector<DependencyRule> rules = {
+            DependencyRule("APPROVE", "PAY", "approved"),
+            DependencyRule("APPROVE", "APPEAL", "rejected")};
+        TestInstance inst(definition, rules, directory);
+
+        REQUIRE(inst.root->makeAvailable());
+        WorkItem* approve = inst.item("APPROVE");
+        REQUIRE(approve->start());
+        REQUIRE(approve->reject("income above threshold"));
+
+        CHECK(inst.state("APPEAL") == "Assigned");
+        CHECK(inst.state("PAY") == "Cancelled");
+        CHECK(inst.state("FUNDING") == "InProgress");  // the branch is not failed
+
+        REQUIRE(finishWith(inst.item("APPEAL"), "sent"));
+        CHECK(inst.state("FUNDING") == "Completed");
+    }
+
+    TEST_CASE("Mediator: invalid actions are refused and do not move work forward") {
+        ParticipantDirectory directory;
+        addLogisticsStaff(directory);
+        std::unique_ptr<SubProcess> definition(buildShipmentExceptionTree());
+        TestInstance inst(*definition, shipmentExceptionRules(), directory);
+        REQUIRE(inst.root->makeAvailable());
+
+        // CLASSIFY has not been opened yet, so it cannot be completed.
+        CHECK_FALSE(inst.item("CLASSIFY")->complete("high"));
+        // LOG_EXCEPTION is assigned but not started.
+        CHECK_FALSE(inst.item("LOG_EXCEPTION")->complete("logged"));
+        CHECK(inst.state("CLASSIFY") == "Created");
+        CHECK(inst.state("HANDLE") == "Created");
+        // Starting an already running sub-process again is refused.
+        CHECK_FALSE(inst.root->makeAvailable());
+    }
+
+    TEST_CASE("Mediator: two instances of one definition progress independently") {
+        ParticipantDirectory directory;
+        addLogisticsStaff(directory);
+        std::unique_ptr<SubProcess> definition(buildShipmentExceptionTree());
+        TestInstance first(*definition, shipmentExceptionRules(), directory);
+        TestInstance second(*definition, shipmentExceptionRules(), directory);
+
+        REQUIRE(first.root->makeAvailable());
+        REQUIRE(finishWith(first.item("LOG_EXCEPTION"), "logged"));
+        REQUIRE(first.item("CLASSIFY")->start());
+        REQUIRE(first.item("CLASSIFY")->reject("duplicate report"));
+
+        CHECK(first.state("SHIP_EX") == "Rejected");
+        CHECK(second.state("SHIP_EX") == "Created");
+        CHECK(second.state("LOG_EXCEPTION") == "Created");
+        CHECK(definition->find("SHIP_EX")->getStateName() == "Created");
+
+        REQUIRE(second.root->makeAvailable());
+        CHECK(second.state("LOG_EXCEPTION") == "Assigned");
+    }
+
+    TEST_CASE("Mediator: an empty sub-process completes as soon as it starts") {
+        SubProcess definition("ROOT", "Root");
+        definition.add(new SubProcess("EMPTY", "Nothing To Do"));
+        ParticipantDirectory directory;
+        TestInstance inst(definition, {}, directory);
+
+        REQUIRE(inst.root->makeAvailable());
+        CHECK(inst.state("EMPTY") == "Completed");
+        CHECK(inst.state("ROOT") == "Completed");
+    }
+}
+
