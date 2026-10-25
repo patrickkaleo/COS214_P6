@@ -1,61 +1,64 @@
 #include "LogisticsDefinitionBuilder.h"
+
 LogisticsDefinitionBuilder::LogisticsDefinitionBuilder(string id, string name, int version)
 	: WorkflowDefinitionBuilder(id, name, version)
 {
 }
 
-void LogisticsDefinitionBuilder::buildStructure()
+void LogisticsDefinitionBuilder::buildDefinition()
 {
-	addSubProcess("SHIP_EX", "Shipment Exception", "");
+	// build the structure and their task with the relevant pririties and all 
+	WorkItem* root = new SubProcess("SHIP_EX", "Shipment Exception");
+	definition->setRoot(root);
+	
+	WorkItem* report = new SubProcess("REPORT", "Exception Report");
+	addWorkItem(report, root);
+	
+	WorkItem* logException = new Task("LOG_EXCEPTION", "Log Exception");
+	addWorkItem(logException, report);
 
-	addSubProcess("REPORT", "Exception Report", "SHIP_EX");
-	addTask("LOG_EXCEPTION", "Log Exception", "REPORT");
-	addTask("CLASSIFY", "Classify Severity", "REPORT");
+	WorkItem* classify = new Task("CLASSIFY", "Classify Severity");
+	addWorkItem(classify, report);
 
-	addSubProcess("HANDLE", "Exception Handling", "SHIP_EX");
-	addTask("ASSESS", "Assess Impact", "HANDLE");
-	addTask("REROUTE", "Reroute Shipment", "HANDLE");
-	addTask("HOLD", "Hold Shipment", "HANDLE");
+	WorkItem* collectEvidence = new Task("COLLECT_EVIDENCE", "Collect Evidence");
+	addWorkItem(collectEvidence, report);
 
-	addSubProcess("CLOSE", "Case Closure", "SHIP_EX");
-	addTask("NOTIFY_CUSTOMER", "Notify Customer", "CLOSE");
-	addTask("CLOSE_CASE", "Close Case", "CLOSE");
-}
+	WorkItem* investigate = new SubProcess("INVESTIGATE", "Investigation");
+	addWorkItem(investigate, root);
 
-void LogisticsDefinitionBuilder::buildDependencies()
-{
-	addDependency("LOG_EXCEPTION", "CLASSIFY", "*");
-	addDependency("CLASSIFY", "ASSESS", "*");
-	addDependency("ASSESS", "REROUTE", "reroute");
-	addDependency("ASSESS", "HOLD", "hold");
-	addDependency("REROUTE", "NOTIFY_CUSTOMER", "*");
-	addDependency("HOLD", "NOTIFY_CUSTOMER", "*");
-	addDependency("NOTIFY_CUSTOMER", "CLOSE_CASE", "*");
-}
+	WorkItem* assess = new Task("ASSESS", "Assess Impact");
+	addWorkItem(assess, investigate);
 
-void LogisticsDefinitionBuilder::buildRouting()
-{
-	setRouting("LOG_EXCEPTION", new RoleBasedRouting("WarehouseClerk"));
-	setRouting("CLASSIFY", new RoleBasedRouting("ExceptionAnalyst"));
-	setRouting("ASSESS", new RoleBasedRouting("LogisticsCoordinator"));
-	setRouting("REROUTE", new RoleBasedRouting("Dispatcher"));
-	setRouting("HOLD", new RoleBasedRouting("WarehouseSupervisor"));
-	setRouting("NOTIFY_CUSTOMER", new RoleBasedRouting("CustomerService"));
-	setRouting("CLOSE_CASE", new RoleBasedRouting("LogisticsCoordinator"));
-}
+	WorkItem* customsCheck = new Task("CUSTOMS_CHECK", "Customs Check");
+	addWorkItem(customsCheck, investigate);
 
-void LogisticsDefinitionBuilder::buildIntegrations()
-{
-	setService("CLASSIFY", "TrackingService");
-	setService("REROUTE", "CarrierAdapter");
-	setService("NOTIFY_CUSTOMER", "NotificationService");
-}
+	WorkItem* carrierQuery = new Task("CARRIER_QUERY", "Query Carrier");
+	addWorkItem(carrierQuery, investigate);
 
-void LogisticsDefinitionBuilder::buildExtras()
-{
-	markCheckpoint("ASSESS");
-	addPriority("REROUTE", 3);
-	addPriority("HOLD", 2);
-	addAudit("NOTIFY_CUSTOMER");
-	addAudit("CLOSE_CASE");
+	WorkItem* handle = new SubProcess("HANDLE", "Exception Handling");
+	addWorkItem(handle, root);
+
+	WorkItem* reroute = new Task("REROUTE", "Reroute Shipment");
+	addWorkItem(reroute, handle);
+
+	WorkItem* hold = new Task("HOLD", "Hold Shipment");
+	addWorkItem(hold, handle);
+
+	WorkItem* returnToSender = new Task("RETURN_TO_SENDER", "Return To Sender");
+	addWorkItem(returnToSender, handle);
+
+	WorkItem* replaceShipment = new Task("REPLACE_SHIPMENT", "Replace Shipment");
+	addWorkItem(replaceShipment, handle);
+
+	WorkItem* close = new SubProcess("CLOSE", "Case Closure");
+	addWorkItem(close, root);
+
+	WorkItem* notifyCustomer = new Task("NOTIFY_CUSTOMER", "Notify Customer");
+	addWorkItem(notifyCustomer, close);
+
+	WorkItem* claimRefund = new Task("CLAIM_REFUND", "Claim Refund");
+	addWorkItem(claimRefund, close);
+
+	WorkItem* closeCase = new Task("CLOSE_CASE", "Close Case");
+	addWorkItem(closeCase, close);
 }

@@ -1,4 +1,4 @@
-#include "WorkflowDefintion.h"
+#include "WorkflowDefinition.h"
 
 WorkflowDefinition::WorkflowDefinition(string id, string name, int version)
 	: id(id), name(name), version(version), root(nullptr)
@@ -7,7 +7,15 @@ WorkflowDefinition::WorkflowDefinition(string id, string name, int version)
 
 WorkflowDefinition::~WorkflowDefinition()
 {
-	delete root;
+	if (root)
+		delete root;
+
+	for (auto iterator = this->rules.begin(); iterator < this->rules.end(); iterator++)
+	{
+		DependencyRule *rule = *iterator;
+		if (rule)
+			delete rule;
+	}
 }
 
 string WorkflowDefinition::getId()

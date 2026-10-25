@@ -1,6 +1,6 @@
 #ifndef WORKITEMDECORATOR_H
 #define WORKITEMDECORATOR_H
-
+#include "WorkItem.h"
 class WorkItemDecorator : WorkItem {
 
 public:

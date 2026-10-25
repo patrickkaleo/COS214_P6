@@ -46,7 +46,13 @@ public:
 
 	string getOutcome();
 
-	virtual workItem* clone() = 0;
+	virtual WorkItem* clone() = 0;
+	
+	virtual void add(WorkItem*);
+	
+	virtual void setRouting(RoutingStrategy*);
+	virtual void setService(string);
+	virtual void setCheckointflag(bool flag);
 
 protected:
 	virtual void onAvailable() = 0;

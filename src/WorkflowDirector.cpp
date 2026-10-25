@@ -2,10 +2,6 @@
 
 WorkflowDefinition* WorkflowDirector::construct(WorkflowDefinitionBuilder& b)
 {
-	b.buildStructure();
-	b.buildDependencies();
-	b.buildRouting();
-	b.buildIntegrations();
-	b.buildExtras();
+	b.buildDefinition();
 	return b.getResult();
 }

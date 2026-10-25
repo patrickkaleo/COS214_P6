@@ -19,8 +19,8 @@ private:
 	string id;
 	string name;
 	int version;
-	WorkItem* root;
-	vector<DependencyRule*> rules;
+	WorkItem *root;
+	vector<DependencyRule *> rules;
 
 public:
 	/**
@@ -32,8 +32,8 @@ public:
 	WorkflowDefinition(string id, string name, int version);
 	~WorkflowDefinition();
 
-	WorkflowDefinition(const WorkflowDefinition&) = delete;
-	WorkflowDefinition& operator=(const WorkflowDefinition&) = delete;
+	WorkflowDefinition(const WorkflowDefinition &) = delete;
+	WorkflowDefinition &operator=(const WorkflowDefinition &) = delete;
 
 	/**
 	 * @brief return id of the workflow definition
@@ -75,31 +75,31 @@ public:
 	 * @brief return the root
 	 * @return WorkItem*
 	 */
-	WorkItem* getRoot();
+	WorkItem *getRoot();
 
 	/**
 	 * @brief set root process
 	 * @param root WorkItem to be added
 	 */
-	void setRoot(WorkItem* root);
+	void setRoot(WorkItem *root);
 
 	/**
 	 * @brief return the dependency rules for a given workflow definition
 	 * @return vector<DependencyRule>&
 	 */
-	vector<DependencyRule*> getRules();
+	vector<DependencyRule *> getRules();
 
 	/**
 	 * @brief add a dependency rule to the workflow definition
 	 * @param newRule new dependency rule wit hdefined to, from and outcome
 	 */
-	void addRule(DependencyRule* newRule);
+	void addRule(DependencyRule *newRule);
 
 	/**
-	 * @brief clone and return root process for an instance 
+	 * @brief clone and return root process for an instance
 	 * @return WorkItem*
 	 */
-	WorkItem* instantiateTree();
+	WorkItem *instantiateTree();
 };
 
 #endif

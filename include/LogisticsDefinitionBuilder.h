@@ -1,25 +1,30 @@
 #ifndef LOGISTICSDEFINITIONBUILDER_H
 #define LOGISTICSDEFINITIONBUILDER_H
 
+#include "DataRuleRouting.h"
 #include "WorkflowDefinitionBuilder.h"
-#include "RoleBasedRouting.h"
-#include <vector>
-using namespace std;
+#include "Task.h"
+#include "WorkItem.h"
+#include "SubProcess.h"
 /**
  * @class LogisticsDefinitionBuilder
- * @brief Generic Builder for creating workflow definitions that can be applied to different scenarios and set ups
+ * @brief Builds the shipment-exception workflow definition.
  */
 class LogisticsDefinitionBuilder : public WorkflowDefinitionBuilder
 {
 public:
-	LogisticsDefinitionBuilder(string id, string name, int version );
-	LogisticsDefinitionBuilder() = delete ;
-	LogisticsDefinitionBuilder(LogisticsDefinitionBuilder& other) = delete ;
-	void buildStructure();
-	void buildDependencies();
-	void buildRouting();
-	void buildIntegrations();
-	void buildExtras();
+	/**
+	 * @brief Creates the logistics workflow builder with supplied metadata.
+	 * @param id Workflow definition identifier.
+	 * @param name Workflow definition name.
+	 * @param version Workflow definition version.
+	 */
+	LogisticsDefinitionBuilder(string id, string name, int version);
+	LogisticsDefinitionBuilder() = delete;
+	LogisticsDefinitionBuilder(const LogisticsDefinitionBuilder& other) = delete;
+	LogisticsDefinitionBuilder& operator=(const LogisticsDefinitionBuilder& other) = delete;
+
+	void buildDefinition() ;
 };
 
 #endif

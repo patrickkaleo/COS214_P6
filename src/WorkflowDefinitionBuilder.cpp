@@ -50,7 +50,7 @@ void WorkflowDefinitionBuilder::setService(WorkItem *item, string serviceName)
 void WorkflowDefinitionBuilder::markCheckpoint(WorkItem *item)
 {
 	if (item)
-		item->
+		item->setCheckointflag(true);
 }
 
 void WorkflowDefinitionBuilder::addPriority(WorkItem *item, int level)
