@@ -2,7 +2,7 @@
  * @file ApprovalRouting.cpp
  * @brief Implementation of approval-based task routing strategy delegating to Chain of Responsibility.
  * @author Enock Nyamweya
- * @version 1.0
+ * @version 2.0
  */
 
 #include "ApprovalRouting.h"
@@ -15,47 +15,44 @@ ApprovalRouting::ApprovalRouting()
     : chain(nullptr) {
 }
 
+ApprovalRouting::ApprovalRouting(std::unique_ptr<ApprovalHandler> handlerChain)
+    : chain(std::move(handlerChain)) {
+}
+
 ApprovalRouting::ApprovalRouting(ApprovalHandler* handlerChain)
     : chain(handlerChain) {
 }
 
-ApprovalRouting::~ApprovalRouting() {
-    delete chain;
-    chain = nullptr;
-}
-
-Participant* ApprovalRouting::select(const Task& task,
-                                     const InstanceData& data,
-                                     const ParticipantDirectory& directory) {
-    (void)directory; // Passed via ApprovalRequest context
+std::shared_ptr<Participant> ApprovalRouting::select(const Task& task,
+                                                     const InstanceData& data,
+                                                     const ParticipantDirectory& directory) {
+    (void)directory;
 
     if (!chain) {
         return nullptr;
     }
 
-    // Encapsulate approval context in an ApprovalRequest value object
     ApprovalRequest request;
     request.item = &task;
     request.data = &data;
     request.level = 0;
+    request.directory = &directory;
 
-    // Delegate processing to the Chain of Responsibility
     return chain->handle(request);
 }
 
-RoutingStrategy* ApprovalRouting::clone() const {
-    // Handler chains are composed dynamically per workflow definition.
-    // Return a new ApprovalRouting container.
-    return new ApprovalRouting(nullptr);
+std::unique_ptr<RoutingStrategy> ApprovalRouting::clone() const {
+    return std::unique_ptr<RoutingStrategy>(new ApprovalRouting(nullptr));
 }
 
 ApprovalHandler* ApprovalRouting::getChain() const {
-    return chain;
+    return chain.get();
+}
+
+void ApprovalRouting::setChain(std::unique_ptr<ApprovalHandler> handlerChain) {
+    chain = std::move(handlerChain);
 }
 
 void ApprovalRouting::setChain(ApprovalHandler* handlerChain) {
-    if (chain != handlerChain) {
-        delete chain;
-        chain = handlerChain;
-    }
+    chain.reset(handlerChain);
 }

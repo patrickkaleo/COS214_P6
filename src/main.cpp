@@ -65,13 +65,13 @@ TEST_SUITE("Enock Nyamweya - Observer & Singleton Subsystems") {
         EventDispatcher& dispatcher = EventDispatcher::getInstance();
         dispatcher.clearListeners();
 
-        NotificationService notifier("TestChannel", false);
-        AuditLogger auditor(false);
-        MonitoringService monitor;
+        auto notifier = std::make_shared<NotificationService>("TestChannel", false);
+        auto auditor = std::make_shared<AuditLogger>(false);
+        auto monitor = std::make_shared<MonitoringService>();
 
-        dispatcher.attachListener(&notifier);
-        dispatcher.attachListener(&auditor);
-        dispatcher.attachListener(&monitor);
+        dispatcher.attachListener(notifier);
+        dispatcher.attachListener(auditor);
+        dispatcher.attachListener(monitor);
 
         CHECK(dispatcher.getListenerCount() == 3);
 
@@ -85,15 +85,15 @@ TEST_SUITE("Enock Nyamweya - Observer & Singleton Subsystems") {
             EventType::COMPLETED, "WF-101", "TASK-1", "Registration", "Verified"
         ));
 
-        CHECK(notifier.getNotificationCount() == 3);
-        CHECK(auditor.getEntryCount() == 3);
-        CHECK(monitor.getTotalEvents() == 3);
-        CHECK(monitor.getCountForType(EventType::COMPLETED) == 1);
+        CHECK(notifier->getNotificationCount() == 3);
+        CHECK(auditor->getEntryCount() == 3);
+        CHECK(monitor->getTotalEvents() == 3);
+        CHECK(monitor->getCountForType(EventType::COMPLETED) == 1);
 
         dispatcher.clearListeners();
     }
 
-    TEST_CASE("Observer: verifies dynamic listener detaching") {
+    TEST_CASE("Observer: verifies dynamic listener detaching with raw pointer compatibility") {
         EventDispatcher& dispatcher = EventDispatcher::getInstance();
         dispatcher.clearListeners();
 
@@ -150,12 +150,14 @@ TEST_SUITE("Enock Nyamweya - Observer & Singleton Subsystems") {
 
 class MockApprovalHandler : public ApprovalHandler {
 private:
-    Participant* approver;
+    std::shared_ptr<Participant> approver;
 public:
+    explicit MockApprovalHandler(std::shared_ptr<Participant> p)
+        : approver(p) {}
     explicit MockApprovalHandler(Participant* p)
         : approver(p) {}
 
-    virtual Participant* handle(ApprovalRequest& req) override {
+    virtual std::shared_ptr<Participant> handle(ApprovalRequest& req) override {
         (void)req;
         return approver;
     }
@@ -165,15 +167,15 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
 
     TEST_CASE("RoleBasedRouting: selects first available participant holding required role") {
         ParticipantDirectory directory;
-        Participant* alice = new Participant("p1", "Alice Smith", "Triage Nurse");
-        Participant* bob = new Participant("p2", "Bob Jones", "Emergency Doctor");
+        auto alice = std::make_shared<Participant>("p1", "Alice Smith", "Triage Nurse");
+        auto bob = std::make_shared<Participant>("p2", "Bob Jones", "Emergency Doctor");
         directory.addParticipant(alice);
         directory.addParticipant(bob);
 
         RoleBasedRouting strategy("Triage Nurse");
         InstanceData data;
 
-        Participant* selected = strategy.select(getDummyTask(), data, directory);
+        std::shared_ptr<Participant> selected = strategy.select(getDummyTask(), data, directory);
         REQUIRE(selected != nullptr);
         CHECK(selected->getId() == "p1");
         CHECK(selected->getName() == "Alice Smith");
@@ -187,15 +189,15 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
         RoleBasedRouting strategy("Chief Surgeon");
         InstanceData data;
 
-        Participant* selected = strategy.select(getDummyTask(), data, directory);
+        std::shared_ptr<Participant> selected = strategy.select(getDummyTask(), data, directory);
         CHECK(selected == nullptr);
     }
 
     TEST_CASE("DataRuleRouting: dynamically maps form data to corresponding roles") {
         ParticipantDirectory directory;
-        directory.addParticipant(new Participant("doc1", "Dr. House", "Emergency Doctor"));
-        directory.addParticipant(new Participant("doc2", "Dr. Watson", "General Practitioner"));
-        directory.addParticipant(new Participant("intern1", "Intern John", "Clinic Intern"));
+        directory.addParticipant(std::make_shared<Participant>("doc1", "Dr. House", "Emergency Doctor"));
+        directory.addParticipant(std::make_shared<Participant>("doc2", "Dr. Watson", "General Practitioner"));
+        directory.addParticipant(std::make_shared<Participant>("intern1", "Intern John", "Clinic Intern"));
 
         std::map<std::string, std::string> mapping = {
             {"critical", "Emergency Doctor"},
@@ -205,14 +207,14 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
 
         InstanceData criticalData;
         criticalData.set("severity", "critical");
-        Participant* pCritical = strategy.select(getDummyTask(), criticalData, directory);
+        std::shared_ptr<Participant> pCritical = strategy.select(getDummyTask(), criticalData, directory);
         REQUIRE(pCritical != nullptr);
         CHECK(pCritical->getId() == "doc1");
         CHECK(pCritical->getName() == "Dr. House");
 
         InstanceData mildData;
         mildData.set("severity", "mild");
-        Participant* pMild = strategy.select(getDummyTask(), mildData, directory);
+        std::shared_ptr<Participant> pMild = strategy.select(getDummyTask(), mildData, directory);
         REQUIRE(pMild != nullptr);
         CHECK(pMild->getId() == "doc2");
         CHECK(pMild->getName() == "Dr. Watson");
@@ -220,7 +222,7 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
 
     TEST_CASE("DataRuleRouting: falls back to default role when field is unmapped or missing") {
         ParticipantDirectory directory;
-        directory.addParticipant(new Participant("intern1", "Intern John", "Clinic Intern"));
+        directory.addParticipant(std::make_shared<Participant>("intern1", "Intern John", "Clinic Intern"));
 
         std::map<std::string, std::string> mapping = {
             {"critical", "Emergency Doctor"}
@@ -229,30 +231,28 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
 
         InstanceData unknownData;
         unknownData.set("severity", "unknown_value");
-        Participant* pUnknown = strategy.select(getDummyTask(), unknownData, directory);
+        std::shared_ptr<Participant> pUnknown = strategy.select(getDummyTask(), unknownData, directory);
         REQUIRE(pUnknown != nullptr);
         CHECK(pUnknown->getId() == "intern1");
 
         InstanceData emptyData;
-        Participant* pEmpty = strategy.select(getDummyTask(), emptyData, directory);
+        std::shared_ptr<Participant> pEmpty = strategy.select(getDummyTask(), emptyData, directory);
         REQUIRE(pEmpty != nullptr);
         CHECK(pEmpty->getId() == "intern1");
     }
 
     TEST_CASE("ApprovalRouting: delegates to ApprovalHandler Chain of Responsibility") {
-        Participant* dean = new Participant("p_dean", "Prof. X", "Dean");
-        MockApprovalHandler* handler = new MockApprovalHandler(dean);
+        auto dean = std::make_shared<Participant>("p_dean", "Prof. X", "Dean");
+        std::unique_ptr<MockApprovalHandler> handler(new MockApprovalHandler(dean));
 
-        ApprovalRouting approvalStrategy(handler);
+        ApprovalRouting approvalStrategy(std::move(handler));
         InstanceData data;
         ParticipantDirectory directory;
 
-        Participant* approver = approvalStrategy.select(getDummyTask(), data, directory);
+        std::shared_ptr<Participant> approver = approvalStrategy.select(getDummyTask(), data, directory);
         REQUIRE(approver != nullptr);
         CHECK(approver->getId() == "p_dean");
         CHECK(approver->getName() == "Prof. X");
-
-        delete dean;
     }
 
     TEST_CASE("RoutingStrategy: clone creates independent strategy duplicate") {
@@ -261,10 +261,10 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
         };
         DataRuleRouting original("priority", mapping, "Junior Officer");
 
-        RoutingStrategy* cloned = original.clone();
+        std::unique_ptr<RoutingStrategy> cloned = original.clone();
         REQUIRE(cloned != nullptr);
 
-        DataRuleRouting* clonedDataRule = dynamic_cast<DataRuleRouting*>(cloned);
+        DataRuleRouting* clonedDataRule = dynamic_cast<DataRuleRouting*>(cloned.get());
         REQUIRE(clonedDataRule != nullptr);
         CHECK(clonedDataRule->getField() == "priority");
         CHECK(clonedDataRule->getFallbackRole() == "Junior Officer");
@@ -272,8 +272,6 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
         clonedDataRule->setFallbackRole("Supervisor");
         CHECK(original.getFallbackRole() == "Junior Officer");
         CHECK(clonedDataRule->getFallbackRole() == "Supervisor");
-
-        delete cloned;
     }
 }
 

@@ -5,12 +5,13 @@
  * @file DataRuleRouting.h
  * @brief Concrete strategy routing tasks dynamically based on workflow instance data.
  * @author Enock Nyamweya
- * @version 1.0
+ * @version 2.0
  */
 
 #include "RoutingStrategy.h"
 #include <string>
 #include <map>
+#include <memory>
 
 /**
  * @class DataRuleRouting
@@ -58,54 +59,26 @@ public:
      * @param task The task being routed.
      * @param data The workflow instance payload containing form attributes.
      * @param directory The organization participant directory.
-     * @return Participant* Pointer to the selected participant, or nullptr if none available.
+     * @return std::shared_ptr<Participant> Shared pointer to the selected participant, or nullptr.
      */
-    virtual Participant* select(const Task& task,
-                                const InstanceData& data,
-                                const ParticipantDirectory& directory) override;
+    virtual std::shared_ptr<Participant> select(const Task& task,
+                                                const InstanceData& data,
+                                                const ParticipantDirectory& directory) override;
 
     /**
      * @brief Clones this strategy instance for workflow template copying.
-     * @return RoutingStrategy* Newly allocated copy of this strategy.
+     * @return std::unique_ptr<RoutingStrategy> Owned clone of this strategy.
      */
-    virtual RoutingStrategy* clone() const override;
+    virtual std::unique_ptr<RoutingStrategy> clone() const override;
 
-    /**
-     * @brief Adds or updates a rule mapping a data value to a target role.
-     * @param value The expected form value (e.g., "high", "critical").
-     * @param roleName The role to assign for this value (e.g., "Emergency Doctor").
-     */
-    void addRule(const std::string& value, const std::string& roleName);
-
-    /**
-     * @brief Gets the inspected data field name.
-     * @return std::string Field name.
-     */
     std::string getField() const;
-
-    /**
-     * @brief Sets the data field name to inspect.
-     * @param fieldName Field name.
-     */
     void setField(const std::string& fieldName);
 
-    /**
-     * @brief Gets the fallback role.
-     * @return std::string Fallback role.
-     */
+    std::map<std::string, std::string> getMapping() const;
+    void addRule(const std::string& value, const std::string& roleName);
+
     std::string getFallbackRole() const;
-
-    /**
-     * @brief Sets the fallback role.
-     * @param defaultFallbackRole Fallback role name.
-     */
-    void setFallbackRole(const std::string& defaultFallbackRole);
-
-    /**
-     * @brief Returns the complete value-to-role lookup map.
-     * @return const std::map<std::string, std::string>& Map reference.
-     */
-    const std::map<std::string, std::string>& getRuleMap() const;
+    void setFallbackRole(const std::string& defaultRole);
 };
 
 #endif // DATARULEROUTING_H

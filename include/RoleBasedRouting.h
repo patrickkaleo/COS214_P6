@@ -5,11 +5,12 @@
  * @file RoleBasedRouting.h
  * @brief Concrete strategy for assigning tasks based on a participant's role.
  * @author Enock Nyamweya
- * @version 1.0
+ * @version 2.0
  */
 
 #include "RoutingStrategy.h"
 #include <string>
+#include <memory>
 
 /**
  * @class RoleBasedRouting
@@ -50,28 +51,19 @@ public:
      * @param task The task requesting an assignee.
      * @param data Instance runtime data (unused by basic role routing).
      * @param directory The participant directory to search.
-     * @return Participant* Pointer to the assigned participant, or nullptr if unavailable.
+     * @return std::shared_ptr<Participant> Shared pointer to the assigned participant, or nullptr.
      */
-    virtual Participant* select(const Task& task,
-                                const InstanceData& data,
-                                const ParticipantDirectory& directory) override;
+    virtual std::shared_ptr<Participant> select(const Task& task,
+                                                const InstanceData& data,
+                                                const ParticipantDirectory& directory) override;
 
     /**
      * @brief Clones this strategy instance for workflow instantiation.
-     * @return RoutingStrategy* Newly allocated copy of this strategy.
+     * @return std::unique_ptr<RoutingStrategy> Owned clone of this strategy.
      */
-    virtual RoutingStrategy* clone() const override;
+    virtual std::unique_ptr<RoutingStrategy> clone() const override;
 
-    /**
-     * @brief Gets the configured role name.
-     * @return std::string The target role.
-     */
     std::string getRole() const;
-
-    /**
-     * @brief Updates the target role name.
-     * @param roleName The new role name.
-     */
     void setRole(const std::string& roleName);
 };
 

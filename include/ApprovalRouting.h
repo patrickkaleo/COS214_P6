@@ -5,12 +5,12 @@
  * @file ApprovalRouting.h
  * @brief Concrete strategy delegating task allocation to a Chain of Responsibility.
  * @author Enock Nyamweya
- * @version 1.0
+ * @version 2.0
  */
 
 #include "RoutingStrategy.h"
+#include <memory>
 
-// Forward declaration of Chain of Responsibility handler
 class ApprovalHandler;
 
 /**
@@ -19,12 +19,13 @@ class ApprovalHandler;
  *
  * For approval workflows (e.g. bursary allocation, expense approvals, medical authorizations),
  * the decision of who approves depends on escalation level, approval limits, or department.
- * ApprovalRouting encapsulates this delegation: it owns the head of an ApprovalHandler chain,
- * constructs an ApprovalRequest, and asks the chain to handle and return the proper approver.
+ * ApprovalRouting encapsulates this delegation: it owns the head of an ApprovalHandler chain
+ * via std::unique_ptr, constructs an ApprovalRequest, and asks the chain to handle and return
+ * the proper approver.
  */
 class ApprovalRouting : public RoutingStrategy {
 private:
-    ApprovalHandler* chain; ///< Head of the ApprovalHandler chain of responsibility (owned).
+    std::unique_ptr<ApprovalHandler> chain; ///< Head of the ApprovalHandler chain (owned via unique_ptr).
 
 public:
     /**
@@ -33,45 +34,56 @@ public:
     ApprovalRouting();
 
     /**
-     * @brief Parameterized constructor taking ownership of an ApprovalHandler chain.
-     * @param handlerChain Pointer to the first handler in the chain of responsibility.
+     * @brief Parameterized constructor taking exclusive ownership of an ApprovalHandler chain.
+     * @param handlerChain Unique pointer to the first handler in the chain.
+     */
+    explicit ApprovalRouting(std::unique_ptr<ApprovalHandler> handlerChain);
+
+    /**
+     * @brief Backward-compatible constructor taking a raw pointer (assumes ownership).
+     * @param handlerChain Pointer to the first handler in the chain.
      */
     explicit ApprovalRouting(ApprovalHandler* handlerChain);
 
     /**
-     * @brief Destructor. Safely cleans up the owned ApprovalHandler chain.
+     * @brief Destructor. Handled automatically via RAII (unique_ptr).
      */
-    virtual ~ApprovalRouting() override;
+    virtual ~ApprovalRouting() override = default;
+
+    ApprovalRouting(const ApprovalRouting&) = delete;
+    ApprovalRouting& operator=(const ApprovalRouting&) = delete;
 
     /**
      * @brief Routes the approval task by passing an ApprovalRequest through the handler chain.
-     *
-     * Constructs an ApprovalRequest using the task's escalation level and instance data,
-     * then executes @c chain->handle(request).
-     *
      * @param task The task requiring approval.
-     * @param data Instance runtime data containing request details (e.g. amount, severity).
+     * @param data Instance runtime data containing request details.
      * @param directory The participant directory.
-     * @return Participant* Pointer to the chosen approver participant, or nullptr if unhandled.
+     * @return std::shared_ptr<Participant> Shared pointer to the chosen approver, or nullptr.
      */
-    virtual Participant* select(const Task& task,
-                                const InstanceData& data,
-                                const ParticipantDirectory& directory) override;
+    virtual std::shared_ptr<Participant> select(const Task& task,
+                                                const InstanceData& data,
+                                                const ParticipantDirectory& directory) override;
 
     /**
-     * @brief Clones this strategy instance.
-     * @return RoutingStrategy* Newly allocated copy of this strategy.
+     * @brief Clones this strategy instance as an owned unique_ptr.
+     * @return std::unique_ptr<RoutingStrategy> Cloned strategy.
      */
-    virtual RoutingStrategy* clone() const override;
+    virtual std::unique_ptr<RoutingStrategy> clone() const override;
 
     /**
-     * @brief Gets the current head of the handler chain.
-     * @return ApprovalHandler* Pointer to the handler.
+     * @brief Gets non-owning pointer to the head of the handler chain.
+     * @return ApprovalHandler* Non-owning pointer.
      */
     ApprovalHandler* getChain() const;
 
     /**
-     * @brief Sets or updates the handler chain head (takes ownership).
+     * @brief Sets or updates the handler chain head taking unique ownership.
+     * @param handlerChain The new handler chain head.
+     */
+    void setChain(std::unique_ptr<ApprovalHandler> handlerChain);
+
+    /**
+     * @brief Backward-compatible overload taking raw pointer (assumes ownership).
      * @param handlerChain The new handler chain head.
      */
     void setChain(ApprovalHandler* handlerChain);
