@@ -1,7 +1,8 @@
 /**
  * @file AuditLogger.cpp
  * @brief Implementation of the AuditLogger concrete Observer class.
- * @version 1.0
+ * @author Enock Nyamweya
+ * @version 2.0
  */
 
 #include "AuditLogger.h"
