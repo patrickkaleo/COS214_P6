@@ -24,13 +24,6 @@ void UniversityApplicationDefinitionBuilder::buildStructure()
 
 void UniversityApplicationDefinitionBuilder::buildDependencies()
 {
-	vector<string> reviewOrder;
-	reviewOrder.push_back("CAPTURE");
-	reviewOrder.push_back("VERIFY_DOCS");
-	reviewOrder.push_back("FACULTY_REVIEW");
-	reviewOrder.push_back("DECISION");
-	// addSequence(reviewOrder);
-
 	addDependency("DECISION", "ISSUE_OFFER", "approved");
 	addDependency("ISSUE_OFFER", "REGISTER", "*");
 }

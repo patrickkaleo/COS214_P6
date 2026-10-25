@@ -22,15 +22,6 @@ public:
 	WorkflowDefinitionBuilder();
 	WorkflowDefinitionBuilder(const WorkflowDefinitionBuilder&) = delete;
 	WorkflowDefinitionBuilder& operator=(const WorkflowDefinitionBuilder&) = delete;
-
-	/**
-	 * @brief reset id, name and version of workflow definition
-	 * @param id new id
-	 * @param name new name
-	 * @param version new version
-	 */
-	virtual void reset(string id, string name, int version) = 0;
-
 	/**
 	 * @brief
 	 */
@@ -87,12 +78,6 @@ protected:
 	 * @param outcome string description of the evaluation of the dependenc yrule for a given workflow instance
 	 */
 	void addDependency(string fromId, string toId, string outcome);
-
-	// /**
-	//  * @brief Build the sequence for execution of the workflow
-	//  * @param ids vector list of ids that have to be executed in the given order
-	//  */
-	// void addSequence(vector<string> ids);
 
 	/**
 	 * @brief set routing strategy for a specific work item

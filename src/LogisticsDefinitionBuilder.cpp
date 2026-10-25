@@ -26,12 +26,6 @@ void LogisticsDefinitionBuilder::buildStructure()
 
 void LogisticsDefinitionBuilder::buildDependencies()
 {
-	vector<string> intakeOrder;
-	intakeOrder.push_back("LOG_EXCEPTION");
-	intakeOrder.push_back("CLASSIFY");
-	intakeOrder.push_back("ASSESS");
-	// addSequence(intakeOrder);
-
 	addDependency("ASSESS", "REROUTE", "reroute");
 	addDependency("ASSESS", "HOLD", "hold");
 	addDependency("REROUTE", "NOTIFY_CUSTOMER", "*");
