@@ -5,7 +5,7 @@
  * @file ApprovalRequest.h
  * @brief Context payload passed along the ApprovalHandler Chain of Responsibility.
  * @author Enock Nyamweya
- * @version 1.0
+ * @version 2.0
  */
 
 class Task;

@@ -1,7 +1,8 @@
 /**
  * @file MonitoringService.cpp
  * @brief Implementation of the MonitoringService concrete Observer class.
- * @version 1.0
+ * @author Enock Nyamweya
+ * @version 2.0
  */
 
 #include "MonitoringService.h"

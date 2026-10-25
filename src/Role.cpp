@@ -2,7 +2,7 @@
  * @file Role.cpp
  * @brief Implementation of the Role value object.
  * @author Enock Nyamweya
- * @version 1.0
+ * @version 2.0
  */
 
 #include "Role.h"

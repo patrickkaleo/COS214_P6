@@ -1,8 +1,9 @@
 /**
  * @file WorkflowEvent.h
  * @brief Defines the event types and data payload structure for workflow lifecycle notifications.
- * @details Implements the Observer pattern event transport mechanism as specified in Section 3.8.
- * @version 1.0
+ * @details Implements the Observer pattern event transport mechanism.
+ * @author Enock Nyamweya
+ * @version 2.0
  */
 
 #ifndef WORKFLOW_EVENT_H
