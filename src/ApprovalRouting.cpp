@@ -10,6 +10,7 @@
 #include "ApprovalRequest.h"
 #include "InstanceData.h"
 #include "ParticipantDirectory.h"
+#include "Task.h"
 
 ApprovalRouting::ApprovalRouting()
     : chain(nullptr) {
@@ -27,26 +28,21 @@ ApprovalRouting::~ApprovalRouting() {
 Participant* ApprovalRouting::select(const Task& task,
                                      const InstanceData& data,
                                      const ParticipantDirectory& directory) {
-    (void)directory; // Passed via ApprovalRequest context
-
     if (!chain) {
         return nullptr;
     }
 
-    // Encapsulate approval context in an ApprovalRequest value object
-    ApprovalRequest request;
-    request.item = &task;
-    request.data = &data;
-    request.level = 0;
+    // Encapsulate approval context in an ApprovalRequest value object.
+    // Each escalation of the task moves the request one handler further along the chain.
+    ApprovalRequest request(&task, &data, task.getEscalationLevel(), &directory);
 
     // Delegate processing to the Chain of Responsibility
     return chain->handle(request);
 }
 
 RoutingStrategy* ApprovalRouting::clone() const {
-    // Handler chains are composed dynamically per workflow definition.
-    // Return a new ApprovalRouting container.
-    return new ApprovalRouting(nullptr);
+    // Each instance's task gets its own copy of the definition's chain.
+    return new ApprovalRouting(chain ? chain->clone() : nullptr);
 }
 
 ApprovalHandler* ApprovalRouting::getChain() const {
@@ -58,4 +54,16 @@ void ApprovalRouting::setChain(ApprovalHandler* handlerChain) {
         delete chain;
         chain = handlerChain;
     }
+}
+
+std::vector<std::string> ApprovalRouting::describeChain() const {
+    std::vector<std::string> levels;
+    if (!chain) {
+        return levels;
+    }
+    std::unique_ptr<Iterator<ApprovalHandler>> it = chain->createIterator();
+    for (it->first(); !it->isDone(); it->next()) {
+        levels.push_back(it->current()->describe());
+    }
+    return levels;
 }

@@ -8,6 +8,8 @@
  * @version 1.0
  */
 
+#include <string>
+#include <vector>
 #include "RoutingStrategy.h"
 
 // Forward declaration of Chain of Responsibility handler
@@ -43,11 +45,15 @@ public:
      */
     virtual ~ApprovalRouting() override;
 
+    ApprovalRouting(const ApprovalRouting&) = delete;
+    ApprovalRouting& operator=(const ApprovalRouting&) = delete;
+
     /**
      * @brief Routes the approval task by passing an ApprovalRequest through the handler chain.
      *
-     * Constructs an ApprovalRequest using the task's escalation level and instance data,
-     * then executes @c chain->handle(request).
+     * Constructs an ApprovalRequest from the task's escalation level, the instance data
+     * and the directory, then executes @c chain->handle(request). After the task escalates,
+     * the next call skips one more handler.
      *
      * @param task The task requiring approval.
      * @param data Instance runtime data containing request details (e.g. amount, severity).
@@ -59,7 +65,7 @@ public:
                                 const ParticipantDirectory& directory) override;
 
     /**
-     * @brief Clones this strategy instance.
+     * @brief Clones this strategy instance, including a copy of the whole handler chain.
      * @return RoutingStrategy* Newly allocated copy of this strategy.
      */
     virtual RoutingStrategy* clone() const override;
@@ -75,6 +81,12 @@ public:
      * @param handlerChain The new handler chain head.
      */
     void setChain(ApprovalHandler* handlerChain);
+
+    /**
+     * @brief Lists every approval level in order, using the chain's iterator.
+     * @return One description per handler, e.g. "BursaryOfficer (amount <= 20000)".
+     */
+    std::vector<std::string> describeChain() const;
 };
 
 #endif // APPROVALROUTING_H
