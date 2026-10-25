@@ -5,6 +5,11 @@ WorkflowDefinition::WorkflowDefinition(string id, string name, int version)
 {
 }
 
+WorkflowDefinition::~WorkflowDefinition()
+{
+	delete root;
+}
+
 string WorkflowDefinition::getId()
 {
 	return id;
@@ -35,12 +40,12 @@ void WorkflowDefinition::setVersion(int version)
 	this->version = version;
 }
 
-SubProcess* WorkflowDefinition::getRoot()
+WorkItem *WorkflowDefinition::getRoot()
 {
 	return root;
 }
 
-void WorkflowDefinition::setRoot(SubProcess* root)
+void WorkflowDefinition::setRoot(WorkItem *root)
 {
 	if (this->root != root)
 	{
@@ -49,17 +54,20 @@ void WorkflowDefinition::setRoot(SubProcess* root)
 	}
 }
 
-vector<DependencyRule>& WorkflowDefinition::getRules()
+vector<DependencyRule *> WorkflowDefinition::getRules()
 {
 	return rules;
 }
 
-void WorkflowDefinition::addRule(string fromId, string toId, string outcome)
+void WorkflowDefinition::addRule(DependencyRule *newRule)
 {
-	rules.push_back(DependencyRule(fromId, toId, outcome));
+	if (newRule)
+		this->rules.push_back(newRule);
 }
 
-SubProcess* WorkflowDefinition::instantiateTree()
+WorkItem *WorkflowDefinition::instantiateTree()
 {
-	return this->root->clone();
+	if (root == nullptr)
+		return nullptr;
+	return root->clone();
 }
