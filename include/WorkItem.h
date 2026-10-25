@@ -15,6 +15,9 @@
 class WorkItemState;
 class Participant;
 class SubProcess;
+class WorkflowMediator;
+class InstanceData;
+class ParticipantDirectory;
 
 /**
  * @class WorkItem
@@ -29,7 +32,12 @@ class SubProcess;
  * listeners see all state changes.
  *
  * WorkItem is also the Component of the Composite pattern (Task, SubProcess); the
- * composite-specific behaviour lives in those subclasses.
+ * composite-specific behaviour lives in those subclasses. childCount() and getChild()
+ * are declared here so iterators can walk any tree without type checks.
+ *
+ * WorkItem is a Colleague of the Mediator pattern: when it finishes (completed,
+ * rejected or cancelled) it tells its WorkflowMediator, which decides what runs next.
+ * Items never reference each other directly.
  */
 class WorkItem {
 protected:
@@ -41,6 +49,7 @@ protected:
     Participant* assignee;     ///< Participant currently responsible (not owned).
     int escalationLevel;       ///< Number of times the item has been escalated.
     SubProcess* parent;        ///< Enclosing sub-process, nullptr for the root (not owned).
+    WorkflowMediator* mediator; ///< Instance mediator told when this item finishes (not owned).
 
 public:
     /**
@@ -105,6 +114,27 @@ public:
     SubProcess* getParent() const;
     void setParent(SubProcess* p);
 
+    WorkflowMediator* getMediator() const;
+    void setMediator(WorkflowMediator* m);
+
+    /// @name Uniform child access (Composite)
+    /// A leaf has no children; SubProcess overrides both.
+    /// @{
+    virtual int childCount() const;
+    virtual WorkItem* getChild(int index) const;
+    /// @}
+
+    /**
+     * @brief Gives the item (and every descendant) the data and directory used for routing.
+     *
+     * The default forwards to each child, so calling it on a root reaches every Task.
+     * Task overrides it to keep the pointers. Neither object is owned.
+     *
+     * @param data The owning instance's data.
+     * @param directory The participants that work can be routed to.
+     */
+    virtual void setRoutingContext(const InstanceData* data, const ParticipantDirectory* directory);
+
     /**
      * @brief Prototype operation used to copy a definition's tree into a new instance.
      * @return WorkItem* Newly allocated deep copy.
@@ -119,6 +149,17 @@ protected:
      * first children available.
      */
     virtual void onAvailable() = 0;
+
+    /**
+     * @brief Hook run after the item reaches a final state, before the mediator is told.
+     *
+     * Does nothing by default. SubProcess uses it to cancel children that are still open.
+     */
+    virtual void onFinished();
+
+private:
+    /// Runs onFinished() and tells the mediator; called after complete/reject/cancel succeed.
+    void finished();
 };
 
 #endif // WORKITEM_H

@@ -9,6 +9,7 @@
 #include "WorkItemState.h"
 #include "CreatedState.h"
 #include "EventDispatcher.h"
+#include "WorkflowMediator.h"
 
 WorkItem::WorkItem(const std::string& id, const std::string& itemName)
     : itemID(id),
@@ -18,7 +19,8 @@ WorkItem::WorkItem(const std::string& id, const std::string& itemName)
       state(new CreatedState()),
       assignee(nullptr),
       escalationLevel(0),
-      parent(nullptr) {
+      parent(nullptr),
+      mediator(nullptr) {
 }
 
 WorkItem::WorkItem(const WorkItem& other)
@@ -29,7 +31,8 @@ WorkItem::WorkItem(const WorkItem& other)
       state(other.state->clone()),
       assignee(other.assignee),
       escalationLevel(other.escalationLevel),
-      parent(nullptr) { // the copying composite re-links its children
+      parent(nullptr),     // the copying composite re-links its children
+      mediator(nullptr) {  // each instance registers its own copy with its own mediator
 }
 
 WorkItem::~WorkItem() = default;
@@ -51,15 +54,38 @@ bool WorkItem::start() {
 }
 
 bool WorkItem::complete(const std::string& result) {
-    return state->complete(*this, result);
+    if (!state->complete(*this, result)) {
+        return false;
+    }
+    finished();
+    return true;
 }
 
 bool WorkItem::reject(const std::string& reason) {
-    return state->reject(*this, reason);
+    if (!state->reject(*this, reason)) {
+        return false;
+    }
+    finished();
+    return true;
 }
 
 bool WorkItem::cancel() {
-    return state->cancel(*this);
+    if (!state->cancel(*this)) {
+        return false;
+    }
+    finished();
+    return true;
+}
+
+void WorkItem::finished() {
+    // Runs after the state call has returned, so the mediator may freely act on other items.
+    onFinished();
+    if (mediator != nullptr) {
+        mediator->itemChanged(*this);
+    }
+}
+
+void WorkItem::onFinished() {
 }
 
 bool WorkItem::escalate() {
@@ -127,4 +153,27 @@ SubProcess* WorkItem::getParent() const {
 
 void WorkItem::setParent(SubProcess* p) {
     parent = p;
+}
+
+WorkflowMediator* WorkItem::getMediator() const {
+    return mediator;
+}
+
+void WorkItem::setMediator(WorkflowMediator* m) {
+    mediator = m;
+}
+
+int WorkItem::childCount() const {
+    return 0;
+}
+
+WorkItem* WorkItem::getChild(int index) const {
+    (void)index;
+    return nullptr;
+}
+
+void WorkItem::setRoutingContext(const InstanceData* data, const ParticipantDirectory* directory) {
+    for (int i = 0; i < childCount(); ++i) {
+        getChild(i)->setRoutingContext(data, directory);
+    }
 }
