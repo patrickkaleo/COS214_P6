@@ -34,6 +34,18 @@
 
 #include "WorkItem.h"
 #include "WorkItemState.h"
+#include "Task.h"
+#include "SubProcess.h"
+#include "Iterator.h"
+#include "WorkItemIterator.h"
+#include "DepthFirstWorkItemIterator.h"
+#include "WorkflowMediator.h"
+#include "DependencyMediator.h"
+#include "DependencyRule.h"
+#include "ConcreteApprovalHandler.h"
+#include "ApprovalChainIterator.h"
+#include "ThresholdRule.h"
+#include "AlwaysAcceptRule.h"
 
 #include "ExternalService.h"
 #include "ServiceRegistry.h"
@@ -42,15 +54,11 @@
 #include "TrackingServiceAdapter.h"
 #include "CarrierAdapter.h"
 
-// Temporary test harness helper:
-// RoutingStrategy::select() takes a `const Task&` reference.
-// To allow Strategy tests to run independently before the Composite subsystem (Task)
-// is merged, this provides a safe dummy reference without requiring Task's definition.
-class Task;
-
+// RoutingStrategy::select() takes a `const Task&`; strategies under test that ignore
+// the task still need a real one (ApprovalRouting reads its escalation level).
 static const Task& getDummyTask() {
-    static const char dummyStorage[64] = {0};
-    return *reinterpret_cast<const Task*>(dummyStorage);
+    static const Task dummy("dummy", "Dummy Task");
+    return dummy;
 }
 
 TEST_SUITE("Enock Nyamweya - Observer & Singleton Subsystems") {
@@ -158,6 +166,10 @@ public:
     virtual Participant* handle(ApprovalRequest& req) override {
         (void)req;
         return approver;
+    }
+
+    virtual ApprovalHandler* clone() const override {
+        return new MockApprovalHandler(approver);
     }
 };
 
