@@ -1137,3 +1137,160 @@ TEST_SUITE("Angelo Anthony - Mediator Subsystem") {
     }
 }
 
+TEST_SUITE("Angelo Anthony - Chain of Responsibility Subsystem") {
+
+    TEST_CASE("CoR: each request goes to the lowest level with enough authority") {
+        ParticipantDirectory directory;
+        addBursaryApprovers(directory);
+        std::unique_ptr<ApprovalHandler> chain(buildBursaryChain());
+
+        InstanceData small, medium, large;
+        small.set("amount", "15000");
+        medium.set("amount", "65000");
+        large.set("amount", "250000");
+
+        ApprovalRequest r1(nullptr, &small, 0, &directory);
+        ApprovalRequest r2(nullptr, &medium, 0, &directory);
+        ApprovalRequest r3(nullptr, &large, 0, &directory);
+        CHECK(chain->handle(r1)->getName() == "Zanele Dube");
+        CHECK(chain->handle(r2)->getName() == "Michael Smith");
+        CHECK(chain->handle(r3)->getName() == "Prof. Naidoo");
+    }
+
+    TEST_CASE("CoR: a missing or non-numeric amount is passed up to unlimited authority") {
+        ParticipantDirectory directory;
+        addBursaryApprovers(directory);
+        std::unique_ptr<ApprovalHandler> chain(buildBursaryChain());
+
+        InstanceData missing, garbage;
+        garbage.set("amount", "R15k");
+        ApprovalRequest r1(nullptr, &missing, 0, &directory);
+        ApprovalRequest r2(nullptr, &garbage, 0, &directory);
+        CHECK(chain->handle(r1)->getName() == "Prof. Naidoo");
+        CHECK(chain->handle(r2)->getName() == "Prof. Naidoo");
+    }
+
+    TEST_CASE("CoR: a level with nobody in its role passes the request on") {
+        ParticipantDirectory directory;
+        directory.addParticipant(new Participant("B2", "Michael Smith", "FinanceManager"));
+        std::unique_ptr<ApprovalHandler> chain(buildBursaryChain());
+
+        InstanceData data;
+        data.set("amount", "5000");
+        ApprovalRequest request(nullptr, &data, 0, &directory);
+        CHECK(chain->handle(request)->getName() == "Michael Smith");
+    }
+
+    TEST_CASE("CoR: the end of the chain returns nullptr when nobody can approve") {
+        ParticipantDirectory directory;
+        addBursaryApprovers(directory);
+        ConcreteApprovalHandler officer("BursaryOfficer", new ThresholdRule("amount", 20000));
+
+        InstanceData data;
+        data.set("amount", "50000");
+        ApprovalRequest request(nullptr, &data, 0, &directory);
+        CHECK(officer.handle(request) == nullptr);
+
+        ApprovalRequest noDirectory(nullptr, &data, 0, nullptr);
+        CHECK(officer.handle(noDirectory) == nullptr);
+    }
+
+    TEST_CASE("CoR: escalating an approval task hands it to the next level") {
+        ParticipantDirectory directory;
+        addBursaryApprovers(directory);
+        InstanceData data;
+        data.set("amount", "12000");
+
+        Task approve("APPROVE", "Approve Bursary");
+        approve.setRouting(new ApprovalRouting(buildBursaryChain()));
+        approve.setRoutingContext(&data, &directory);
+
+        REQUIRE(approve.makeAvailable());
+        CHECK(approve.getStateName() == "Assigned");
+        CHECK(approve.getAssignee()->getName() == "Zanele Dube");
+
+        // Deadline passed at the officer: escalate, then route to the next level.
+        REQUIRE(approve.escalate());
+        CHECK(approve.getEscalationLevel() == 1);
+        CHECK(approve.getAssignee() == nullptr);
+        REQUIRE(approve.route());
+        CHECK(approve.getStateName() == "Assigned");
+        CHECK(approve.getAssignee()->getName() == "Michael Smith");
+
+        REQUIRE(approve.escalate());
+        REQUIRE(approve.route());
+        CHECK(approve.getAssignee()->getName() == "Prof. Naidoo");
+
+        REQUIRE(approve.start());
+        CHECK(approve.complete("approved"));
+    }
+
+    TEST_CASE("CoR: a task nobody can approve escalates automatically when it opens") {
+        ParticipantDirectory directory;
+        addBursaryApprovers(directory);
+        InstanceData data;
+        data.set("amount", "50000");
+
+        Task approve("APPROVE", "Approve Bursary");
+        approve.setRouting(new ApprovalRouting(
+            new ConcreteApprovalHandler("BursaryOfficer", new ThresholdRule("amount", 20000))));
+        approve.setRoutingContext(&data, &directory);
+
+        REQUIRE(approve.makeAvailable());
+        CHECK(approve.getStateName() == "Escalated");
+        CHECK(approve.getAssignee() == nullptr);
+        CHECK(approve.getEscalationLevel() == 1);
+    }
+
+    TEST_CASE("CoR: cloned routing carries its own copy of the whole chain") {
+        ParticipantDirectory directory;
+        addBursaryApprovers(directory);
+        InstanceData data;
+        data.set("amount", "65000");
+
+        RoutingStrategy* copy = nullptr;
+        {
+            ApprovalRouting original(buildBursaryChain());
+            copy = original.clone();
+            ApprovalRouting* approvalCopy = static_cast<ApprovalRouting*>(copy);
+            CHECK(approvalCopy->getChain() != original.getChain());
+            CHECK(approvalCopy->describeChain() == original.describeChain());
+        } // original and its chain are destroyed here
+
+        Participant* approver = copy->select(getDummyTask(), data, directory);
+        REQUIRE(approver != nullptr);
+        CHECK(approver->getName() == "Michael Smith");
+        delete copy;
+    }
+
+    TEST_CASE("CoR: an approval task cloned from a definition still routes through the chain") {
+        ParticipantDirectory directory;
+        addBursaryApprovers(directory);
+
+        SubProcess definition("FUNDING", "Bursary Funding");
+        Task* approve = new Task("APPROVE", "Approve Bursary");
+        approve->setRouting(new ApprovalRouting(buildBursaryChain()));
+        definition.add(approve);
+
+        TestInstance inst(definition, {}, directory);
+        inst.data.set("amount", "250000");
+        REQUIRE(inst.root->makeAvailable());
+        CHECK(inst.state("APPROVE") == "Assigned");
+        CHECK(inst.item("APPROVE")->getAssignee()->getName() == "Prof. Naidoo");
+    }
+
+    TEST_CASE("CoR: setNext returns its argument and replaces the old successor") {
+        ConcreteApprovalHandler head("BursaryOfficer", new ThresholdRule("amount", 20000));
+        ApprovalHandler* manager = new ConcreteApprovalHandler("FinanceManager", new AlwaysAcceptRule());
+        CHECK(head.setNext(manager) == manager);
+        CHECK(head.getNext() == manager);
+
+        ApprovalHandler* committee = new ConcreteApprovalHandler("BursaryCommittee", new AlwaysAcceptRule());
+        head.setNext(committee); // deletes the manager handler
+        CHECK(head.getNext() == committee);
+
+        ApprovalRouting routing;
+        CHECK(routing.describeChain().empty());
+        CHECK(routing.select(getDummyTask(), InstanceData(), ParticipantDirectory()) == nullptr);
+    }
+}
