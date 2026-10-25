@@ -2,7 +2,7 @@
 #define UNIVERSITYAPLICATIONDEFINITIONBUILDER_H
 
 #include "WorkflowDefinitionBuilder.h"
-
+#include "RoleBasedRouting.h"
 /**
  * @class UniversityApplicationDefinitionBuilder
  * @brief Generic Builder for creating workflow definitions that can be applied to different scenarios and set ups

@@ -7,7 +7,7 @@ UniversityApplicationDefinitionBuilder::UniversityApplicationDefinitionBuilder(s
 
 void UniversityApplicationDefinitionBuilder::buildStructure()
 {
-	addSubProcess("UNI_APP", "University Application", 5);
+	addSubProcess("UNI_APP", "University Application", "uni-5");
 
 	addSubProcess("INTAKE", "Application Intake", "UNI_APP");
 	addTask("CAPTURE", "Capture Application", "INTAKE");

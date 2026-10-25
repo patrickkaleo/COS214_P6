@@ -19,7 +19,7 @@ protected:
 	WorkflowDefinition* definition;
 
 public:
-	WorkflowDefinitionBuilder() = delete;
+	WorkflowDefinitionBuilder();
 	WorkflowDefinitionBuilder(const WorkflowDefinitionBuilder&) = delete;
 	WorkflowDefinitionBuilder& operator=(const WorkflowDefinitionBuilder&) = delete;
 
