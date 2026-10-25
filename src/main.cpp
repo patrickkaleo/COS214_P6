@@ -694,3 +694,215 @@ TEST_SUITE("Angela Ramaboea - Adapter Subsystem") {
         CHECK(data.get("waybill") == "WB1001");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Composite, Iterator, Mediator and Chain of Responsibility test helpers
+// ---------------------------------------------------------------------------
+
+/// Task routed to the first participant holding @p role.
+static Task* roleTask(const std::string& id, const std::string& name, const std::string& role) {
+    Task* task = new Task(id, name);
+    task->setRouting(new RoleBasedRouting(role));
+    return task;
+}
+
+/// Starts and completes an item that routing has already assigned.
+static bool finishWith(WorkItem* item, const std::string& outcome) {
+    return item != nullptr && item->start() && item->complete(outcome);
+}
+
+/// Ids visited by a work-item iterator, in order.
+static std::vector<std::string> visitOrder(Iterator<WorkItem>& it) {
+    std::vector<std::string> ids;
+    for (it.first(); !it.isDone(); it.next()) {
+        ids.push_back(it.current()->getId());
+    }
+    return ids;
+}
+
+/// Shipment-exception process: report, then handle (reroute or hold), then close.
+static SubProcess* buildShipmentExceptionTree() {
+    SubProcess* root = new SubProcess("SHIP_EX", "Shipment Exception");
+
+    SubProcess* report = new SubProcess("REPORT", "Exception Report");
+    report->add(roleTask("LOG_EXCEPTION", "Log Exception", "WarehouseClerk"));
+    report->add(roleTask("CLASSIFY", "Classify Severity", "ExceptionAnalyst"));
+
+    SubProcess* handle = new SubProcess("HANDLE", "Exception Handling");
+    handle->add(roleTask("ASSESS", "Assess Impact", "LogisticsCoordinator"));
+    handle->add(roleTask("REROUTE", "Reroute Shipment", "Dispatcher"));
+    handle->add(roleTask("HOLD", "Hold Shipment", "WarehouseSupervisor"));
+
+    SubProcess* close = new SubProcess("CLOSE", "Case Closure");
+    close->add(roleTask("NOTIFY_CUSTOMER", "Notify Customer", "CustomerService"));
+    close->add(roleTask("CLOSE_CASE", "Close Case", "LogisticsCoordinator"));
+
+    root->add(report);
+    root->add(handle);
+    root->add(close);
+    return root;
+}
+
+static std::vector<DependencyRule> shipmentExceptionRules() {
+    std::vector<DependencyRule> rules;
+    rules.push_back(DependencyRule("REPORT", "HANDLE", "*"));
+    rules.push_back(DependencyRule("HANDLE", "CLOSE", "*"));
+    rules.push_back(DependencyRule("LOG_EXCEPTION", "CLASSIFY", "*"));
+    rules.push_back(DependencyRule("ASSESS", "REROUTE", "reroute"));
+    rules.push_back(DependencyRule("ASSESS", "HOLD", "hold"));
+    rules.push_back(DependencyRule("NOTIFY_CUSTOMER", "CLOSE_CASE", "*"));
+    return rules;
+}
+
+static void addLogisticsStaff(ParticipantDirectory& directory) {
+    directory.addParticipant(new Participant("L1", "Sipho Ndlovu", "WarehouseClerk"));
+    directory.addParticipant(new Participant("L2", "Ayesha Patel", "ExceptionAnalyst"));
+    directory.addParticipant(new Participant("L3", "Johan van Wyk", "LogisticsCoordinator"));
+    directory.addParticipant(new Participant("L4", "Lerato Mokoena", "Dispatcher"));
+    directory.addParticipant(new Participant("L5", "Pieter Botha", "WarehouseSupervisor"));
+    directory.addParticipant(new Participant("L6", "Nomsa Khumalo", "CustomerService"));
+}
+
+/// One running instance: its own copy of the tree, its own mediator and its own data.
+struct TestInstance {
+    std::unique_ptr<SubProcess> root;
+    DependencyMediator mediator;
+    InstanceData data;
+
+    TestInstance(const SubProcess& definitionRoot,
+                 const std::vector<DependencyRule>& rules,
+                 const ParticipantDirectory& directory)
+        : root(definitionRoot.clone()), mediator(rules) {
+        mediator.registerTree(*root);
+        root->setRoutingContext(&data, &directory);
+    }
+
+    WorkItem* item(const std::string& id) { return mediator.findItem(id); }
+    std::string state(const std::string& id) { return item(id)->getStateName(); }
+};
+
+/// Bursary approval levels: officer up to R20 000, manager up to R100 000, then committee.
+static ApprovalHandler* buildBursaryChain() {
+    ApprovalHandler* officer = new ConcreteApprovalHandler("BursaryOfficer", new ThresholdRule("amount", 20000), 48);
+    officer->setNext(new ConcreteApprovalHandler("FinanceManager", new ThresholdRule("amount", 100000), 72))
+           ->setNext(new ConcreteApprovalHandler("BursaryCommittee", new AlwaysAcceptRule(), 168));
+    return officer;
+}
+
+static void addBursaryApprovers(ParticipantDirectory& directory) {
+    directory.addParticipant(new Participant("B1", "Zanele Dube", "BursaryOfficer"));
+    directory.addParticipant(new Participant("B2", "Michael Smith", "FinanceManager"));
+    directory.addParticipant(new Participant("B3", "Prof. Naidoo", "BursaryCommittee"));
+}
+
+TEST_SUITE("Angelo Anthony - Composite & Iterator Subsystem") {
+
+    TEST_CASE("Iterator: depth-first traversal visits parents before children, left to right") {
+        std::unique_ptr<SubProcess> root(buildShipmentExceptionTree());
+        std::unique_ptr<WorkItemIterator> it = root->createIterator();
+
+        std::vector<std::string> expected = {
+            "SHIP_EX", "REPORT", "LOG_EXCEPTION", "CLASSIFY",
+            "HANDLE", "ASSESS", "REROUTE", "HOLD",
+            "CLOSE", "NOTIFY_CUSTOMER", "CLOSE_CASE"};
+        CHECK(visitOrder(*it) == expected);
+    }
+
+    TEST_CASE("Iterator: first() restarts, and a finished iterator stays finished") {
+        std::unique_ptr<SubProcess> root(buildShipmentExceptionTree());
+        std::unique_ptr<WorkItemIterator> it = root->createIterator();
+
+        while (!it->isDone()) {
+            it->next();
+        }
+        CHECK(it->current() == nullptr);
+        it->next(); // harmless once done
+        CHECK(it->isDone());
+
+        it->first();
+        REQUIRE_FALSE(it->isDone());
+        CHECK(it->current()->getId() == "SHIP_EX");
+    }
+
+    TEST_CASE("Iterator: a single task and an empty root are traversed correctly") {
+        Task task("T1", "Capture Application");
+        DepthFirstWorkItemIterator single(&task);
+        CHECK(visitOrder(single) == std::vector<std::string>{"T1"});
+
+        DepthFirstWorkItemIterator empty(nullptr);
+        CHECK(empty.isDone());
+        CHECK(empty.current() == nullptr);
+    }
+
+    TEST_CASE("Composite: find() locates nested items and parents are linked") {
+        std::unique_ptr<SubProcess> root(buildShipmentExceptionTree());
+
+        WorkItem* hold = root->find("HOLD");
+        REQUIRE(hold != nullptr);
+        CHECK(hold->getName() == "Hold Shipment");
+        REQUIRE(hold->getParent() != nullptr);
+        CHECK(hold->getParent()->getId() == "HANDLE");
+        CHECK(hold->getParent()->getParent() == root.get());
+
+        CHECK(root->find("SHIP_EX") == root.get());
+        CHECK(root->find("NOT_THERE") == nullptr);
+        CHECK(hold->childCount() == 0);
+        CHECK(hold->getChild(0) == nullptr);
+    }
+
+    TEST_CASE("Composite: remove() deletes only the named direct child") {
+        SubProcess handle("HANDLE", "Exception Handling");
+        handle.add(new Task("ASSESS", "Assess Impact"));
+        handle.add(new Task("HOLD", "Hold Shipment"));
+        handle.add(nullptr); // ignored
+
+        CHECK(handle.childCount() == 2);
+        CHECK(handle.remove("ASSESS"));
+        CHECK_FALSE(handle.remove("ASSESS"));
+        CHECK(handle.childCount() == 1);
+        CHECK(handle.getChild(0)->getId() == "HOLD");
+        CHECK(handle.getChild(5) == nullptr);
+    }
+
+    TEST_CASE("Composite: clone() deep-copies the tree so instances are isolated") {
+        std::unique_ptr<SubProcess> definition(buildShipmentExceptionTree());
+        std::unique_ptr<SubProcess> copy(definition->clone());
+
+        WorkItem* original = definition->find("ASSESS");
+        WorkItem* copied = copy->find("ASSESS");
+        REQUIRE(copied != nullptr);
+        CHECK(copied != original);
+        CHECK(copied->getParent() == copy->find("HANDLE"));
+
+        Task* copiedTask = static_cast<Task*>(copied);
+        Task* originalTask = static_cast<Task*>(original);
+        REQUIRE(copiedTask->getRouting() != nullptr);
+        CHECK(copiedTask->getRouting() != originalTask->getRouting());
+
+        // Progress in the copy must not leak into the definition.
+        CHECK(copied->makeAvailable());
+        CHECK(copied->getStateName() == "Available");
+        CHECK(original->getStateName() == "Created");
+
+        CHECK(copy->remove("REPORT"));
+        CHECK(definition->find("LOG_EXCEPTION") != nullptr);
+    }
+
+    TEST_CASE("Iterator: approval chain iterator lists every level in order") {
+        std::unique_ptr<ApprovalHandler> chain(buildBursaryChain());
+        std::unique_ptr<Iterator<ApprovalHandler>> it = chain->createIterator();
+
+        std::vector<std::string> levels;
+        for (it->first(); !it->isDone(); it->next()) {
+            levels.push_back(it->current()->describe());
+        }
+        REQUIRE(levels.size() == 3);
+        CHECK(levels[0] == "BursaryOfficer (amount <= 20000)");
+        CHECK(levels[1] == "FinanceManager (amount <= 100000)");
+        CHECK(levels[2] == "BursaryCommittee (any request)");
+
+        ApprovalChainIterator empty(nullptr);
+        CHECK(empty.isDone());
+    }
+}
+
