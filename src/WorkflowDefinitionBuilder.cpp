@@ -1,5 +1,14 @@
 #include "WorkflowDefinitionBuilder.h"
 
+WorkflowDefinitionBuilder::WorkflowDefinitionBuilder(string id, string name, int version)
+	: definition(new WorkflowDefinition(id, name, version))
+{
+}
+
+WorkflowDefinitionBuilder::~WorkflowDefinitionBuilder()
+{
+	delete definition;
+}
 
 WorkflowDefinition* WorkflowDefinitionBuilder::getResult()
 {
@@ -85,8 +94,7 @@ void WorkflowDefinitionBuilder::markCheckpoint(string itemId)
 		return;
 	}
 
-	// mark checkopoint on an item with the id
-	// task->setCheckpoint(true);
+
 }
 
 void WorkflowDefinitionBuilder::addPriority(string itemId, int level)

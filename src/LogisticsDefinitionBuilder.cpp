@@ -1,9 +1,7 @@
 #include "LogisticsDefinitionBuilder.h"
-LogisticsDefinitionBuilder::LogisticsDefinitionBuilder( string id, int version) 
+LogisticsDefinitionBuilder::LogisticsDefinitionBuilder(string id, string name, int version)
+	: WorkflowDefinitionBuilder(id, name, version)
 {
-	this->definition->setId(id);
-	this->definition->setName("Logistics Workflow");
-	this->definition->setVersion(version);
 }
 
 void LogisticsDefinitionBuilder::buildStructure()
@@ -26,6 +24,8 @@ void LogisticsDefinitionBuilder::buildStructure()
 
 void LogisticsDefinitionBuilder::buildDependencies()
 {
+	addDependency("LOG_EXCEPTION", "CLASSIFY", "*");
+	addDependency("CLASSIFY", "ASSESS", "*");
 	addDependency("ASSESS", "REROUTE", "reroute");
 	addDependency("ASSESS", "HOLD", "hold");
 	addDependency("REROUTE", "NOTIFY_CUSTOMER", "*");

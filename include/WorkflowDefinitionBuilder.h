@@ -19,7 +19,8 @@ protected:
 	WorkflowDefinition* definition;
 
 public:
-	WorkflowDefinitionBuilder();
+	WorkflowDefinitionBuilder(string id, string name, int version);
+	virtual ~WorkflowDefinitionBuilder();
 	WorkflowDefinitionBuilder(const WorkflowDefinitionBuilder&) = delete;
 	WorkflowDefinitionBuilder& operator=(const WorkflowDefinitionBuilder&) = delete;
 	/**
@@ -62,6 +63,11 @@ protected:
 	 * @param parentId of subprocess that is parent to the new subprocess to be added
 	 */
 	void addSubProcess(string id, string name, string parentId);
+
+	/**
+	 * @brief find process based on id
+	 * @param id subprocess id
+	 */
 
 	/**
 	 * @brief add task item to the workflow definition @see WorkItem

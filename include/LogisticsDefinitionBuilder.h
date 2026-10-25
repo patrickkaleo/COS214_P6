@@ -12,7 +12,7 @@ using namespace std;
 class LogisticsDefinitionBuilder : public WorkflowDefinitionBuilder
 {
 public:
-	LogisticsDefinitionBuilder(string id, int version);
+	LogisticsDefinitionBuilder(string id, string name, int version );
 	LogisticsDefinitionBuilder() = delete ;
 	LogisticsDefinitionBuilder(LogisticsDefinitionBuilder& other) = delete ;
 	void buildStructure();

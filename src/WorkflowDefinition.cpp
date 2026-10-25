@@ -5,11 +5,6 @@ WorkflowDefinition::WorkflowDefinition(string id, string name, int version)
 {
 }
 
-WorkflowDefinition::~WorkflowDefinition()
-{
-	delete root;
-}
-
 string WorkflowDefinition::getId()
 {
 	return id;

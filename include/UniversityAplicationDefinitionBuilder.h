@@ -11,6 +11,7 @@ class UniversityApplicationDefinitionBuilder : public WorkflowDefinitionBuilder
 {
 public:
 	UniversityApplicationDefinitionBuilder(string id);
+	UniversityApplicationDefinitionBuilder(string id, string name, int version);
 	UniversityApplicationDefinitionBuilder() = delete;
 	UniversityApplicationDefinitionBuilder(WorkflowDefinition& ) = delete;
 	

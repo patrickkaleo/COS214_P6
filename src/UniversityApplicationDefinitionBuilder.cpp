@@ -1,13 +1,18 @@
 #include "UniversityAplicationDefinitionBuilder.h"
 
-UniversityApplicationDefinitionBuilder::UniversityApplicationDefinitionBuilder(string id) 
+UniversityApplicationDefinitionBuilder::UniversityApplicationDefinitionBuilder(string id)
+	: UniversityApplicationDefinitionBuilder(id, "University Application Workflow", 1)
 {
-	this->definition->setId(id);
+}
+
+UniversityApplicationDefinitionBuilder::UniversityApplicationDefinitionBuilder(string id, string name, int version)
+	: WorkflowDefinitionBuilder(id, name, version)
+{
 }
 
 void UniversityApplicationDefinitionBuilder::buildStructure()
 {
-	addSubProcess("UNI_APP", "University Application", "uni-5");
+	addSubProcess("UNI_APP", "University Application", "");
 
 	addSubProcess("INTAKE", "Application Intake", "UNI_APP");
 	addTask("CAPTURE", "Capture Application", "INTAKE");
@@ -20,11 +25,16 @@ void UniversityApplicationDefinitionBuilder::buildStructure()
 	addSubProcess("OFFER", "Offer and Registration", "UNI_APP");
 	addTask("ISSUE_OFFER", "Issue Offer", "OFFER");
 	addTask("REGISTER", "Registration", "OFFER");
+	addTask("NOTIFY_REJECTION", "Notify Applicant of Rejection", "OFFER");
 }
 
 void UniversityApplicationDefinitionBuilder::buildDependencies()
 {
+	addDependency("CAPTURE", "VERIFY_DOCS", "*");
+	addDependency("VERIFY_DOCS", "FACULTY_REVIEW", "*");
+	addDependency("FACULTY_REVIEW", "DECISION", "*");
 	addDependency("DECISION", "ISSUE_OFFER", "approved");
+	addDependency("DECISION", "NOTIFY_REJECTION", "rejected");
 	addDependency("ISSUE_OFFER", "REGISTER", "*");
 }
 
@@ -35,6 +45,7 @@ void UniversityApplicationDefinitionBuilder::buildRouting()
 	setRouting("FACULTY_REVIEW", new RoleBasedRouting("FacultyOfficer"));
 	setRouting("DECISION", new RoleBasedRouting("Dean"));
 	setRouting("ISSUE_OFFER", new RoleBasedRouting("AdmissionsOfficer"));
+	setRouting("NOTIFY_REJECTION", new RoleBasedRouting("AdmissionsOfficer"));
 	setRouting("REGISTER", new RoleBasedRouting("Registrar"));
 }
 
@@ -42,6 +53,7 @@ void UniversityApplicationDefinitionBuilder::buildIntegrations()
 {
 	setService("VERIFY_DOCS", "DocumentVerificationService");
 	setService("ISSUE_OFFER", "NotificationService");
+	setService("NOTIFY_REJECTION", "NotificationService");
 }
 
 void UniversityApplicationDefinitionBuilder::buildExtras()
@@ -50,4 +62,5 @@ void UniversityApplicationDefinitionBuilder::buildExtras()
 	addPriority("FACULTY_REVIEW", 2);
 	addAudit("DECISION");
 	addAudit("ISSUE_OFFER");
+	addAudit("NOTIFY_REJECTION");
 }
