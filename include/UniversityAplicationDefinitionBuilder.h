@@ -2,7 +2,8 @@
 #define UNIVERSITYAPLICATIONDEFINITIONBUILDER_H
 
 #include "WorkflowDefinitionBuilder.h"
-
+#include "DataRuleRouting.h"
+#include "RoleBasedRouting.h"
 /**
  * @class UniversityApplicationDefinitionBuilder
  * @brief Builds the university admissions workflow definition.
