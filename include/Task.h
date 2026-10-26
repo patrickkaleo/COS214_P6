@@ -105,12 +105,21 @@ public:
      */
     virtual void performWork(InstanceContext& context);
 
+    /**
+     * @brief Set the context used by this task's routing strategy.
+     * @param data Instance data available during routing (not owned).
+     * @param directory Directory used to look up participants (not owned).
+     */
+	void setRoutingContext(InstanceData* data, ParticipantDirectory* directory);
+
 private:
     Participant* assignee_;          /**< Not owned. */
     RoutingStrategy* routing_;       /**< Owned. */
     std::string serviceName_;        /**< Key into ServiceRegistry. */
     bool checkpoint_;                /**< Take Memento before external call. */
     int escalationLevel_;            /**< For approval / escalation chains. */
+	InstanceData* instanceData_;     /**< Not owned. */
+	ParticipantDirectory* directory_;/**< Not owned. */
 };
 
 #endif // TASK_H
