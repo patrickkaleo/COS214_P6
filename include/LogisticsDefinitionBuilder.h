@@ -1,11 +1,10 @@
 #ifndef LOGISTICSDEFINITIONBUILDER_H
 #define LOGISTICSDEFINITIONBUILDER_H
 
-#include "DataRuleRouting.h"
 #include "WorkflowDefinitionBuilder.h"
-#include "Task.h"
-#include "WorkItem.h"
-#include "SubProcess.h"
+#include "DataRuleRouting.h"
+#include "RoleBasedRouting.h"
+
 /**
  * @class LogisticsDefinitionBuilder
  * @brief Builds the shipment-exception workflow definition.
@@ -24,7 +23,7 @@ public:
 	LogisticsDefinitionBuilder(const LogisticsDefinitionBuilder& other) = delete;
 	LogisticsDefinitionBuilder& operator=(const LogisticsDefinitionBuilder& other) = delete;
 
-	void buildDefinition() ;
+	void buildDefinition() override;
 };
 
 #endif
