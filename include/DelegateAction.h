@@ -1,15 +1,18 @@
 #ifndef DELEGATEACTION_H
 #define DELEGATEACTION_H
 
-class DelegateAction {
+#include "WorkItemAction.h"
+
+class DelegateAction : public WorkItemAction
+{
 
 private:
-	Participant* to;
+	Participant *to;
 
 public:
-	bool doExecute(WorkItem& item);
-
-	string describe();
+	DelegateAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor, Participant *to);
+	bool doExecute(WorkItem &item);
+	std::string describe() const;
 };
 
 #endif
