@@ -1,27 +1,52 @@
 #ifndef WORKFLOWINSTANCE_H
 #define WORKFLOWINSTANCE_H
+#include "WorkflowDefintion.h"
+#include "SubProcess.h"
+#include "DependencyMediator.h"
+#include "InstanceData.h"
+#include "WorkflowSnapshot.h"
+#include "WorkItem.h"
+#include "Task.h"
+#include "ParticipantDirectory.h"
+#include<map>
+#include<vector>
 
+using namespace std;
 class WorkFlowInstance {
 
 private:
 	string Id;
-	const WorkFlowDefinition* definition;
-	DependencyMediator mediator;
+	const WorkflowDefinition* definition;
+	DependencyMediator* mediator;
 	SubProcess* rootProcess;
 	InstanceData data;
-
+	ParticipantDirectory* particpants;
 public:
+	WorkFlowInstance(const string & id,  const WorkflowDefinition* definition, SubProcess* root, DependencyMediator* mediator,const InstanceData& data, ParticipantDirectory* directory);
+	
+	~WorkFlowInstance();
+
 	bool start();
 
-	WorkItem* findItem(string id);
+	WorkItem* findItem( const string& id)const;
 
-	InstanceData getDatat();
+	const string& getId() const;
 
-	string status();
+	InstanceData& getData();
 
-	WorkflowSnapshot* createSnapshot(string label);
+	string status() const;
 
-	void restoreSnapshot(constWorkflowSnapshot& snapshot);
+	WorkflowSnapshot* createSnapshot(const string& label);
+	
+	WorkItem* findItemRecursive(WorkItem* current,const std::string& itemId) const;
+
+	void captureItem(WorkItem* item,map<string, string>& states,map<string, string>& assignees, map<string, string>& outcomes)const;
+
+	void restoreSnapshot(const WorkflowSnapshot& snapshot);
+	
+	void clearAssignees(WorkItem* item);
+
+	WorkItemState* createStateFromName(const string& stateName) const;
 };
 
 #endif

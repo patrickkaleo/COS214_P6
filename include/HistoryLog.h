@@ -1,5 +1,10 @@
 #ifndef HISTORYLOG_H
 #define HISTORYLOG_H
+#include<iostream>
+#include<map>
+#include<vector>
+#include "WorkflowSnapshot.h"
+
 
 class HistoryLog {
 
@@ -7,11 +12,12 @@ private:
 	map<string, vector<WorkflowSnapshot*>> snapshots;
 
 public:
-	void pushSnapshot(string InstanceID, WorkflowSnapshot* snapshot);
+	void pushSnapshot(string & InstanceID, WorkflowSnapshot* snapshot);
 
-	WorkflowSnapshot* popSnapshot();
+	WorkflowSnapshot* popSnapshot(const string& instanceId);
 
-	WorkFlowSnapshot* latest(string InstanceID);
+	WorkflowSnapshot* latest(const string & InstanceID) const;
+	~HistoryLog();
 };
 
 #endif
