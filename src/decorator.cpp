@@ -16,6 +16,8 @@
 #include <iostream>
 #include <string>
 
+using namespace std;
+
 // WorkItemDecorator
 WorkItemDecorator::WorkItemDecorator(WorkItem* inner)
     : WorkItem(inner ? inner->getId() : "unknown", inner ? inner->getName() : "unknown"),
@@ -38,11 +40,11 @@ bool WorkItemDecorator::start() {
     return inner_ ? inner_->start() : false;
 }
 
-bool WorkItemDecorator::complete(const std::string& outcome) {
+bool WorkItemDecorator::complete(const string& outcome) {
     return inner_ ? inner_->complete(outcome) : false;
 }
 
-bool WorkItemDecorator::reject(const std::string& reason) {
+bool WorkItemDecorator::reject(const string& reason) {
     return inner_ ? inner_->reject(reason) : false;
 }
 
@@ -75,8 +77,8 @@ int PriorityDecorator::getPriority() const {
 }
 
 void PriorityDecorator::onAvailable() {
-    // Extra behaviour first
-    std::cout << "[PriorityDecorator] \"" << getName() << "\" flagged as priority level " << level_ << "\n";
+    // Extra behaviour
+    cout << "[PriorityDecorator] \"" << getName() << "\" flagged as priority level " << level_ << "\n";
     // Then forward
     WorkItemDecorator::onAvailable();
 }
@@ -92,12 +94,46 @@ AuditDecorator::AuditDecorator(WorkItem* inner, AuditLogger* logger)
       logger_(logger)
 {}
 
-void AuditDecorator::audit(const std::string& action) const {
-    if (logger_) {
-        // Real AuditLogger API
-        std::cout << "[AuditDecorator] " << action << " on \"" << getName() << "\" (id=" << getId() << ")\n";
-        // logger_->onEvent(WorkflowEvent{EventType::..., ..., id_, name_, ...});
+void AuditDecorator::audit(const string& action) const {
+    if (!logger_) return;
+
+    EventType type = EventType::STARTED; //default
+    string outcome;
+
+    if (action == "makeAvailable" || action == "onAvailable") {
+        type = EventType::AVAILABLE;
+    } else if (action == "assign") {
+        type = EventType::ASSIGNED;
+    } else if (action == "start") {
+        type = EventType::STARTED;
+    } else if (action.find("complete") == 0) {
+        type = EventType::COMPLETED;
+        // action may be "complete(outcome=paid)" so extracting after '=' if present
+        string::size_type pos = action.find('=');
+        if (pos != string::npos && pos + 1 < action.size()) {
+            outcome = action.substr(pos + 1);
+            if (!outcome.empty() && outcome.back() == ')') {
+                outcome.pop_back();
+            }
+        }
+    } else if (action.find("reject") == 0) {
+        type = EventType::REJECTED;
+        string::size_type pos = action.find('=');
+        if (pos != string::npos && pos + 1 < action.size()) {
+            outcome = action.substr(pos + 1);
+            if (!outcome.empty() && outcome.back() == ')') {
+                outcome.pop_back();
+            }
+        }
+    } else if (action == "cancel") {
+        type = EventType::CANCELLED;
+    } else if (action == "escalate") {
+        type = EventType::ESCALATED;
     }
+
+    // instanceId is empty here (WorkItem does not own instance id) Listeners still get item id/name/outcome for the audit trail.
+    WorkflowEvent event(type, /*instanceId*/ "", getId(), getName(), outcome);
+    logger_->onEvent(event);
 }
 
 bool AuditDecorator::makeAvailable() {
@@ -115,12 +151,12 @@ bool AuditDecorator::start() {
     return WorkItemDecorator::start();
 }
 
-bool AuditDecorator::complete(const std::string& outcome) {
+bool AuditDecorator::complete(const string& outcome) {
     audit("complete(outcome=" + outcome + ")");
     return WorkItemDecorator::complete(outcome);
 }
 
-bool AuditDecorator::reject(const std::string& reason) {
+bool AuditDecorator::reject(const string& reason) {
     audit("reject(reason=" + reason + ")");
     return WorkItemDecorator::reject(reason);
 }
