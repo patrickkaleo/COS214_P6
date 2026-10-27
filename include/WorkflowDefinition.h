@@ -11,7 +11,8 @@ using namespace std;
 
 /**
  * @class WorkflowDefition
- * @brief A template for a workflow eg a workflow to review a bursary application or a a university application
+ * @brief Finished workflow product. Holds the root work-item tree and the dependency rules.
+ * Two live definitions cannot share an id.
  */
 class WorkflowDefinition
 {
@@ -25,11 +26,15 @@ private:
 public:
 	/**
 	 * @brief constructor
-	 * @param id id of workflow defintion
+	 * @param id id of workflow defintion. Empty and duplicate ids are not accepted.
 	 * @param name name of workflow defintion
 	 * @param version version of workflow defintion
 	 */
 	WorkflowDefinition(string id, string name, int version);
+
+	/**
+	 * @brief Release the reserved id and delete the root tree and dependency rules.
+	 */
 	~WorkflowDefinition();
 
 	WorkflowDefinition(const WorkflowDefinition &) = delete;
@@ -44,9 +49,10 @@ public:
 	/**
 	 * @brief set id of the workflow definition
 	 * @param id new id
+	 * @return false when the id is empty or already used by another definition
 	 */
 	void setId(string id);
-
+	
 	/**
 	 * @brief return name of the workflow definition
 	 * @return string
@@ -82,22 +88,22 @@ public:
 	 * @param root WorkItem to be added
 	 */
 	void setRoot(WorkItem *root);
-
+	
 	/**
 	 * @brief return the dependency rules for a given workflow definition
-	 * @return vector<DependencyRule>&
+	 * @return vector<DependencyRule*> the rules stored on this definition
 	 */
 	vector<DependencyRule *> getRules();
 
 	/**
 	 * @brief add a dependency rule to the workflow definition
-	 * @param newRule new dependency rule wit hdefined to, from and outcome
+	 * @param newRule rule with fromId, toId and outcome. This definition takes ownership.
 	 */
 	void addRule(DependencyRule *newRule);
 
 	/**
-	 * @brief clone and return root process for an instance
-	 * @return WorkItem*
+	 * @brief Clone the root work item so a new instance can run from that root.
+	 * @return WorkItem* deep copy of the root, or nullptr when the definition has no root
 	 */
 	WorkItem *instantiateTree();
 };
