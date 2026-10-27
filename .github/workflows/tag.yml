@@ -1,0 +1,50 @@
+name: Tag pipeline
+
+on:
+  push:
+    tags:
+      - "**"
+
+permissions:
+  contents: write
+
+jobs:
+  ci:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t tividy:${{ github.ref_name }} .
+
+      - name: Extract binary
+        run: |
+          docker create --name tividy-extract tividy:${{ github.ref_name }}
+          docker cp tividy-extract:/app/tividy ./tividy
+          docker rm tividy-extract
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: tividy
+          path: tividy
+          if-no-files-found: error
+
+  cd:
+    name: Release
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: tividy
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: tividy
+          fail_on_unmatched_files: true
+          generate_release_notes: true
