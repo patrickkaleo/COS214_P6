@@ -1,0 +1,7 @@
+.git/
+docs/
+obj/
+*.lck
+Addmissions
+tividy
+test_build
