@@ -51,8 +51,7 @@ public:
 	 * @param id new id
 	 * @return false when the id is empty or already used by another definition
 	 */
-	void setId(string id);
-	
+	bool setId(string id);
 	/**
 	 * @brief return name of the workflow definition
 	 * @return string
@@ -88,7 +87,6 @@ public:
 	 * @param root WorkItem to be added
 	 */
 	void setRoot(WorkItem *root);
-	
 	/**
 	 * @brief return the dependency rules for a given workflow definition
 	 * @return vector<DependencyRule*> the rules stored on this definition

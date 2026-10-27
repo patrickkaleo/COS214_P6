@@ -14,7 +14,7 @@ class WorkflowDirector
 
 public:
 	/**
-	 * @brief Run structure, dependencies, services and extras, then take the product.
+	 * @brief Run structure, dependencies, services, routing and extras, then take the product.
 	 * @param b file builder, or any other concrete builder
 	 * @return WorkflowDefinition* finished definition, or nullptr when the id is missing or already used
 	 */

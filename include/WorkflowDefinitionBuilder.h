@@ -18,7 +18,7 @@ using namespace std;
 /**
  * @class WorkflowDefinitionBuilder
  * @brief Generic Builder for creating workflow definitions that can be applied to different scenarios and set ups.
- * The director calls the four section steps in order. Helpers refer to work items by id.
+ * The director calls the build steps in order. Helpers refer to work items by id.
  */
 class WorkflowDefinitionBuilder
 {
@@ -31,14 +31,10 @@ protected:
 
 public:
 	/**
-	 * @brief A builder must be given an id, or it must read one from a file.
-	 */
-	WorkflowDefinitionBuilder();
-
-	/**
 	 * @brief Delete a definition that was never handed over by getResult().
 	 */
 	virtual ~WorkflowDefinitionBuilder();
+	WorkflowDefinitionBuilder() = default;
 
 	WorkflowDefinitionBuilder(const WorkflowDefinitionBuilder &) = delete;
 	WorkflowDefinitionBuilder &operator=(const WorkflowDefinitionBuilder &) = delete;
@@ -54,9 +50,14 @@ public:
 	virtual void buildDependencies() = 0;
 
 	/**
-	 * @brief Attach services and routing strategies to work items by id.
+	 * @brief Attach services to work items by id.
 	 */
 	virtual void buildServices() = 0;
+
+	/**
+	 * @brief Attach routing strategies to work items by id.
+	 */
+	virtual void buildRouting() = 0;
 
 	/**
 	 * @brief Mark checkpoints and wrap items with priority and audit decorators.
@@ -96,6 +97,7 @@ protected:
 
 	/**
 	 * @brief Add a dependency rule to the workflow definition.
+	 * A dependency line is fromId, toId and outcome, with no keyword in front.
 	 * @param fromId id of the item the rule starts from
 	 * @param toId id of the item the rule goes to
 	 * @param outcome outcome that satisfies the rule
