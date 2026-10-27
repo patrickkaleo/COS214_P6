@@ -1,8 +1,10 @@
 #include "WorkflowDirector.h"
-#include "FileWorkflowDefinitionBuilder.h"
 
 WorkflowDefinition* WorkflowDirector::construct(WorkflowDefinitionBuilder* b)
 {
-	b->buildDefinition();
+	b->buildStructure();
+	b->buildDependencies();
+	b->buildServices();
+	b->buildExtras();
 	return b->getResult();
 }

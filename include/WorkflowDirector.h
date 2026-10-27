@@ -14,8 +14,8 @@ class WorkflowDirector
 
 public:
 	/**
-	 * @brief Tell the builder to build the definition, then take the product.
-	 * @param b concrete builder for one scenario, or a file builder
+	 * @brief Run structure, dependencies, services and extras, then take the product.
+	 * @param b file builder, or any other concrete builder
 	 * @return WorkflowDefinition* finished definition, or nullptr when the id is missing or already used
 	 */
 	WorkflowDefinition* construct(WorkflowDefinitionBuilder* b);
