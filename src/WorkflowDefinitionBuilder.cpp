@@ -1,10 +1,4 @@
 #include "WorkflowDefinitionBuilder.h"
-
-WorkflowDefinitionBuilder::WorkflowDefinitionBuilder(string id, string name, int version)
-	: definition(new WorkflowDefinition(id, name, version))
-{
-}
-
 WorkflowDefinitionBuilder::~WorkflowDefinitionBuilder()
 {
 	if (this->definition)
@@ -21,46 +15,104 @@ WorkflowDefinition *WorkflowDefinitionBuilder::getResult()
 	return result;
 }
 
-void WorkflowDefinitionBuilder::addWorkItem(WorkItem *newWorkItem, WorkItem *parent)
+void WorkflowDefinitionBuilder::startDefinition(string id, string name, int version)
 {
-	if (parent && newWorkItem)
+	if (definition == nullptr)
 	{
-		parent->add(newWorkItem);
+		definition = new WorkflowDefinition(id, name, version);
 	}
 }
 
-void WorkflowDefinitionBuilder::addDependency(DependencyRule *newDependencyRule)
+WorkItem *WorkflowDefinitionBuilder::findItem(string itemId)
+{
+	map<string, WorkItem *>::iterator found = items.find(itemId);
+	if (found == items.end())
+	{
+		return nullptr;
+	}
+	return found->second;
+}
+
+void WorkflowDefinitionBuilder::addProcess(string id, string name, string parentId)
 {
 	if (definition)
-		definition->addRule(newDependencyRule);
+	{
+		WorkItem *parent = findItem(parentId);
+		if (parent)
+			parent->add(new SubProcess(id, name));
+	}
 }
 
-void WorkflowDefinitionBuilder::setRouting(WorkItem *item, RoutingStrategy *strategy)
+void WorkflowDefinitionBuilder::addTask(string id, string name, string parentId)
 {
-	if (item && strategy)
-		item->setRouting(strategy);
+	if (definition)
+	{
+		WorkItem *parent = findItem(parentId);
+		if (parent)
+			parent->add(new Task(id, name));
+	}
 }
 
-void WorkflowDefinitionBuilder::setService(WorkItem *item, string serviceName)
+void WorkflowDefinitionBuilder::addDependency(string fromId, string toId, string outcome)
 {
+	if (definition)
+	{
+		definition->addRule(new DependencyRule(fromId, toId, outcome));
+	}
+}
+
+void WorkflowDefinitionBuilder::setRouting(string itemId, RoutingStrategy *strategy)
+{
+	if (strategy)
+	{
+		WorkItem *item = findItem(itemId);
+		if (item)
+			item->setRouting(strategy);
+	}
+}
+
+void WorkflowDefinitionBuilder::setService(string itemId, string serviceName)
+{
+	WorkItem *item = findItem(itemId);
 	if (item)
+	{
 		item->setService(serviceName);
+	}
 }
 
-void WorkflowDefinitionBuilder::markCheckpoint(WorkItem *item)
+void WorkflowDefinitionBuilder::markCheckpoint(string itemId)
 {
-	if (item)
+	WorkItem *item = findItem(itemId);
+	if (item != nullptr)
+	{
 		item->setCheckointflag(true);
+	}
 }
 
-void WorkflowDefinitionBuilder::addPriority(WorkItem *item, int level)
+void WorkflowDefinitionBuilder::addPriority(string itemId, int level)
 {
-	if (level >= 0 && item)
-		item = new PriorityDecorator(item, level);
-}
-
-void WorkflowDefinitionBuilder::addAudit(WorkItem *item)
-{
+	WorkItem *item = findItem(itemId);
 	if (item)
-		item = new AuditDecorator();
+	{
+		WorkItem *wrapped = new PriorityDecorator(item, level);
+		replaceItem(item, wrapped);
+		items[itemId] = wrapped;
+	}
+}
+
+void WorkflowDefinitionBuilder::addAudit(string itemId)
+{
+	WorkItem *item = findItem(itemId);
+	if (item)
+	{
+		AuditLogger *auditor = new AuditLogger(false);
+		WorkItem *wrapped = new AuditDecorator(item, auditor);
+		replaceItem(item, wrapped);
+		items[itemId] = wrapped;
+	}
+}
+
+void WorkflowDefinitionBuilder::replaceItem(WorkItem *&current, WorkItem *replacement)
+{
+	current = replacement;
 }
