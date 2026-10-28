@@ -9,6 +9,9 @@
 #include "ExternalService.h"
 #include "WorkflowEventListener.h"
 #include "EventDispatcher.h"
+#include "FileWorkflowDefinition"
+
+#include <fstream>
 
 #include "ClaimAction.h"
 #include "StartAction.h"
@@ -23,7 +26,7 @@ std::string TividyWorkflowFacade::registerDefinition(
 {
 
   WorkflowDefinition *definition =
-      director.construct(builder);
+      director.construct(&builder);
 
   if (definition == nullptr)
   {
@@ -32,6 +35,20 @@ std::string TividyWorkflowFacade::registerDefinition(
 
   // Engine takes ownership of the definition.
   return engine.registerDefinition(definition);
+}
+
+std::string TividyWorkflowFacade::registerDefinitionFromFile(const std::string &filePath){
+    std::ifstream input(filePath.c_str());
+
+    if(!input.is.open()){
+      return "unable to open file";
+    }
+
+    input.close();
+
+    FileWorkflowDefinitionBuilder builder(filePath);
+
+    return registerDefinition(builder);
 }
 
 // Add a participant to the directory.
