@@ -2,20 +2,22 @@ CXX = g++
 CXXFLAGS = -std=c++11 -Wall -Wextra -g -Iinclude
 
 SRCDIR = src
+TESTDIR = tests
 OBJDIR = obj
 TARGET = tividy
 TEST_TARGET = tividy_tests
 
-# Separate main entry points
+# Demo application sources
 MAIN_SRC = $(SRCDIR)/main.cpp
-TEST_SRC = $(SRCDIR)/main_tests.cpp
-
 MAIN_OBJ = $(OBJDIR)/main.o
-TEST_OBJ = $(OBJDIR)/main_tests.o
 
-# Common engine sources compiled into both binaries (excluding both mains)
-COMMON_SRCS = $(filter-out $(MAIN_SRC) $(TEST_SRC), $(wildcard $(SRCDIR)/*.cpp))
+# Common engine sources compiled into both the demo and tests (all src/*.cpp except main.cpp)
+COMMON_SRCS = $(filter-out $(MAIN_SRC), $(wildcard $(SRCDIR)/*.cpp))
 COMMON_OBJS = $(patsubst $(SRCDIR)/%.cpp, $(OBJDIR)/%.o, $(COMMON_SRCS))
+
+# Test suite sources (all tests/*.cpp)
+TEST_SRCS = $(wildcard $(TESTDIR)/*.cpp)
+TEST_OBJS = $(patsubst $(TESTDIR)/%.cpp, $(OBJDIR)/$(TESTDIR)/%.o, $(TEST_SRCS))
 
 .PHONY: all run test valgrind gdb docs clean
 
@@ -25,11 +27,17 @@ all: $(TARGET) $(TEST_TARGET)
 $(TARGET): $(MAIN_OBJ) $(COMMON_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
-# Master unit test suite runner
-$(TEST_TARGET): $(TEST_OBJ) $(COMMON_OBJS)
+# Master modular unit test suite runner
+$(TEST_TARGET): $(TEST_OBJS) $(COMMON_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
+# Pattern rule for engine and demo objects
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Pattern rule for modular test objects
+$(OBJDIR)/$(TESTDIR)/%.o: $(TESTDIR)/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
