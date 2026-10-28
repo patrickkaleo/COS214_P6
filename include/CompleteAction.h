@@ -1,14 +1,21 @@
 #ifndef COMPLETEACTION_H
 #define COMPLETEACTION_H
 
-class CompleteAction : WorkItemAction {
+#include "WorkItemAction.h"
+
+class CompleteAction : WorkItemAction
+{
+
+private:
+	std::string outcome;
+
+protected:
+	bool doExecute(WorkItem &item);
 
 public:
-	string outcome;
+	CompleteAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor, const std::string &outcome);
 
-	bool doeExecute(WorkItem& Item);
-
-	string describe();
+	std::string describe() const;
 };
 
 #endif

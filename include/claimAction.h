@@ -1,13 +1,17 @@
 #ifndef CLAIMACTION_H
 #define CLAIMACTION_H
 
-class claimAction {
+#include "WorkItemAction.h"
 
+class ClaimAction
+{
+protected:
+	bool doExecute(WorkItem &item);
 
 public:
-	bool doExecute(workItem& item);
+	ClaimAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor);
 
-	string describe();
+	std::string describe();
 };
 
 #endif
