@@ -4,4 +4,5 @@ obj/
 *.lck
 Addmissions
 tividy
+tividy_tests
 test_build

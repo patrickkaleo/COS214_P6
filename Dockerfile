@@ -18,8 +18,8 @@ WORKDIR /app
 # Copy all project files into container
 COPY . .
 
-# Build the project using the Makefile
-RUN make clean && make
+# Build the project using the Makefile (both tividy and tividy_tests)
+RUN make clean && make all
 
 # Default command runs the compiled application
 CMD ["./tividy"]
