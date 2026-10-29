@@ -10,6 +10,9 @@
 #define TASK_H
 
 #include "WorkItem.h"
+#include "InstanceData.h"
+#include "ParticipantDirectory.h"
+
 #include <string>
 
 // Forward declarations
