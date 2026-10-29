@@ -67,7 +67,6 @@ vp.log
 # Temporary and Log files
 *.log
 *.swp
-*.txt
 
 # Package & Debug
 vcpkg_installed/

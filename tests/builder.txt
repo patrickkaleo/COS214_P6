@@ -1,0 +1,22 @@
+DEFINITION
+WF-100|Onboarding|1
+
+WORKITEMS
+process|INTAKE|-|Application Intake
+task|CAPTURE|INTAKE|Capture Application
+task|VERIFY|INTAKE|Verify Application
+
+DEPENDENCIES
+CAPTURE|VERIFY|approved
+
+ROUTING
+CAPTURE|role|Admissions Officer
+VERIFY|data|severity|Exception Analyst|low|Warehouse Clerk|high|Exception Analyst
+
+SERVICES
+service|CAPTURE|Document Verification Service
+
+EXTRAS
+checkpoint|CAPTURE
+priority|VERIFY|2
+audit|VERIFY
