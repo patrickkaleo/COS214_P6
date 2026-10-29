@@ -1,7 +1,6 @@
 /**
  * @file composite.cpp
- * @brief Implementation of the Composite hierarchy only:
- *        WorkItem, Task, SubProcess.
+ * @brief Implementation of the Composite hierarchy: Task & SubProcess.
  * @version 1.0
  */
 
