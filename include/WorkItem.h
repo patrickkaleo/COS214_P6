@@ -1,6 +1,6 @@
 /**
  * @file WorkItem.h
- * @brief Abstract Component of the Composite pattern for the TIVIDY workflow engine.
+ * @brief Abstract Component of the Composite pattern + Context (State) for TIVIDY workflow engine.
  * @details Every piece of work (leaf Task or composite SubProcess) is a WorkItem.
  *          Lifecycle operations are forwarded to the current WorkItemState (State pattern).
  *          The class is also the Subject of Observer and a Colleague of the Mediator.
@@ -12,6 +12,7 @@
 
 #include <string>
 #include <vector>
+#include "WorkflowEvent.h"   // EventType
 
 // Forward declarations
 class Participant;
@@ -19,11 +20,10 @@ class WorkItemState;
 class SubProcess;
 class WorkflowMediator;
 class WorkflowEventListener;
-class WorkflowEvent;
 
 /**
  * @class WorkItem
- * @brief Common interface for every piece of work in the engine.
+ * @brief Common interface/base for every piece of work in the engine - Task (leaf) and SubProcess (composite).
  *
  * Clients and the Mediator only ever talk to a WorkItem*; they never care
  * whether the object is a leaf Task or a composite SubProcess.
@@ -36,6 +36,12 @@ public:
      * @param name Human-readable name (scenario data, not engine logic).
      */
     WorkItem(const std::string& id, const std::string& name);
+
+    /**
+     * @brief Copy constructs a WorkItem with the given identity.
+     * @param other workItem to be copied.
+     */
+	WorkItem(const WorkItem& other);
 
     /**
      * @brief Virtual destructor. Deletes the owned WorkItemState.
@@ -92,6 +98,12 @@ public:
     // state management
 
     /**
+     * @brief Called by concrete states after a successful transition.
+     *        Replaces the state object and publishes via EventDispatcher.
+     */
+    void changeState(WorkItemState* next, EventType event);
+
+	/**
      * @brief Replace the current state object (takes ownership).
      * @param s New state; previous state is deleted.
      */
@@ -103,11 +115,32 @@ public:
      */
     WorkItemState* getState() const { return state_; }
 
+    /** @brief Sets the participant assigned to this work item.
+     *  @param participant Participant to assign; ownership is not transferred.
+     */
+    void setAssignee(Participant* participant);
+
+    /**
+     * @brief Set the outcome string (normally done by complete/reject/cancel).
+     * @param o Outcome value.
+     */
+    void setOutcome(const std::string& o) { outcome_ = o; }
+
+    /** @brief Increases the escalation level by one.
+     */
+    void incrementEscalation();
+
     /**
      * @brief Whether this item is in a terminal state (Completed / Rejected / Cancelled).
      * @return true if no further lifecycle operations are legal.
      */
     bool isFinished() const;
+	
+    /**
+     * @brief Access the current state object.
+     * @return Name of state
+     */
+    std::string getStateName() const;
 
     // identity / data
 
@@ -120,11 +153,25 @@ public:
     /** @return Outcome set on successful complete/reject/cancel. */
     std::string getOutcome() const { return outcome_; }
 
-    /**
-     * @brief Set the outcome string (normally done by complete/reject/cancel).
-     * @param o Outcome value.
+    /** @brief Gets the participant assigned to this work item.
+     *  @return The assigned participant, or nullptr if none is assigned.
      */
-    void setOutcome(const std::string& o) { outcome_ = o; }
+    Participant* getAssignee() const;
+
+    /** @brief Gets the current escalation level.
+     *  @return The escalation level.
+     */
+    int getEscalationLevel() const;
+
+    /** @brief Gets the unique identifier for this work-item instance.
+     *  @return The instance identifier.
+     */
+    std::string getInstanceId() const;
+
+    /** @brief Sets the unique identifier for this work-item instance.
+     *  @param id The instance identifier to store.
+     */
+    void setInstanceId(const std::string& id);
 
     // structure
 
@@ -191,8 +238,11 @@ public:
 protected:
     std::string id_;                                       /**< Unique identifier. */
     std::string name_;                                     /**< Display name. */
+	std::string instanceId;
     std::string outcome_;                                  /**< Result of completion / rejection. */
     WorkItemState* state_;                                 /**< Owned current state. */
+	Participant* assignee;   
+    int escalationLevel;
     SubProcess* parent_;                                   /**< Not owned. */
     std::vector<WorkflowEventListener*> listeners_;        /**< Not owned. */
     WorkflowMediator* mediator_;                           /**< Not owned. */
