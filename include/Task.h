@@ -85,7 +85,6 @@ public:
     bool isCheckpoint() const;
 
     /**
-    /**
      * @brief Set the context used by this task's routing strategy.
      * @param data Instance data available during routing (not owned).
      * @param directory Directory used to look up participants (not owned).
