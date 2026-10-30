@@ -342,7 +342,7 @@ TEST_SUITE("Angela Ramaboea - Adapter Subsystem") {
         registry.add(new CarrierAdapter());
 
         CHECK(registry.size() == 4);
-        CHECK(registry.has("DocumentVerificationService"));
+        CHECK(registry.has("IdentityVerificationService"));
         CHECK(registry.has("PaymentGateway"));
         CHECK(registry.has("TrackingService"));
         CHECK(registry.has("CarrierAdapter"));
@@ -359,10 +359,10 @@ TEST_SUITE("Angela Ramaboea - Adapter Subsystem") {
         GovernmentIDAdapter* second = new GovernmentIDAdapter();
 
         registry.add(first);
-        CHECK(registry.find("DocumentVerificationService") == first);
+        CHECK(registry.find("IdentityVerificationService") == first);
 
         registry.add(second);
-        CHECK(registry.find("DocumentVerificationService") == second);
+        CHECK(registry.find("IdentityVerificationService") == second);
         CHECK(registry.size() == 1);
     }
 
