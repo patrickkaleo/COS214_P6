@@ -1,31 +1,33 @@
 #include "WorkFlowInstance.h"
-#include "createState.h"
+#include "CreatedState.h"
 #include "AvailableState.h"
 #include "AssignedState.h"
-#include "InProgresssState.h"
+#include "InProgressState.h"
 #include "EscalatedState.h"
 #include "CompletedState.h"
 #include "RejectedState.h"
-#include"cancelledState.h"
+#include"CancelledState.h"
 #include "SubProcess.h"
+#include "Task.h"
+#include "Participant.h"
 #include<iostream>
 using namespace std;
 
 using namespace std;
 
 
-WorkFlowInstance::WorkFlowInstance(const string& id,const WorkflowDefinition* definition,SubProcess* root,DependencyMediator* mediator,const InstanceData& data,ParticipantDirectory* directory)
+WorkflowInstance::WorkflowInstance(const string& id,const WorkflowDefinition* definition,SubProcess* root,DependencyMediator* mediator,const InstanceData& data,ParticipantDirectory* directory)
 {
     Id = id;
     this->definition = definition;
     rootProcess = root;
     this->mediator = mediator;
     this->data = data;
-    particpants = directory;
+    participants = directory;
 }
 
 
-WorkFlowInstance::~WorkFlowInstance()
+WorkflowInstance::~WorkflowInstance()
 {
     delete rootProcess;
     delete mediator;
@@ -35,7 +37,7 @@ WorkFlowInstance::~WorkFlowInstance()
 }
 
 
-bool WorkFlowInstance::start()
+bool WorkflowInstance::start()
 {
     if (rootProcess==NULL)
     {
@@ -45,15 +47,15 @@ bool WorkFlowInstance::start()
 }
 
 
-const string& WorkFlowInstance::getId() const
+const string& WorkflowInstance::getId() const
 {
     return Id;
 }
-InstanceData& WorkFlowInstance::getData()
+InstanceData& WorkflowInstance::getData()
 {
     return data;
 }
-WorkItem* WorkFlowInstance::findItem(const string& itemId) const
+WorkItem* WorkflowInstance::findItem(const string& itemId) const
 {
     if (rootProcess == NULL)
     {
@@ -63,7 +65,7 @@ WorkItem* WorkFlowInstance::findItem(const string& itemId) const
     return findItemRecursive(rootProcess, itemId);
 }
 //helper function
-WorkItem* WorkFlowInstance::findItemRecursive(WorkItem* current,const string& itemId) const
+WorkItem* WorkflowInstance::findItemRecursive(WorkItem* current,const string& itemId) const
 {
     if (current == NULL)
     {
@@ -89,7 +91,7 @@ WorkItem* WorkFlowInstance::findItemRecursive(WorkItem* current,const string& it
     }
     return NULL;
 }
-string WorkFlowInstance::status() const
+string WorkflowInstance::status() const
 {
     if (rootProcess == NULL)
     {
@@ -107,13 +109,13 @@ string WorkFlowInstance::status() const
     return "running";
 }
 //helper
-void WorkFlowInstance::captureItem(WorkItem* item,map<string, string>& states,map<string, string>& assignees,map<string, string>& outcomes) const
+void WorkflowInstance::captureItem(WorkItem* item,map<string, string>& states,map<string, string>& assignees,map<string, string>& outcomes) const
 {
     if (item == NULL)
     {
         return;
     }
-    states[item->getId()] =item->getName();
+    states[item->getId()] = item->getStateName();
 
     outcomes[item->getId()] =item->getOutcome();
     Task* task =dynamic_cast<Task*>(item);
@@ -137,7 +139,7 @@ void WorkFlowInstance::captureItem(WorkItem* item,map<string, string>& states,ma
 }
 
 
-WorkflowSnapshot* WorkFlowInstance::createSnapshot(const string& label)
+WorkflowSnapshot* WorkflowInstance::createSnapshot(const string& label)
 {
     map<string, string> itemStates;
     map<string, string> assignees;
@@ -148,7 +150,7 @@ WorkflowSnapshot* WorkFlowInstance::createSnapshot(const string& label)
     return new WorkflowSnapshot(itemStates,assignees,outcomes,data,label);
 }
 
-void WorkFlowInstance::restoreSnapshot(const WorkflowSnapshot& snapshot)
+void WorkflowInstance::restoreSnapshot(const WorkflowSnapshot& snapshot)
 {
     // Restore InstanceData
     data = snapshot.data;
@@ -170,13 +172,13 @@ void WorkFlowInstance::restoreSnapshot(const WorkflowSnapshot& snapshot)
     }
 
     // Restore WorkItem outcomes
-    for (map<string, string>::const_iterator it =snapshot.outcome.begin();it != snapshot.outcome.end();++it)
+    for (map<string, string>::const_iterator it =snapshot.outcomes.begin();it != snapshot.outcomes.end();++it)
     {
         WorkItem* item =findItem(it->first);
 
         if (item != NULL)
         {
-            item->outcome =it->second;
+           item->setOutcome(it->second);
         }
     }
 
@@ -195,19 +197,16 @@ void WorkFlowInstance::restoreSnapshot(const WorkflowSnapshot& snapshot)
             continue;
         }
 
-        if (particpants == NULL)
+        if (participants == NULL)
         {
             continue;
         }
 
-        Participant* participant =particpants->findById(it->second);
-
-        task->assignee =participant;
+        std::shared_ptr<Participant> participant =participants->findById(it->second);
+        task->setAssignee(participant.get());
     }
 }
-
-
-void WorkFlowInstance::clearAssignees(WorkItem* item)
+void WorkflowInstance::clearAssignees(WorkItem* item)
 {
     if (item == NULL)
     {
@@ -218,7 +217,7 @@ void WorkFlowInstance::clearAssignees(WorkItem* item)
 
     if (task != NULL)
     {
-        task->assignee = NULL;
+        task->setAssignee(nullptr);
     }
 
     SubProcess* process =dynamic_cast<SubProcess*>(item);
@@ -230,11 +229,11 @@ void WorkFlowInstance::clearAssignees(WorkItem* item)
         }
     }
 }
-WorkItemState* WorkFlowInstance::createStateFromName(const string& stateName) const
+WorkItemState* WorkflowInstance::createStateFromName(const string& stateName) const
 {
     if (stateName == "Created")
     {
-        return new createState();
+        return new CreatedState();
     }
 
     if (stateName == "Available")
@@ -249,7 +248,7 @@ WorkItemState* WorkFlowInstance::createStateFromName(const string& stateName) co
 
     if (stateName == "InProgress")
     {
-        return new InProgresssState();
+        return new InProgressState;
     }
 
     if (stateName == "Escalated")
@@ -269,7 +268,7 @@ WorkItemState* WorkFlowInstance::createStateFromName(const string& stateName) co
 
     if (stateName == "Cancelled")
     {
-        return new cancelledState();
+        return new CancelledState();
     }
 
     return NULL;

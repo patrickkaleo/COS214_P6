@@ -4,92 +4,66 @@
 /**
  * @file ApprovalHandler.h
  * @brief Abstract Handler interface for the Chain of Responsibility approval workflow.
- * @author Enock Nyamweya, Angelo Anthony
- * @version 1.1
+ * @author Enock Nyamweya
+ * @version 2.0
  */
 
 #include <memory>
-#include <string>
-#include "Iterator.h"
 
 class ApprovalRequest;
 class Participant;
 
 /**
  * @class ApprovalHandler
- * @brief Handler of the GoF Chain of Responsibility (Behavioural) pattern.
+ * @brief Base handler in the Chain of Responsibility for multi-level approvals.
  *
- * Approval may need one person or several levels of authority. The task asking for
- * approval only knows the first handler. Each handler either finds an approver or
- * passes the request on, so the number, order and rules of the levels are pure
- * configuration.
- *
- * A handler owns the rest of the chain after it, and deleting the head deletes
- * the whole chain.
- *
- * @see ConcreteApprovalHandler, ApprovalRouting, ApprovalChainIterator
+ * Ownership of the succeeding handler in the chain is managed via std::unique_ptr,
+ * ensuring automatic recursive destruction with zero memory leaks (pure RAII).
  */
 class ApprovalHandler {
 private:
-    ApprovalHandler* nextHandler; ///< Next level of authority (owned, may be null).
+    std::unique_ptr<ApprovalHandler> nextHandler; ///< Owned successor in chain.
 
 public:
-    ApprovalHandler();
-    virtual ~ApprovalHandler();
+    ApprovalHandler()
+        : nextHandler(nullptr) {}
 
+    virtual ~ApprovalHandler() = default;
+
+    // Disallow copying to maintain strict linear chain ownership
     ApprovalHandler(const ApprovalHandler&) = delete;
     ApprovalHandler& operator=(const ApprovalHandler&) = delete;
 
     /**
-     * @brief Sets the next handler, deleting any handler it replaces.
-     *
-     * Returns its argument so a chain reads in order:
-     * @code
-     *   officer->setNext(manager)->setNext(committee);
-     * @endcode
-     *
-     * @param next Next handler (ownership is taken), or nullptr to end the chain.
-     * @return ApprovalHandler* The handler passed in.
+     * @brief Chains the next handler taking unique ownership.
+     * @param next Unique pointer to the next handler.
      */
-    ApprovalHandler* setNext(ApprovalHandler* next);
-
-    ApprovalHandler* getNext() const;
+    void setNext(std::unique_ptr<ApprovalHandler> next) {
+        nextHandler = std::move(next);
+    }
 
     /**
-     * @brief Finds an approver for the request, or passes it along the chain.
-     * @param request The approval being asked for.
-     * @return Participant* The approver, or nullptr if no handler in the chain can approve.
+     * @brief Backward-compatible overload accepting raw pointer and taking ownership.
+     * @param next Pointer to the next handler.
      */
-    virtual Participant* handle(ApprovalRequest& request) = 0;
+    void setNext(ApprovalHandler* next) {
+        nextHandler.reset(next);
+    }
 
     /**
-     * @brief Copies this handler and every handler after it.
-     *
-     * Each workflow instance gets its own chain when the definition's tasks are cloned.
-     *
-     * @return ApprovalHandler* Newly allocated copy of the chain from this handler on.
+     * @brief Gets non-owning pointer to the next handler.
+     * @return ApprovalHandler* Non-owning raw pointer.
      */
-    virtual ApprovalHandler* clone() const = 0;
-
-    /// @return One-line description of this level, shown when listing a chain.
-    virtual std::string describe() const;
+    ApprovalHandler* getNext() const {
+        return nextHandler.get();
+    }
 
     /**
-     * @brief Creates an iterator over this handler and every handler after it.
-     * @return Iterator whose first element is this handler.
+     * @brief Handles or forwards the approval request.
+     * @param request Approval context payload.
+     * @return std::shared_ptr<Participant> Assigned approver, or nullptr.
      */
-    std::unique_ptr<Iterator<ApprovalHandler>> createIterator();
-
-protected:
-    /// @return The next handler's answer, or nullptr at the end of the chain.
-    Participant* passToNext(ApprovalRequest& request);
-
-    /**
-     * @brief Helper for clone(): attaches a copy of the rest of this chain to @p copy.
-     * @param copy Freshly made copy of this handler.
-     * @return ApprovalHandler* @p copy.
-     */
-    ApprovalHandler* withClonedNext(ApprovalHandler* copy) const;
+    virtual std::shared_ptr<Participant> handle(ApprovalRequest& request) = 0;
 };
 
 #endif // APPROVALHANDLER_H

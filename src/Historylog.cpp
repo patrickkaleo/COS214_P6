@@ -1,7 +1,7 @@
 #include "HistoryLog.h"
 using namespace std;
 
-void HistoryLog::pushSnapshot(string & InstanceID, WorkflowSnapshot* snapshot)
+void HistoryLog::pushSnapshots(const string & InstanceID, WorkflowSnapshot* snapshot)
 {
     if(snapshot==NULL)
     {
@@ -10,7 +10,7 @@ void HistoryLog::pushSnapshot(string & InstanceID, WorkflowSnapshot* snapshot)
     snapshots[InstanceID].push_back(snapshot);
 
 }
-WorkflowSnapshot* HistoryLog::popSnapshot(const string& instanceId)
+WorkflowSnapshot* HistoryLog::popSnapshots(const string& instanceId)
 {
     map<string,vector<WorkflowSnapshot*>>::iterator it;
     it= snapshots.find(instanceId);
@@ -27,7 +27,7 @@ WorkflowSnapshot* HistoryLog::popSnapshot(const string& instanceId)
     return snapshotsl;
 
 }
-WorkflowSnapshot* HistoryLog::latest(const string & InstanceID) const
+const WorkflowSnapshot* HistoryLog::latest(const string & InstanceID) const
 {
     map<string,vector<WorkflowSnapshot*>>::const_iterator it;
     it= snapshots.find(InstanceID);

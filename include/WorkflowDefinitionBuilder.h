@@ -1,131 +1,155 @@
 #ifndef WORKFLOWDEFINITIONBUILDER_H
 #define WORKFLOWDEFINITIONBUILDER_H
 
+#include <map>
 #include <string>
 #include <vector>
-#include <memory>
 using namespace std;
 
 #include "RoutingStrategy.h"
-#include "WorkflowDefintion.h"
+#include "WorkflowDefinition.h"
+#include "AuditDecorator.h"
+#include "AuditLogger.h"
+#include "PriorityDecorator.h"
+#include "SubProcess.h"
+#include "Task.h"
+#include "WorkItem.h"
 
 /**
  * @class WorkflowDefinitionBuilder
- * @brief Generic Builder for creating workflow definitions that can be applied to different scenarios and set ups
+ * @brief Generic Builder for creating workflow definitions that can be applied to different scenarios and set ups.
+ * The director calls the build steps in order. Helpers refer to work items by id.
  */
 class WorkflowDefinitionBuilder
 {
 protected:
-	WorkflowDefinition* definition;
+	/**
+	 * @brief Definition being assembled. Null after getResult() hands it to the caller.
+	 */
+	WorkflowDefinition *definition;
+	map<string, WorkItem*> items; // for finding items in o(logn)
 
 public:
-	WorkflowDefinitionBuilder() = delete;
-	WorkflowDefinitionBuilder(const WorkflowDefinitionBuilder&) = delete;
-	WorkflowDefinitionBuilder& operator=(const WorkflowDefinitionBuilder&) = delete;
-
 	/**
-	 * @brief reset id, name and version of workflow definition
-	 * @param id new id
-	 * @param name new name
-	 * @param version new version
+	 * @brief Delete a definition that was never handed over by getResult().
 	 */
-	virtual void reset(string id, string name, int version) = 0;
+	virtual ~WorkflowDefinitionBuilder();
+	WorkflowDefinitionBuilder() = default;
+
+	WorkflowDefinitionBuilder(const WorkflowDefinitionBuilder &) = delete;
+	WorkflowDefinitionBuilder &operator=(const WorkflowDefinitionBuilder &) = delete;
 
 	/**
-	 * @brief
+	 * @brief Build the composite work-item tree, starting at the root.
 	 */
 	virtual void buildStructure() = 0;
 
 	/**
-	 * @brief
-	 */
-	virtual void buildExtras() = 0;
-
-	/**
-	 * @brief build the relevant dependency rules for the work definition
+	 * @brief Add dependency rules. Each rule names a from id, a to id and an outcome.
 	 */
 	virtual void buildDependencies() = 0;
 
 	/**
-	 * @brief build the routing strategy for the workflow definition
-	 * @brief Examples of routing: RoleBasedRouting, DataRuleRouting, ApprovalRouting
+	 * @brief Attach services to work items by id.
+	 */
+	virtual void buildServices() = 0;
+
+	/**
+	 * @brief Attach routing strategies to work items by id.
 	 */
 	virtual void buildRouting() = 0;
 
 	/**
-	 * @brief build integrations for the workflow definitions
+	 * @brief Mark checkpoints and wrap items with priority and audit decorators.
 	 */
-	virtual void buildIntegrations() = 0;
+	virtual void buildExtras() = 0;
 
 	/**
-	 * @brief return a workflow definition
-	 * @return WorkflowDefinition*
+	 * @brief Hand the finished definition to the caller. The builder no longer owns it.
+	 * @return WorkflowDefinition* the product, or nullptr when nothing was built
 	 */
-	WorkflowDefinition* getResult();
+	WorkflowDefinition *getResult();
 
 protected:
 	/**
-	 * @brief add sub process to work definition
-	 * @param id subprocess id
-	 * @param name subprocess name
-	 * @param parentId of subprocess that is parent to the new subprocess to be added
+	 * @brief Create the product after the id, name and version are known.
+	 * @param id definition id
+	 * @param name human-readable name
+	 * @param version version number
 	 */
-	void addSubProcess(string id, string name, string parentId);
+	void startDefinition(string id, string name, int version);
 
 	/**
-	 * @brief add task item to the workflow definition @see WorkItem
-	 * @param id string id of the work item
-	 * @param name string name of the work item
-	 * @param parentid string id of the parent containing this work item
+	 * @brief Add a subprocess. Parent id "-" makes this process the root.
+	 * @param id subprocess id
+	 * @param name subprocess name
+	 * @param parentId id of the parent process, or "-" for the root
+	 */
+	void addProcess(string id, string name, string parentId);
+
+	/**
+	 * @brief Add a task under the subprocess with the given id.
+	 * @param id task id
+	 * @param name task name
+	 * @param parentId id of the parent subprocess
 	 */
 	void addTask(string id, string name, string parentId);
 
 	/**
-	 * @brief add a dependency rule to the workflow definition
-	 * @param fromId string id of where the dependency rule is from
-	 * @param toId string id of the dependency rule if going to
-	 * @param outcome string description of the evaluation of the dependenc yrule for a given workflow instance
+	 * @brief Add a dependency rule to the workflow definition.
+	 * A dependency line is fromId, toId and outcome, with no keyword in front.
+	 * @param fromId id of the item the rule starts from
+	 * @param toId id of the item the rule goes to
+	 * @param outcome outcome that satisfies the rule
 	 */
 	void addDependency(string fromId, string toId, string outcome);
 
-	// /**
-	//  * @brief Build the sequence for execution of the workflow
-	//  * @param ids vector list of ids that have to be executed in the given order
-	//  */
-	// void addSequence(vector<string> ids);
-
 	/**
-	 * @brief set routing strategy for a specific work item
-	 * @param itemId string id of the work item for which this routing strategy applies
-	 * @param strategy RoutingStrategy to be attached to the workitem
+	 * @brief Set the routing strategy for the work item with this id.
+	 * @param itemId id of the work item
+	 * @param strategy RoleBasedRouting, DataRuleRouting or ApprovalRouting. The item takes ownership.
 	 */
-	void setRouting(string itemId, RoutingStrategy* strategy);
+	void setRouting(string itemId, RoutingStrategy *strategy);
 
 	/**
-	 * @brief add a service to a workitem
-	 * @param itemID WorkItem where the service is to be added
-	 * @param serviceName string name of a service to be added
+	 * @brief Add a service to the work item with this id.
+	 * @param itemId id of the work item
+	 * @param serviceName name of the service to attach
 	 */
 	void setService(string itemId, string serviceName);
 
 	/**
-	 * @brief is this work items to be checkpointed or not?
-	 * @param itemId id of the item to be checkpoint
+	 * @brief Mark the work item with this id as a checkpoint.
+	 * @param itemId id of the item whose checkpoint flag is raised
 	 */
 	void markCheckpoint(string itemId);
 
 	/**
-	 * @brief set the priority of a work item
-	 * @param itemId string id of the work item that is being given a priority
-	 * @param level int level of the priority
+	 * @brief Wrap the work item with this id in a priority decorator.
+	 * @param itemId id of the work item
+	 * @param level priority level
 	 */
 	void addPriority(string itemId, int level);
 
 	/**
-	 * @brief add an audit decoration to a work item
-	 * @param itemId string id of the item that is being added to the work item
+	 * @brief Wrap the work item with this id in an audit decorator.
+	 * @param itemId id of the work item
 	 */
 	void addAudit(string itemId);
+
+	/**
+	 * @brief Find a work item created during this build.
+	 * @param itemId id to look up
+	 * @return WorkItem* or nullptr
+	 */
+	WorkItem *findItem(string itemId);
+
+	/**
+	 * @brief Replace the work-item pointer with the replacement.
+	 * @param current pointer that is changed
+	 * @param replacement work item now stored in that pointer
+	 */
+	void replaceItem(WorkItem *&current, WorkItem *replacement);
 };
 
 #endif

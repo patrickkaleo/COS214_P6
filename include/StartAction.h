@@ -1,13 +1,18 @@
 #ifndef STARTACTION_H
 #define STARTACTION_H
 
-class StartAction {
+#include "WorkItemAction.h"
 
+class StartAction : public WorkItemAction {
+protected:
+    bool doExecute(WorkItem& item) override;
 
 public:
-	bool doExecute(WorkItem& item);
+    StartAction(WorkflowInstance* instance,
+                const std::string& itemId,
+                Participant* actor);
 
-	string describe();
+    std::string describe() const override;
 };
 
 #endif

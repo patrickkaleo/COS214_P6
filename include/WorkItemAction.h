@@ -1,18 +1,31 @@
 #ifndef WORKITEMACTION_H
 #define WORKITEMACTION_H
 
-class WorkItemAction {
+#include <string>
 
-private:
-	WorkflowInstance* Instance;
-	string ItemId;
-	Participant* actor;
-	WorkFlowSnapshot* before;
+class WorkflowSnapshot;
+class WorkflowInstance;
+class WorkItem;
+class Participant;
+
+class WorkItemAction
+{
+
+protected:
+	WorkflowInstance *instance;
+	std::string itemId;
+	Participant *actor;
+	WorkflowSnapshot *before;
+
+	virtual bool doExecute(WorkItem &item) = 0;
 
 public:
-	bool doExecute(WorkItem& item, WorkItem& item);
+	WorkItemAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor);
+	virtual ~WorkItemAction();
+	bool execute();
+	bool undo();
 
-	virtual string describe() = 0;
+	virtual std::string describe() const = 0;
 
 	void description();
 };
