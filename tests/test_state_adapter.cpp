@@ -116,6 +116,12 @@ TEST_SUITE("Angela Ramaboea - State Subsystem") {
         CHECK(item.escalate());
         CHECK(item.getStateName() == "Escalated");
         CHECK(item.getEscalationLevel() == 1);
+        CHECK(item.getAssignee() == nullptr);
+
+        // Escalated work must be re-assigned before it can continue
+        CHECK_FALSE(item.start());
+        CHECK_FALSE(item.complete("approved"));
+        CHECK(item.getStateName() == "Escalated");
 
         CHECK(item.assign(&supervisor));
         CHECK(item.getStateName() == "Assigned");
@@ -164,6 +170,11 @@ TEST_SUITE("Angela Ramaboea - State Subsystem") {
         CHECK(copy.start());
         CHECK(copy.getStateName() == "InProgress");
         CHECK(original.getStateName() == "Assigned");
+
+        std::unique_ptr<WorkItem> cloned(original.clone());
+        CHECK(cloned->getStateName() == "Assigned");
+        CHECK(cloned->cancel());
+        CHECK(original.getStateName() == "Assigned");
     }
 
     TEST_CASE("State: every transition publishes the matching event on the dispatcher") {
@@ -198,6 +209,115 @@ TEST_SUITE("Angela Ramaboea - State Subsystem") {
             CHECK(ev.instanceId == "INST-42");
             CHECK(ev.itemId == "T7");
         }
+
+        dispatcher.clearListeners();
+    }
+
+    TEST_CASE("State: requests are refused in Created, Available and Assigned until legal") {
+        Participant clerk("P8", "Sipho", "WarehouseClerk");
+        LifecycleTestItem item("T8", "Log Exception");
+
+        // Created: cannot be assigned, rejected or escalated
+        CHECK_FALSE(item.assign(&clerk));
+        CHECK_FALSE(item.reject("no"));
+        CHECK_FALSE(item.escalate());
+        CHECK(item.getStateName() == "Created");
+
+        // Available: cannot be made available again, started or completed
+        REQUIRE(item.makeAvailable());
+        CHECK_FALSE(item.makeAvailable());
+        CHECK_FALSE(item.start());
+        CHECK_FALSE(item.complete("done"));
+        CHECK(item.getStateName() == "Available");
+
+        // Assigned: cannot complete or reject without starting
+        REQUIRE(item.assign(&clerk));
+        CHECK_FALSE(item.complete("done"));
+        CHECK_FALSE(item.reject("no"));
+        CHECK(item.getStateName() == "Assigned");
+    }
+
+    TEST_CASE("State: assigning a null participant is refused") {
+        LifecycleTestItem item("T9", "Classify Severity");
+        REQUIRE(item.makeAvailable());
+        CHECK_FALSE(item.assign(nullptr));
+        CHECK(item.getStateName() == "Available");
+        CHECK(item.getAssignee() == nullptr);
+
+        Participant clerk("P9", "Thabo", "Clerk");
+        REQUIRE(item.assign(&clerk));
+        CHECK_FALSE(item.assign(nullptr));
+        CHECK(item.getStateName() == "Assigned");
+        CHECK(item.getAssignee() == &clerk);
+
+        REQUIRE(item.escalate());
+        CHECK_FALSE(item.assign(nullptr));
+        CHECK(item.getStateName() == "Escalated");
+    }
+
+    TEST_CASE("State: delegation re-assigns an Assigned item to another participant") {
+        Participant a("P10", "Kabelo", "Registrar");
+        Participant b("P11", "Zanele", "Registrar");
+        LifecycleTestItem item("T10", "Verify Documents");
+        REQUIRE(item.makeAvailable());
+        REQUIRE(item.assign(&a));
+
+        CHECK(item.assign(&b));
+        CHECK(item.getStateName() == "Assigned");
+        CHECK(item.getAssignee() == &b);
+    }
+
+    TEST_CASE("State: cancellation is allowed from every non-final state") {
+        Participant p("P12", "Ayanda", "CustomerService");
+
+        LifecycleTestItem created("C1", "Created item");
+        CHECK(created.cancel());
+        CHECK(created.getStateName() == "Cancelled");
+        CHECK(created.isFinished());
+
+        LifecycleTestItem available("C2", "Available item");
+        REQUIRE(available.makeAvailable());
+        CHECK(available.cancel());
+        CHECK(available.getStateName() == "Cancelled");
+
+        LifecycleTestItem assigned("C3", "Assigned item");
+        REQUIRE(assigned.makeAvailable());
+        REQUIRE(assigned.assign(&p));
+        CHECK(assigned.cancel());
+        CHECK(assigned.getStateName() == "Cancelled");
+
+        LifecycleTestItem inProgress("C4", "In-progress item");
+        driveToInProgress(inProgress, &p);
+        CHECK(inProgress.cancel());
+        CHECK(inProgress.getStateName() == "Cancelled");
+
+        LifecycleTestItem escalated("C5", "Escalated item");
+        REQUIRE(escalated.makeAvailable());
+        REQUIRE(escalated.escalate());
+        CHECK(escalated.cancel());
+        CHECK(escalated.getStateName() == "Cancelled");
+    }
+
+    TEST_CASE("State: refused requests publish no event") {
+        EventDispatcher& dispatcher = EventDispatcher::getInstance();
+        dispatcher.clearListeners();
+
+        auto recorder = std::make_shared<EventRecorder>();
+        dispatcher.attachListener(recorder);
+
+        Participant p("P13", "Musa", "Dean");
+        LifecycleTestItem item("T11", "Admission Decision");
+
+        CHECK_FALSE(item.start());
+        CHECK(recorder->events.empty());
+
+        driveToInProgress(item, &p);
+        REQUIRE(item.complete("approved"));
+        REQUIRE(recorder->events.size() == 4);
+        CHECK(recorder->events[3].outcome == "approved");
+
+        CHECK_FALSE(item.start());
+        CHECK(recorder->events.size() == 4);
 
         dispatcher.clearListeners();
     }
@@ -277,6 +397,25 @@ TEST_SUITE("Angela Ramaboea - Adapter Subsystem") {
 
         ServiceResult missing = adapter.invoke(makeRequest("verifyIdentity", {}));
         CHECK_FALSE(missing.success);
+
+        CHECK_FALSE(adapter.invoke(makeRequest("verifyIdentity",
+            {{"idNumber", "12AB"}, {"surname", "Mokoena"}})).success);
+    }
+
+    TEST_CASE("Adapter: GovernmentIDAdapter reports a mismatch or deceased record as data") {
+        GovernmentIDAdapter adapter;
+
+        ServiceResult mismatch = adapter.invoke(makeRequest("verifyIdentity",
+            {{"idNumber", "0501015800087"}, {"surname", "Naidoo"}}));
+        CHECK(mismatch.success);
+        CHECK(mismatch.outputs["identityVerified"] == "false");
+        CHECK(mismatch.outputs["identityStatus"] == "SURNAME_MISMATCH");
+
+        ServiceResult deceased = adapter.invoke(makeRequest("verifyIdentity",
+            {{"idNumber", "4808105009083"}, {"surname", "Dlamini"}}));
+        CHECK(deceased.success);
+        CHECK(deceased.outputs["identityVerified"] == "false");
+        CHECK(deceased.outputs["identityStatus"] == "DECEASED");
     }
 
     TEST_CASE("Adapter: GovernmentIDAdapter handles third-party service outages") {
