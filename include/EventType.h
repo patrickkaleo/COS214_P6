@@ -1,0 +1,17 @@
+#ifndef EVENTTYPE_H
+#define EVENTTYPE_H
+
+enum class EventType
+{
+	AVAILABLE,
+	ASSIGNED,
+	STARTED,
+	COMPLETED,
+	REJECTED,
+	CANCELLED,
+	ESCALATED,
+	FAILED,
+	INSTANCE_COMPLETED
+};
+
+#endif

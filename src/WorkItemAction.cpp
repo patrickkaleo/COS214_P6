@@ -1,7 +1,7 @@
 #include "WorkItemAction.h"
 #include "WorkItem.h"
 #include "WorkflowInstance.h"
-#include "WorkFlowSnapshot.h"
+#include "WorkflowSnapshot.h"
 
 WorkItemAction::WorkItemAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor) : instance(instance), itemId(itemId), actor(actor), before(nullptr) {}
 
