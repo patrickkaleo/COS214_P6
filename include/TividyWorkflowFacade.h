@@ -10,6 +10,9 @@
 #include "WorkflowEngine.h"
 #include "WorkflowDirector.h"
 #include "InstanceData.h"
+#include <string>
+#include <vector>
+#include <ctime>
 
 class Participant;
 class ExternalService;
@@ -20,8 +23,8 @@ class TividyWorkflowFacade
 {
 
 private:
-	WorkflowEngine *engine;
-	WorkflowDirector *director;
+	WorkflowEngine engine;
+	WorkflowDirector director;
 
 public:
 	/**
@@ -29,14 +32,14 @@ public:
 	 *
 	 * Initializes the workflow engine and director.
 	 */
-	TividyWorkflowFacade();
+	TividyWorkflowFacade() = default;
 
 	/**
 	 * @brief Destroys the TividyWorkflowFacade object.
 	 *
 	 * Cleans up the workflow engine and director.
 	 */
-	~TividyWorkflowFacade();
+	~TividyWorkflowFacade() = default;
 
 	/**
 	 * @brief Registers a new workflow definition.
@@ -53,7 +56,7 @@ public:
 	 * @param name The name of the participant.
 	 * @param roles The roles of the participant.
 	 */
-	void addParticipant(std::string id, std::string name, std::vector<std::string> roles);
+	void addParticipant(const std::string &id, const std::string &name, const std::vector<std::string> &roles);
 
 	/**
 	 * @brief Registers an external system adapter.
@@ -76,70 +79,70 @@ public:
 	 * @param data The instance data.
 	 * @return The ID of the started instance.
 	 */
-	std::string startInstance(std::string definitionId, InstanceData data);
+	std::string startInstance(const std::string &definitionId, const InstanceData &data);
 
 	/**
 	 * @brief Claims a work item.
 	 *
 	 * @param instanceId The ID of the workflow instance.
 	 * @param itemId The ID of the work item.
-	 * @param actorId The ID of the actor claiming the item.
+	 * @param actor Pointer to the actor claiming the item.
 	 * @return True if the claim is successful, false otherwise.
 	 */
-	bool claim(std::string instanceId, std::string itemId, std::string actorId);
+	bool claim(const std::string &instanceId, const std::string &itemId, Participant *actor);
 
 	/**
 	 * @brief Starts work on an item.
 	 *
 	 * @param instanceId The ID of the workflow instance.
 	 * @param itemId The ID of the work item.
-	 * @param actorId The ID of the actor starting the work.
+	 * @param actor Pointer to the actor starting the work.
 	 * @return True if the start is successful, false otherwise.
 	 */
-	bool start(std::string instanceId, std::string itemId, std::string actorId);
+	bool start(const std::string &instanceId, const std::string &itemId, Participant *actor);
 
 	/**
 	 * @brief Completes a work item.
 	 *
 	 * @param instanceId The ID of the workflow instance.
 	 * @param itemId The ID of the work item.
-	 * @param actorId The ID of the actor completing the item.
+	 * @param actor Pointer to the actor completing the item.
 	 * @param outcome The outcome of the completion.
 	 * @return True if the completion is successful, false otherwise.
 	 */
-	bool complete(std::string instanceId, std::string itemId, std::string actorId, std::string outcome);
+	bool complete(const std::string &instanceId, const std::string &itemId, Participant *actor, const std::string &outcome);
 
 	/**
 	 * @brief Rejects a work item.
 	 *
 	 * @param instanceId The ID of the workflow instance.
 	 * @param itemId The ID of the work item.
-	 * @param actorId The ID of the actor rejecting the item.
+	 * @param actor Pointer to the actor rejecting the item.
 	 * @param reason The reason for rejection.
 	 * @return True if the rejection is successful, false otherwise.
 	 */
-	bool reject(std::string instanceId, std::string itemId, std::string actorId, std::string reason);
+	bool reject(const std::string &instanceId, const std::string &itemId, Participant *actor, const std::string &reason);
 
 	/**
 	 * @brief Delegates a work item.
 	 *
 	 * @param instanceId The ID of the workflow instance.
 	 * @param itemId The ID of the work item.
-	 * @param actorId The ID of the actor delegating the item.
-	 * @param toId The ID of the actor to whom the item is being delegated.
+	 * @param actor Pointer to the actor delegating the item.
+	 * @param to Pointer to the target participant.
 	 * @return True if the delegation is successful, false otherwise.
 	 */
-	bool delegate(std::string instanceId, std::string itemId, std::string actorId, std::string toId);
+	bool delegate(const std::string &instanceId, const std::string &itemId, Participant *actor, Participant *to);
 
 	/**
 	 * @brief Cancels a work item.
 	 *
 	 * @param instanceId The ID of the workflow instance.
 	 * @param itemId The ID of the work item.
-	 * @param actorId The ID of the actor canceling the item.
+	 * @param actor Pointer to the actor canceling the item.
 	 * @return True if the cancellation is successful, false otherwise.
 	 */
-	bool cancel(std::string instanceId, std::string itemId, std::string actorId);
+	bool cancel(const std::string &instanceId, const std::string &itemId, Participant *actor);
 
 	/**
 	 * @brief Undoes the last executed action.
@@ -161,7 +164,10 @@ public:
 	 * @param instanceId The ID of the workflow instance.
 	 * @return A string representing the current status of the instance.
 	 */
-	std::string getStatus(std::string instanceId);
+	std::string getStatus(const std::string &instanceId);
+
+	std::string registerDefinitionFromFile(
+			const std::string &filePath);
 };
 
 #endif

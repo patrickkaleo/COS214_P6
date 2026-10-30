@@ -17,7 +17,7 @@
  *
  */
 
-class CancelAction : WorkItemAction
+class CancelAction : public WorkItemAction
 {
 
 protected:
@@ -30,12 +30,13 @@ protected:
 	bool doExecute(WorkItem &Item);
 
 public:
+	CancelAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor);
 	/**
 	 * @brief Describes the cancel action
 	 *
 	 * @return A string description of the action
 	 */
-	std::string describe();
+	std::string describe() const override;
 };
 
 #endif

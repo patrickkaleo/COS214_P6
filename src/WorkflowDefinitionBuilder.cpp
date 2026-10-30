@@ -33,24 +33,53 @@ WorkItem *WorkflowDefinitionBuilder::findItem(string itemId)
 	return found->second;
 }
 
-void WorkflowDefinitionBuilder::addProcess(string id, string name, string parentId)
+void WorkflowDefinitionBuilder::addProcess(
+		string id, string name, string parentId)
 {
-	if (definition)
+	if (definition == nullptr)
+		return;
+
+	SubProcess *process = new SubProcess(id, name);
+
+	// Root process has no parent.
+	if (parentId == "-")
 	{
-		WorkItem *parent = findItem(parentId);
-		if (parent)
-			parent->add(new SubProcess(id, name));
+		definition->setRoot(process);
+		items[id] = process;
+		return;
 	}
+
+	SubProcess *parent =
+			dynamic_cast<SubProcess *>(findItem(parentId));
+
+	if (parent == nullptr)
+	{
+		delete process;
+		return;
+	}
+
+	parent->add(process);
+	items[id] = process;
 }
 
-void WorkflowDefinitionBuilder::addTask(string id, string name, string parentId)
+void WorkflowDefinitionBuilder::addTask(
+		string id, string name, string parentId)
 {
-	if (definition)
-	{
-		WorkItem *parent = findItem(parentId);
-		if (parent)
-			parent->add(new Task(id, name));
-	}
+	if (definition == nullptr)
+		return;
+
+	SubProcess *parent =
+			dynamic_cast<SubProcess *>(findItem(parentId));
+
+	if (parent == nullptr)
+		return;
+
+	Task *task = new Task(id, name);
+
+	parent->add(task);
+
+	// Register task so other build steps can find it.
+	items[id] = task;
 }
 
 void WorkflowDefinitionBuilder::addDependency(string fromId, string toId, string outcome)
@@ -61,32 +90,43 @@ void WorkflowDefinitionBuilder::addDependency(string fromId, string toId, string
 	}
 }
 
-void WorkflowDefinitionBuilder::setRouting(string itemId, RoutingStrategy *strategy)
+void WorkflowDefinitionBuilder::setRouting(
+		string itemId, RoutingStrategy *strategy)
 {
-	if (strategy)
+	Task *task =
+			dynamic_cast<Task *>(findItem(itemId));
+
+	if (task == nullptr)
 	{
-		WorkItem *item = findItem(itemId);
-		if (item)
-			item->setRouting(strategy);
+		delete strategy;
+		return;
 	}
+
+	task->setRouting(strategy);
 }
 
-void WorkflowDefinitionBuilder::setService(string itemId, string serviceName)
+void WorkflowDefinitionBuilder::setService(
+		string itemId,
+		string serviceName)
 {
-	WorkItem *item = findItem(itemId);
-	if (item)
-	{
-		item->setService(serviceName);
-	}
+	Task *task = dynamic_cast<Task *>(findItem(itemId));
+
+	if (task == nullptr)
+		return;
+
+	task->setServiceName(serviceName);
 }
 
-void WorkflowDefinitionBuilder::markCheckpoint(string itemId)
+void WorkflowDefinitionBuilder::markCheckpoint(
+		string itemId)
 {
-	WorkItem *item = findItem(itemId);
-	if (item != nullptr)
-	{
-		item->setCheckointflag(true);
-	}
+	Task *task =
+			dynamic_cast<Task *>(findItem(itemId));
+
+	if (task == nullptr)
+		return;
+
+	task->setCheckpoint(true);
 }
 
 void WorkflowDefinitionBuilder::addPriority(string itemId, int level)

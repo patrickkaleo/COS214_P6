@@ -1,5 +1,6 @@
 #include "DelegateAction.h"
 #include "WorkItem.h"
+#include "Participant.h"
 
 DelegateAction::DelegateAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor, Participant *to)
     : WorkItemAction(instance, itemId, actor), to(to) {}

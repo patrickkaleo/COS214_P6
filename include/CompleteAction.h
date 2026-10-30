@@ -3,7 +3,7 @@
 
 #include "WorkItemAction.h"
 
-class CompleteAction : WorkItemAction
+class CompleteAction : public WorkItemAction
 {
 
 private:

@@ -6,26 +6,46 @@
 #include "EscalatedState.h"
 #include "CompletedState.h"
 #include "RejectedState.h"
-#include"CancelledState.h"
+#include "CancelledState.h"
 #include "SubProcess.h"
 #include "Task.h"
 #include "Participant.h"
-#include<iostream>
+#include "ParticipantDirectory.h"
+#include <memory>
+#include <map>
+#include <iostream>
 using namespace std;
 
 using namespace std;
 
-
-WorkflowInstance::WorkflowInstance(const string& id,const WorkflowDefinition* definition,SubProcess* root,DependencyMediator* mediator,const InstanceData& data,ParticipantDirectory* directory)
+// The engine/tests use the three-argument constructor.
+// Instantiate a separate runtime tree so the definition retains its own root.
+WorkflowInstance::WorkflowInstance(const std::string &id,
+                                   const WorkflowDefinition *definition,
+                                   const InstanceData &data)
+    : Id(id), definition(definition), mediator(new DependencyMediator()),
+      rootProcess(nullptr), data(data), participants(nullptr)
 {
-    Id = id;
-    this->definition = definition;
-    rootProcess = root;
-    this->mediator = mediator;
-    this->data = data;
-    participants = directory;
+    if (definition != nullptr)
+    {
+        // instantiateTree() is currently non-const in WorkflowDefinition.h.
+        WorkItem *cloned = const_cast<WorkflowDefinition *>(definition)->instantiateTree();
+        rootProcess = dynamic_cast<SubProcess *>(cloned);
+        if (rootProcess == nullptr)
+            delete cloned;
+    }
 }
 
+WorkflowInstance::WorkflowInstance(const string &id,
+                                   const WorkflowDefinition *definition,
+                                   SubProcess *root,
+                                   DependencyMediator *mediator,
+                                   const InstanceData &data,
+                                   ParticipantDirectory *directory)
+    : Id(id), definition(definition), mediator(mediator), rootProcess(root),
+      data(data), participants(directory)
+{
+}
 
 WorkflowInstance::~WorkflowInstance()
 {
@@ -36,26 +56,24 @@ WorkflowInstance::~WorkflowInstance()
     mediator = NULL;
 }
 
-
 bool WorkflowInstance::start()
 {
-    if (rootProcess==NULL)
+    if (rootProcess == NULL)
     {
         return false;
     }
     return rootProcess->makeAvailable();
 }
 
-
-const string& WorkflowInstance::getId() const
+const string &WorkflowInstance::getId() const
 {
     return Id;
 }
-InstanceData& WorkflowInstance::getData()
+InstanceData &WorkflowInstance::getData()
 {
     return data;
 }
-WorkItem* WorkflowInstance::findItem(const string& itemId) const
+WorkItem *WorkflowInstance::findItem(const string &itemId) const
 {
     if (rootProcess == NULL)
     {
@@ -64,8 +82,8 @@ WorkItem* WorkflowInstance::findItem(const string& itemId) const
 
     return findItemRecursive(rootProcess, itemId);
 }
-//helper function
-WorkItem* WorkflowInstance::findItemRecursive(WorkItem* current,const string& itemId) const
+// helper function
+WorkItem *WorkflowInstance::findItemRecursive(WorkItem *current, const string &itemId) const
 {
     if (current == NULL)
     {
@@ -75,7 +93,7 @@ WorkItem* WorkflowInstance::findItemRecursive(WorkItem* current,const string& it
     {
         return current;
     }
-    SubProcess* process =dynamic_cast<SubProcess*>(current);
+    SubProcess *process = dynamic_cast<SubProcess *>(current);
     if (process == NULL)
     {
         return NULL;
@@ -83,7 +101,7 @@ WorkItem* WorkflowInstance::findItemRecursive(WorkItem* current,const string& it
 
     for (int i = 0; i < process->childCount(); ++i)
     {
-        WorkItem* found =findItemRecursive(process->getChild(i), itemId);
+        WorkItem *found = findItemRecursive(process->getChild(i), itemId);
         if (found != NULL)
         {
             return found;
@@ -97,19 +115,19 @@ string WorkflowInstance::status() const
     {
         return "invalid";
     }
-    string stateName=rootProcess->getName();
-    if (stateName=="Completed")
+    string stateName = rootProcess->getName();
+    if (stateName == "Completed")
     {
         return "completed";
     }
-    if (stateName == "Rejected" ||stateName == "Cancelled")
+    if (stateName == "Rejected" || stateName == "Cancelled")
     {
         return "terminated";
     }
     return "running";
 }
-//helper
-void WorkflowInstance::captureItem(WorkItem* item,map<string, string>& states,map<string, string>& assignees,map<string, string>& outcomes) const
+// helper
+void WorkflowInstance::captureItem(WorkItem *item, map<string, string> &states, map<string, string> &assignees, map<string, string> &outcomes) const
 {
     if (item == NULL)
     {
@@ -117,54 +135,53 @@ void WorkflowInstance::captureItem(WorkItem* item,map<string, string>& states,ma
     }
     states[item->getId()] = item->getStateName();
 
-    outcomes[item->getId()] =item->getOutcome();
-    Task* task =dynamic_cast<Task*>(item);
-    
-    if (task != NULL &&task->getAssignee() != NULL)
+    outcomes[item->getId()] = item->getOutcome();
+    Task *task = dynamic_cast<Task *>(item);
+
+    if (task != NULL && task->getAssignee() != NULL)
     {
-        assignees[item->getId()]=task->getAssignee()->getId();
+        assignees[item->getId()] = task->getAssignee()->getId();
     }
 
     // If this is a SubProcess,
     // recursively capture all children
-    SubProcess* process =dynamic_cast<SubProcess*>(item);
+    SubProcess *process = dynamic_cast<SubProcess *>(item);
 
     if (process != NULL)
     {
-        for (int i = 0;i < process->childCount();++i)
+        for (int i = 0; i < process->childCount(); ++i)
         {
-            captureItem(process->getChild(i), states,assignees, outcomes);
+            captureItem(process->getChild(i), states, assignees, outcomes);
         }
     }
 }
 
-
-WorkflowSnapshot* WorkflowInstance::createSnapshot(const string& label)
+WorkflowSnapshot *WorkflowInstance::createSnapshot(const string &label)
 {
     map<string, string> itemStates;
     map<string, string> assignees;
     map<string, string> outcomes;
 
-    captureItem(rootProcess,itemStates,assignees,outcomes);
+    captureItem(rootProcess, itemStates, assignees, outcomes);
 
-    return new WorkflowSnapshot(itemStates,assignees,outcomes,data,label);
+    return new WorkflowSnapshot(itemStates, assignees, outcomes, data, label);
 }
 
-void WorkflowInstance::restoreSnapshot(const WorkflowSnapshot& snapshot)
+void WorkflowInstance::restoreSnapshot(const WorkflowSnapshot &snapshot)
 {
     // Restore InstanceData
     data = snapshot.data;
 
     // Restore WorkItem states
-    for (map<string, string>::const_iterator it =snapshot.itemStates.begin();it != snapshot.itemStates.end();++it)
+    for (map<string, string>::const_iterator it = snapshot.itemStates.begin(); it != snapshot.itemStates.end(); ++it)
     {
-        WorkItem* item =findItem(it->first);
+        WorkItem *item = findItem(it->first);
         if (item == NULL)
         {
             continue;
         }
 
-        WorkItemState* restoredState=createStateFromName(it->second);
+        WorkItemState *restoredState = createStateFromName(it->second);
         if (restoredState != NULL)
         {
             item->setState(restoredState);
@@ -172,13 +189,13 @@ void WorkflowInstance::restoreSnapshot(const WorkflowSnapshot& snapshot)
     }
 
     // Restore WorkItem outcomes
-    for (map<string, string>::const_iterator it =snapshot.outcomes.begin();it != snapshot.outcomes.end();++it)
+    for (map<string, string>::const_iterator it = snapshot.outcomes.begin(); it != snapshot.outcomes.end(); ++it)
     {
-        WorkItem* item =findItem(it->first);
+        WorkItem *item = findItem(it->first);
 
         if (item != NULL)
         {
-           item->setOutcome(it->second);
+            item->setOutcome(it->second);
         }
     }
 
@@ -186,11 +203,11 @@ void WorkflowInstance::restoreSnapshot(const WorkflowSnapshot& snapshot)
     clearAssignees(rootProcess);
 
     // Restore saved assignments
-    for (map<string, string>::const_iterator it =snapshot.assignees.begin();it != snapshot.assignees.end();++it)
+    for (map<string, string>::const_iterator it = snapshot.assignees.begin(); it != snapshot.assignees.end(); ++it)
     {
-        WorkItem* item =findItem(it->first);
+        WorkItem *item = findItem(it->first);
 
-        Task* task = dynamic_cast<Task*>(item);
+        Task *task = dynamic_cast<Task *>(item);
 
         if (task == NULL)
         {
@@ -202,34 +219,34 @@ void WorkflowInstance::restoreSnapshot(const WorkflowSnapshot& snapshot)
             continue;
         }
 
-        std::shared_ptr<Participant> participant =participants->findById(it->second);
+        std::shared_ptr<Participant> participant = participants->findById(it->second);
         task->setAssignee(participant.get());
     }
 }
-void WorkflowInstance::clearAssignees(WorkItem* item)
+void WorkflowInstance::clearAssignees(WorkItem *item)
 {
     if (item == NULL)
     {
         return;
     }
 
-    Task* task =dynamic_cast<Task*>(item);
+    Task *task = dynamic_cast<Task *>(item);
 
     if (task != NULL)
     {
         task->setAssignee(nullptr);
     }
 
-    SubProcess* process =dynamic_cast<SubProcess*>(item);
+    SubProcess *process = dynamic_cast<SubProcess *>(item);
     if (process != NULL)
     {
-        for (int i = 0;i < process->childCount();++i)
+        for (int i = 0; i < process->childCount(); ++i)
         {
             clearAssignees(process->getChild(i));
         }
     }
 }
-WorkItemState* WorkflowInstance::createStateFromName(const string& stateName) const
+WorkItemState *WorkflowInstance::createStateFromName(const string &stateName) const
 {
     if (stateName == "Created")
     {

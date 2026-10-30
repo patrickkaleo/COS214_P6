@@ -12,7 +12,7 @@ MAIN_SRC = $(SRCDIR)/main.cpp
 MAIN_OBJ = $(OBJDIR)/main.o
 
 # Common engine sources compiled into both the demo and tests (all src/*.cpp except main.cpp)
-COMMON_SRCS = $(filter-out $(MAIN_SRC), $(wildcard $(SRCDIR)/*.cpp))
+COMMON_SRCS = $(filter-out $(MAIN_SRC) $(SRCDIR)/decorator.cpp, $(wildcard $(SRCDIR)/*.cpp))
 COMMON_OBJS = $(patsubst $(SRCDIR)/%.cpp, $(OBJDIR)/%.o, $(COMMON_SRCS))
 
 # Test suite sources (all tests/*.cpp)

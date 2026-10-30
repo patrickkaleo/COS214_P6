@@ -3,7 +3,7 @@
 
 #include <string>
 
-class WorkFlowSnapshot;
+class WorkflowSnapshot;
 class WorkflowInstance;
 class WorkItem;
 class Participant;
@@ -12,10 +12,10 @@ class WorkItemAction
 {
 
 protected:
-	WorkflowInstance *Instance;
+	WorkflowInstance *instance;
 	std::string itemId;
 	Participant *actor;
-	WorkFlowSnapshot *before;
+	WorkflowSnapshot *before;
 
 	virtual bool doExecute(WorkItem &item) = 0;
 
@@ -25,7 +25,7 @@ public:
 	bool execute();
 	bool undo();
 
-	virtual std::string describe() = 0;
+	virtual std::string describe() const = 0;
 
 	void description();
 };
