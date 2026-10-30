@@ -61,15 +61,15 @@ public:
      * @param directory The organization participant directory.
      * @return std::shared_ptr<Participant> Shared pointer to the selected participant, or nullptr.
      */
-    virtual std::shared_ptr<Participant> select(const Task& task,
-                                                const InstanceData& data,
-                                                const ParticipantDirectory& directory) override;
+    virtual Participant* select(const Task& task,
+                                const InstanceData& data,
+                                const ParticipantDirectory& directory) override;
 
     /**
      * @brief Clones this strategy instance for workflow template copying.
-     * @return std::unique_ptr<RoutingStrategy> Owned clone of this strategy.
+     * @return RoutingStrategy* Newly allocated clone of this strategy.
      */
-    virtual std::unique_ptr<RoutingStrategy> clone() const override;
+    virtual RoutingStrategy* clone() const override;
 
     std::string getField() const;
     void setField(const std::string& fieldName);

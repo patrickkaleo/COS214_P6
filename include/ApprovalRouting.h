@@ -60,15 +60,15 @@ public:
      * @param directory The participant directory.
      * @return std::shared_ptr<Participant> Shared pointer to the chosen approver, or nullptr.
      */
-    virtual std::shared_ptr<Participant> select(const Task& task,
-                                                const InstanceData& data,
-                                                const ParticipantDirectory& directory) override;
+    virtual Participant* select(const Task& task,
+                                const InstanceData& data,
+                                const ParticipantDirectory& directory) override;
 
     /**
-     * @brief Clones this strategy instance as an owned unique_ptr.
-     * @return std::unique_ptr<RoutingStrategy> Cloned strategy.
+     * @brief Clones this strategy instance as a newly allocated strategy.
+     * @return RoutingStrategy* Cloned strategy.
      */
-    virtual std::unique_ptr<RoutingStrategy> clone() const override;
+    virtual RoutingStrategy* clone() const override;
 
     /**
      * @brief Gets non-owning pointer to the head of the handler chain.
