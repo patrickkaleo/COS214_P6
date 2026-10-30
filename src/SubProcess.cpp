@@ -82,3 +82,8 @@ bool SubProcess::allChildrenFinished() const {
     }
     return true;
 }
+
+// SubProcess::createIterator  (factory for the Iterator pattern)
+WorkItemIterator* SubProcess::createIterator() const {
+    return new DepthFirstWorkItemIterator(const_cast<SubProcess*>(this));
+}
