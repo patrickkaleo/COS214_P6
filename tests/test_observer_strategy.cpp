@@ -132,9 +132,13 @@ public:
     explicit MockApprovalHandler(Participant* p)
         : approver(p) {}
 
-    virtual std::shared_ptr<Participant> handle(ApprovalRequest& req) override {
+    virtual Participant* handle(ApprovalRequest& req) override {
         (void)req;
-        return approver;
+        return approver.get();
+    }
+
+    virtual ApprovalHandler* clone() const override {
+        return new MockApprovalHandler(approver);
     }
 };
 
@@ -223,9 +227,8 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
     TEST_CASE("ApprovalRouting: delegates to ApprovalHandler Chain of Responsibility") {
         Task task("TASK-ROUTING-5", "Budget Approval");
         auto dean = std::make_shared<Participant>("p_dean", "Prof. X", "Dean");
-        std::unique_ptr<MockApprovalHandler> handler(new MockApprovalHandler(dean));
 
-        ApprovalRouting approvalStrategy(std::move(handler));
+        ApprovalRouting approvalStrategy(new MockApprovalHandler(dean));
         InstanceData data;
         ParticipantDirectory directory;
 

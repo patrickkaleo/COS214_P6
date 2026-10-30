@@ -17,8 +17,6 @@
 
 // Forward declarations
 class RoutingStrategy;
-class InstanceData;
-class ParticipantDirectory;
 class ServiceRegistry;
 class Participant;
 
@@ -89,7 +87,14 @@ public:
      * @param data Instance data available during routing (not owned).
      * @param directory Directory used to look up participants (not owned).
      */
-	void setRoutingContext(InstanceData* data, ParticipantDirectory* directory);
+    void setRoutingContext(const InstanceData* data, const ParticipantDirectory* directory) override;
+    void setRoutingContext(InstanceData* data, ParticipantDirectory* directory);
+
+    /**
+     * @brief Route the task to an assignee based on current data and directory.
+     * @return true if successfully assigned or escalated.
+     */
+    bool route();
 
     /**
      * @brief Inject service registry for performWork (not owned).
@@ -102,36 +107,13 @@ public:
      */
     virtual void performWork(InstanceData& context);
 
-    /**
-     * @brief Current escalation level (used by ApprovalRouting / Chain of Responsibility).
-     * @param l Level index (0 = first handler).
-     */
-    void setEscalationLevel(int l) { escalationLevel_ = l; }
-
-    /** @return Current escalation level. */
-    int getEscalationLevel() const { return escalationLevel_; }
-
-    /**
-     * @return Participant currently assigned to this task (not owned).
-     */
-    Participant* getAssignee() const { return assignee_; }
-
-    /**
-     * @brief Record the assignee (not owned; lives in ParticipantDirectory).
-     * @param p Participant pointer.
-     */
-    void setAssignee(Participant* p) { assignee_ = p; }
-
-
 private:
-    Participant* assignee_;          /**< Not owned. */
-    RoutingStrategy* routing_;       /**< Owned. */
-    std::string serviceName_;        /**< Key into ServiceRegistry. */
-    bool checkpoint_;                /**< Take Memento before external call. */
-    int escalationLevel_;            /**< For approval / escalation chains. */
-	InstanceData* instanceData_;     /**< Not owned. */
-	ParticipantDirectory* directory_;/**< Not owned. */
-	ServiceRegistry* services_;      /**< Not owned. */
+    RoutingStrategy* routing_;             /**< Owned. */
+    std::string serviceName_;              /**< Key into ServiceRegistry. */
+    bool checkpoint_;                      /**< Take Memento before external call. */
+    const InstanceData* instanceData_;     /**< Not owned. */
+    const ParticipantDirectory* directory_;/**< Not owned. */
+    ServiceRegistry* services_;            /**< Not owned. */
 };
 
 #endif // TASK_H

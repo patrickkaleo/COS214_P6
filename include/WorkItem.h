@@ -1,9 +1,6 @@
 /**
  * @file WorkItem.h
- * @brief Abstract Component of the Composite pattern + Context (State) for TIVIDY workflow engine.
- * @details Every piece of work (leaf Task or composite SubProcess) is a WorkItem.
- *          Lifecycle operations are forwarded to the current WorkItemState (State pattern).
- *          The class is also the Subject of Observer and a Colleague of the Mediator.
+ * @brief Common interface/base for every piece of work in the engine - Task (leaf) and SubProcess (composite).
  * @version 1.0
  */
 
@@ -12,6 +9,8 @@
 
 #include <string>
 #include <vector>
+#include <algorithm>
+
 #include "WorkflowEvent.h"   // EventType
 
 // Forward declarations
@@ -20,6 +19,8 @@ class WorkItemState;
 class SubProcess;
 class WorkflowMediator;
 class WorkflowEventListener;
+class InstanceData;
+class ParticipantDirectory;
 
 /**
  * @class WorkItem
@@ -41,71 +42,73 @@ public:
      * @brief Copy constructs a WorkItem with the given identity.
      * @param other workItem to be copied.
      */
-	WorkItem(const WorkItem& other);
+    WorkItem(const WorkItem& other);
 
     /**
-     * @brief Virtual destructor. Deletes the owned WorkItemState.
+     * @brief Virtual destructor. Cleans up owned state.
      */
     virtual ~WorkItem();
 
-    // lifecycle (delegate to state)
+    // Lifecycle operations (delegated to state_)
 
     /**
      * @brief Attempt to make this item available for assignment.
-     * @return true if the current state accepted the transition.
+     * @return true if the current state permits the transition.
      */
     virtual bool makeAvailable();
 
     /**
      * @brief Attempt to assign this item to a participant.
-     * @param p Participant to assign (not owned by WorkItem).
-     * @return true if the current state accepted the transition.
+     * @param p Participant to assign (not owned).
+     * @return true if assignment succeeded.
      */
     virtual bool assign(Participant* p);
 
     /**
      * @brief Attempt to start work on this item.
-     * @return true if the current state accepted the transition.
+     * @return true if started.
      */
     virtual bool start();
 
     /**
-     * @brief Attempt to complete this item with the given outcome.
-     * @param outcome Result string (e.g. "approved", "paid"). Stored on success.
-     * @return true if the current state accepted the transition.
+     * @brief Attempt to complete this item with an outcome.
+     * @param outcome Result string (e.g. "approved", "rejected", "verified").
+     * @return true if completion succeeded.
      */
     virtual bool complete(const std::string& outcome);
 
     /**
-     * @brief Attempt to reject this item.
-     * @param reason Human-readable rejection reason.
-     * @return true if the current state accepted the transition.
+     * @brief Attempt to reject this item with a reason.
+     * @param reason Explanation for rejection.
+     * @return true if rejection succeeded.
      */
     virtual bool reject(const std::string& reason);
 
     /**
      * @brief Attempt to cancel this item.
-     * @return true if the current state accepted the transition.
+     * @return true if cancelled.
      */
     virtual bool cancel();
 
     /**
      * @brief Attempt to escalate this item (e.g. deadline passed).
-     * @return true if the current state accepted the transition.
+     * @return true if escalation succeeded.
      */
     virtual bool escalate();
 
-    // state management
+    // State inspection / mutation
 
     /**
-     * @brief Called by concrete states after a successful transition.
-     *        Replaces the state object and publishes via EventDispatcher.
+     * @brief Transition to a new state and publish the associated WorkflowEvent.
+     * @param next  Newly allocated state object (WorkItem takes ownership).
+     * @param event Event type corresponding to the transition.
      */
     void changeState(WorkItemState* next, EventType event);
 
-	/**
-     * @brief Replace the current state object (takes ownership).
-     * @param s New state; previous state is deleted.
+    /**
+     * @brief Replace the state object directly without firing a lifecycle event.
+     *        Used by Memento restore and initial state wiring.
+     * @param s New state (takes ownership; deletes old state).
      */
     void setState(WorkItemState* s);
 
@@ -135,43 +138,42 @@ public:
      * @return true if no further lifecycle operations are legal.
      */
     bool isFinished() const;
-	
+
     /**
-     * @brief Access the current state object.
-     * @return Name of state
+     * @brief Human-readable name of the current state.
+     * @return State name string (e.g. "Created", "Available", "Assigned", ...).
      */
     std::string getStateName() const;
 
-    // identity / data
-
-    /** @return Unique item identifier. */
+    // Getters and Setters
     std::string getId() const { return id_; }
-
-    /** @return Human-readable name. */
     std::string getName() const { return name_; }
-
-    /** @return Outcome set on successful complete/reject/cancel. */
     std::string getOutcome() const { return outcome_; }
 
     /** @brief Gets the participant assigned to this work item.
      *  @return The assigned participant, or nullptr if none is assigned.
      */
-    Participant* getAssignee() const;
+    Participant* getAssignee() const { return assignee; }
 
     /** @brief Gets the current escalation level.
      *  @return The escalation level.
      */
-    int getEscalationLevel() const;
+    int getEscalationLevel() const { return escalationLevel; }
+
+    /** @brief Sets the escalation level directly.
+     *  @param level The new escalation level.
+     */
+    void setEscalationLevel(int level) { escalationLevel = level; }
 
     /** @brief Gets the unique identifier for this work-item instance.
      *  @return The instance identifier.
      */
-    std::string getInstanceId() const;
+    std::string getInstanceId() const { return instanceId; }
 
     /** @brief Sets the unique identifier for this work-item instance.
      *  @param id The instance identifier to store.
      */
-    void setInstanceId(const std::string& id);
+    void setInstanceId(const std::string& id) { instanceId = id; }
 
     // structure
 
@@ -220,6 +222,20 @@ public:
      */
     WorkflowMediator* getMediator() const { return mediator_; }
 
+    /// @name Uniform child access (Composite)
+    /// A leaf has no children; SubProcess overrides both.
+    /// @{
+    virtual int childCount() const;
+    virtual WorkItem* getChild(int index) const;
+    /// @}
+
+    /**
+     * @brief Recursively propagates routing context down the workflow tree.
+     * @param data Instance runtime data.
+     * @param directory Participant directory.
+     */
+    virtual void setRoutingContext(const InstanceData* data, const ParticipantDirectory* directory);
+
     // Prototype (Builder / instance cloning)
 
     /**
@@ -235,13 +251,19 @@ public:
      */
     virtual void onAvailable() = 0;
 
+    /**
+     * @brief Hook run after the item reaches a final state, before mediator is told.
+     */
+    virtual void onFinished();
+
 protected:
+    void finished();
     std::string id_;                                       /**< Unique identifier. */
     std::string name_;                                     /**< Display name. */
-	std::string instanceId;
+    std::string instanceId;
     std::string outcome_;                                  /**< Result of completion / rejection. */
     WorkItemState* state_;                                 /**< Owned current state. */
-	Participant* assignee;   
+    Participant* assignee;   
     int escalationLevel;
     SubProcess* parent_;                                   /**< Not owned. */
     std::vector<WorkflowEventListener*> listeners_;        /**< Not owned. */

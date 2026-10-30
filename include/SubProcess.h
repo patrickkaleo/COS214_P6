@@ -10,9 +10,11 @@
 #ifndef SUBPROCESS_H
 #define SUBPROCESS_H
 
-#include "WorkItem.h"
+#include <memory>
 #include <string>
 #include <vector>
+
+#include "WorkItem.h"
 
 class WorkItemIterator;
 
@@ -45,10 +47,15 @@ public:
     void onAvailable() override;
 
     /**
+     * @brief Hook called when SubProcess finishes; cancels any children still open.
+     */
+    void onFinished() override;
+
+    /**
      * @brief Deep-copy this sub-process and all of its children.
      * @return Newly allocated SubProcess*; caller owns it.
      */
-    WorkItem* clone() const override;
+    SubProcess* clone() const override;
 
     // Composite operations
 
@@ -61,20 +68,21 @@ public:
     /**
      * @brief Remove and delete the child with the given id.
      * @param id Identifier of the child to remove.
+     * @return true if a child was removed, false otherwise.
      */
-    void remove(const std::string& id);
+    bool remove(const std::string& id);
 
     /**
      * @brief Access a child by zero-based index.
      * @param index Child index.
      * @return Pointer to the child, or nullptr if out of range.
      */
-    WorkItem* getChild(int index) const;
+    WorkItem* getChild(int index) const override;
 
     /**
      * @return Number of direct children.
      */
-    int childCount() const { return static_cast<int>(children_.size()); }
+    int childCount() const override { return static_cast<int>(children_.size()); }
 
     /**
      * @brief Whether every direct child is in a terminal state.
@@ -87,14 +95,21 @@ public:
      */
     const std::vector<WorkItem*>& getChildren() const { return children_; }
 
+    /**
+     * @brief Finds an item anywhere in this branch, including this sub-process.
+     * @param id Identifier to look for.
+     * @return The item, or nullptr if not in this branch.
+     */
+    WorkItem* find(const std::string& id) const;
+
     // Iterator
 
     /**
      * @brief Factory for a depth-first iterator over this sub-tree.
-     * @return Newly allocated WorkItemIterator*; caller must delete it.
+     * @return Unique pointer to newly allocated WorkItemIterator.
      * @note Concrete type is DepthFirstWorkItemIterator.
      */
-    WorkItemIterator* createIterator() const;
+    std::unique_ptr<WorkItemIterator> createIterator() const;
 
 private:
     std::vector<WorkItem*> children_;   /**< Owned children. */

@@ -1,9 +1,6 @@
 /**
  * @file WorkItem.cpp
  * @brief WorkItem implementation aligned with WorkItem.h (State + Composite + Observer hooks).
- * @details Lifecycle delegates to WorkItemState. changeState() updates state and publishes
- *          via EventDispatcher. makeAvailable() calls onAvailable() for Composite (Task routing /
- *          SubProcess open children). Optional per-item listeners via attach/detach/notify.
  * @version 1.0
  */
 
@@ -12,6 +9,7 @@
 #include "CreatedState.h"
 #include "EventDispatcher.h"
 #include "WorkflowEvent.h"
+#include "WorkflowMediator.h"
 #include "Participant.h"
 #include "SubProcess.h"
 
@@ -43,7 +41,6 @@ WorkItem::WorkItem(const WorkItem& other)
       escalationLevel(other.escalationLevel),
       parent_(nullptr),
       mediator_(nullptr)
-      // listeners_ not copied; instance re-attaches as needed
 {}
 
 WorkItem::~WorkItem() {
@@ -72,22 +69,38 @@ bool WorkItem::start() {
 
 bool WorkItem::complete(const string& outcome) {
     if (!state_) return false;
-    return state_->complete(*this, outcome);
+    if (!state_->complete(*this, outcome)) return false;
+    finished();
+    return true;
 }
 
 bool WorkItem::reject(const string& reason) {
     if (!state_) return false;
-    return state_->reject(*this, reason);
+    if (!state_->reject(*this, reason)) return false;
+    finished();
+    return true;
 }
 
 bool WorkItem::cancel() {
     if (!state_) return false;
-    return state_->cancel(*this);
+    if (!state_->cancel(*this)) return false;
+    finished();
+    return true;
 }
 
 bool WorkItem::escalate() {
     if (!state_) return false;
     return state_->escalate(*this);
+}
+
+void WorkItem::finished() {
+    onFinished();
+    if (mediator_) {
+        mediator_->itemChanged(*this);
+    }
+}
+
+void WorkItem::onFinished() {
 }
 
 // State transition + EventDispatcher (per-item listeners)
@@ -122,31 +135,15 @@ bool WorkItem::isFinished() const {
 }
 
 string WorkItem::getStateName() const {
-    if (!state_) return "";
+    if (!state_) return "None";
     return state_->name();
 }
 
-Participant* WorkItem::getAssignee() const {
-    return assignee;
-}
-
-int WorkItem::getEscalationLevel() const {
-    return escalationLevel;
-}
-
-string WorkItem::getInstanceId() const {
-    return instanceId;
-}
-
-void WorkItem::setInstanceId(const string& id) {
-    instanceId = id;
-}
-
-// Per-item Observer
+// Observer support
 void WorkItem::attach(WorkflowEventListener* l) {
     if (!l) return;
-    if (find(listeners_.begin(), listeners_.end(), l) != listeners_.end()) {
-        return;
+    for (auto* existing : listeners_) {
+        if (existing == l) return;
     }
     listeners_.push_back(l);
 }
@@ -161,6 +158,24 @@ void WorkItem::notify(const WorkflowEvent& event) {
     for (auto* listener : listeners_) {
         if (listener) {
             listener->onEvent(event);
+        }
+    }
+}
+
+int WorkItem::childCount() const {
+    return 0;
+}
+
+WorkItem* WorkItem::getChild(int index) const {
+    (void)index;
+    return nullptr;
+}
+
+void WorkItem::setRoutingContext(const InstanceData* data, const ParticipantDirectory* directory) {
+    for (int i = 0; i < childCount(); ++i) {
+        WorkItem* c = getChild(i);
+        if (c) {
+            c->setRoutingContext(data, directory);
         }
     }
 }

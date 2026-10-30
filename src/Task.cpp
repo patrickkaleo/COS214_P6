@@ -1,21 +1,20 @@
 /**
  * @file Task.cpp
- * @brief Leaf of the Composite pattern — atomic work item.
+ * @brief Implementation of the Task leaf of the Composite pattern.
  * @version 1.0
  */
 
 #include "Task.h"
-#include "WorkItem.h"
 #include "RoutingStrategy.h"
-#include "InstanceData.h"
-#include "ParticipantDirectory.h"
 #include "Participant.h"
-#include "ExternalService.h"
+#include "ParticipantDirectory.h"
+#include "InstanceData.h"
 #include "ServiceRegistry.h"
-// #include "ServiceRequest.h"
-// #include "ServiceResult.h"
+#include "ExternalService.h"
+#include "ServiceRequest.h"
+#include "ServiceResult.h"
 
-#include <string>
+#include <iostream>
 
 using namespace std;
 
@@ -31,41 +30,43 @@ Task::Task(const string& id, const string& itemName)
 
 Task::~Task() {
     delete routing_;
-    // instanceData_, directory_, services_ are not owned
 }
 
-// Composite hook — called from WorkItem::makeAvailable() after state accepts
-void Task::onAvailable() {
-    if (!routing_) return;
-    if (!instanceData_ || !directory_) return;
+bool Task::route() {
+    if (!routing_ || !instanceData_ || !directory_) {
+        return false;
+    }
 
     Participant* p = routing_->select(*this, *instanceData_, *directory_);
     if (p) {
         if (assign(p)) {
             setAssignee(p);
+            return true;
         }
+        return false;
     } else {
-        // No eligible participant hence escalate (State handles transition and event)
-        escalate();
+        return escalate();
     }
 }
 
-// Prototype
+void Task::onAvailable() {
+    route();
+}
+
 WorkItem* Task::clone() const {
     Task* copy = new Task(getId(), getName());
     copy->setOutcome(getOutcome());
     copy->setInstanceId(getInstanceId());
     copy->serviceName_ = serviceName_;
     copy->checkpoint_ = checkpoint_;
+    copy->setEscalationLevel(getEscalationLevel());
 
     if (routing_) {
         copy->routing_ = routing_->clone();
     }
-    // instanceData_, directory_, services_, mediator, parent set by instance after clone
     return copy;
 }
 
-// Task-specific configuration
 void Task::setRouting(RoutingStrategy* strategy) {
     delete routing_;
     routing_ = strategy;
@@ -89,6 +90,11 @@ void Task::setCheckpoint(bool value) {
 
 bool Task::isCheckpoint() const {
     return checkpoint_;
+}
+
+void Task::setRoutingContext(const InstanceData* data, const ParticipantDirectory* directory) {
+    instanceData_ = data;
+    directory_ = directory;
 }
 
 void Task::setRoutingContext(InstanceData* data, ParticipantDirectory* directory) {
@@ -121,22 +127,12 @@ void Task::performWork(InstanceData& data) {
         return;
     }
 
-    // Build request from InstanceData key/value map
     ServiceRequest req;
-    // If ServiceRequest has operation + params map:
-    // req.operation = serviceName_;
-    // req.params = data.getMap();
-
     ServiceResult result = svc->invoke(req);
 
     if (result.success) {
-        // adapter outputs back into instance data:
-        // for (const auto& kv : result.values) {
-        //     data.set(kv.first, kv.second);
-        // }
         complete("ok");
     } else {
-        // Task only signals failure via escalation
         escalate();
     }
 }
