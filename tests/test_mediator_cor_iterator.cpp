@@ -138,7 +138,7 @@ TEST_SUITE("Angelo Anthony - Composite & Iterator Subsystem") {
 
     TEST_CASE("Iterator: depth-first traversal visits parents before children, left to right") {
         std::unique_ptr<SubProcess> root(buildShipmentExceptionTree());
-        std::unique_ptr<WorkItemIterator> it = root->createIterator();
+        std::unique_ptr<WorkItemIterator> it(root->createIterator());
 
         std::vector<std::string> expected = {
             "SHIP_EX", "REPORT", "LOG_EXCEPTION", "CLASSIFY",
@@ -149,7 +149,7 @@ TEST_SUITE("Angelo Anthony - Composite & Iterator Subsystem") {
 
     TEST_CASE("Iterator: first() restarts, and a finished iterator stays finished") {
         std::unique_ptr<SubProcess> root(buildShipmentExceptionTree());
-        std::unique_ptr<WorkItemIterator> it = root->createIterator();
+        std::unique_ptr<WorkItemIterator> it(root->createIterator());
 
         while (!it->isDone()) {
             it->next();
@@ -252,7 +252,7 @@ TEST_SUITE("Angelo Anthony - Mediator Subsystem") {
         DependencyMediator mediator(shipmentExceptionRules());
         mediator.registerTree(*root);
 
-        std::unique_ptr<WorkItemIterator> it = root->createIterator();
+        std::unique_ptr<WorkItemIterator> it(root->createIterator());
         int count = 0;
         for (it->first(); !it->isDone(); it->next()) {
             CHECK(it->current()->getMediator() == &mediator);

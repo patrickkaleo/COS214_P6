@@ -98,12 +98,10 @@ bool SubProcess::allChildrenFinished() const {
     return true;
 }
 
-std::unique_ptr<WorkItemIterator> SubProcess::createIterator() const {
-    return std::unique_ptr<WorkItemIterator>(new DepthFirstWorkItemIterator(const_cast<SubProcess*>(this)));
-}
+WorkItemIterator* SubProcess::createIterator() const { return new DepthFirstWorkItemIterator(const_cast<SubProcess*>(this)); }
 
 WorkItem* SubProcess::find(const std::string& id) const {
-    std::unique_ptr<WorkItemIterator> it = createIterator();
+    std::unique_ptr<WorkItemIterator> it(createIterator());
     for (it->first(); !it->isDone(); it->next()) {
         if (it->current() && it->current()->getId() == id) {
             return it->current();

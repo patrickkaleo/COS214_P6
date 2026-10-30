@@ -109,7 +109,7 @@ public:
      * @return Unique pointer to newly allocated WorkItemIterator.
      * @note Concrete type is DepthFirstWorkItemIterator.
      */
-    std::unique_ptr<WorkItemIterator> createIterator() const;
+    WorkItemIterator* createIterator() const;
 
 private:
     std::vector<WorkItem*> children_;   /**< Owned children. */
