@@ -26,16 +26,7 @@
 #include "ParticipantDirectory.h"
 #include "InstanceData.h"
 
-// Temporary test harness helper:
-// RoutingStrategy::select() takes a `const Task&` reference.
-// To allow Strategy tests to run independently before the Composite subsystem (Task)
-// is merged, this provides a safe dummy reference without requiring Task's definition.
-class Task;
-
-static const Task& getDummyTask() {
-    static const char dummyStorage[64] = {0};
-    return *reinterpret_cast<const Task*>(dummyStorage);
-}
+#include "Task.h"
 
 TEST_SUITE("Enock Nyamweya - Observer & Singleton Subsystems") {
 
@@ -150,6 +141,7 @@ public:
 TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
 
     TEST_CASE("RoleBasedRouting: selects first available participant holding required role") {
+        Task task("TASK-ROUTING-1", "Triage Assessment");
         ParticipantDirectory directory;
         auto alice = std::make_shared<Participant>("p1", "Alice Smith", "Triage Nurse");
         auto bob = std::make_shared<Participant>("p2", "Bob Jones", "Emergency Doctor");
@@ -159,7 +151,7 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
         RoleBasedRouting strategy("Triage Nurse");
         InstanceData data;
 
-        std::shared_ptr<Participant> selected = strategy.select(getDummyTask(), data, directory);
+        Participant* selected = strategy.select(task, data, directory);
         REQUIRE(selected != nullptr);
         CHECK(selected->getId() == "p1");
         CHECK(selected->getName() == "Alice Smith");
@@ -167,17 +159,19 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
     }
 
     TEST_CASE("RoleBasedRouting: returns nullptr when no participant holds target role") {
+        Task task("TASK-ROUTING-2", "Surgery Consultation");
         ParticipantDirectory directory;
         directory.addParticipant(new Participant("p1", "Alice Smith", "Triage Nurse"));
 
         RoleBasedRouting strategy("Chief Surgeon");
         InstanceData data;
 
-        std::shared_ptr<Participant> selected = strategy.select(getDummyTask(), data, directory);
+        Participant* selected = strategy.select(task, data, directory);
         CHECK(selected == nullptr);
     }
 
     TEST_CASE("DataRuleRouting: dynamically maps form data to corresponding roles") {
+        Task task("TASK-ROUTING-3", "Patient Triage");
         ParticipantDirectory directory;
         directory.addParticipant(std::make_shared<Participant>("doc1", "Dr. House", "Emergency Doctor"));
         directory.addParticipant(std::make_shared<Participant>("doc2", "Dr. Watson", "General Practitioner"));
@@ -191,20 +185,21 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
 
         InstanceData criticalData;
         criticalData.set("severity", "critical");
-        std::shared_ptr<Participant> pCritical = strategy.select(getDummyTask(), criticalData, directory);
+        Participant* pCritical = strategy.select(task, criticalData, directory);
         REQUIRE(pCritical != nullptr);
         CHECK(pCritical->getId() == "doc1");
         CHECK(pCritical->getName() == "Dr. House");
 
         InstanceData mildData;
         mildData.set("severity", "mild");
-        std::shared_ptr<Participant> pMild = strategy.select(getDummyTask(), mildData, directory);
+        Participant* pMild = strategy.select(task, mildData, directory);
         REQUIRE(pMild != nullptr);
         CHECK(pMild->getId() == "doc2");
         CHECK(pMild->getName() == "Dr. Watson");
     }
 
     TEST_CASE("DataRuleRouting: falls back to default role when field is unmapped or missing") {
+        Task task("TASK-ROUTING-4", "General Assessment");
         ParticipantDirectory directory;
         directory.addParticipant(std::make_shared<Participant>("intern1", "Intern John", "Clinic Intern"));
 
@@ -215,17 +210,18 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
 
         InstanceData unknownData;
         unknownData.set("severity", "unknown_value");
-        std::shared_ptr<Participant> pUnknown = strategy.select(getDummyTask(), unknownData, directory);
+        Participant* pUnknown = strategy.select(task, unknownData, directory);
         REQUIRE(pUnknown != nullptr);
         CHECK(pUnknown->getId() == "intern1");
 
         InstanceData emptyData;
-        std::shared_ptr<Participant> pEmpty = strategy.select(getDummyTask(), emptyData, directory);
+        Participant* pEmpty = strategy.select(task, emptyData, directory);
         REQUIRE(pEmpty != nullptr);
         CHECK(pEmpty->getId() == "intern1");
     }
 
     TEST_CASE("ApprovalRouting: delegates to ApprovalHandler Chain of Responsibility") {
+        Task task("TASK-ROUTING-5", "Budget Approval");
         auto dean = std::make_shared<Participant>("p_dean", "Prof. X", "Dean");
         std::unique_ptr<MockApprovalHandler> handler(new MockApprovalHandler(dean));
 
@@ -233,7 +229,7 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
         InstanceData data;
         ParticipantDirectory directory;
 
-        std::shared_ptr<Participant> approver = approvalStrategy.select(getDummyTask(), data, directory);
+        Participant* approver = approvalStrategy.select(task, data, directory);
         REQUIRE(approver != nullptr);
         CHECK(approver->getId() == "p_dean");
         CHECK(approver->getName() == "Prof. X");
@@ -245,7 +241,7 @@ TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
         };
         DataRuleRouting original("priority", mapping, "Junior Officer");
 
-        std::unique_ptr<RoutingStrategy> cloned = original.clone();
+        std::unique_ptr<RoutingStrategy> cloned(original.clone());
         REQUIRE(cloned != nullptr);
 
         DataRuleRouting* clonedDataRule = dynamic_cast<DataRuleRouting*>(cloned.get());

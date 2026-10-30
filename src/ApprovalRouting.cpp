@@ -23,9 +23,9 @@ ApprovalRouting::ApprovalRouting(ApprovalHandler* handlerChain)
     : chain(handlerChain) {
 }
 
-std::shared_ptr<Participant> ApprovalRouting::select(const Task& task,
-                                                     const InstanceData& data,
-                                                     const ParticipantDirectory& directory) {
+Participant* ApprovalRouting::select(const Task& task,
+                                     const InstanceData& data,
+                                     const ParticipantDirectory& directory) {
     (void)directory;
 
     if (!chain) {
@@ -38,11 +38,12 @@ std::shared_ptr<Participant> ApprovalRouting::select(const Task& task,
     request.level = 0;
     request.directory = &directory;
 
-    return chain->handle(request);
+    auto approver = chain->handle(request);
+    return approver ? approver.get() : nullptr;
 }
 
-std::unique_ptr<RoutingStrategy> ApprovalRouting::clone() const {
-    return std::unique_ptr<RoutingStrategy>(new ApprovalRouting(nullptr));
+RoutingStrategy* ApprovalRouting::clone() const {
+    return new ApprovalRouting(nullptr);
 }
 
 ApprovalHandler* ApprovalRouting::getChain() const {

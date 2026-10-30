@@ -20,9 +20,9 @@ DataRuleRouting::DataRuleRouting(const std::string& fieldName,
     : field(fieldName), valueToRole(mapping), fallbackRole(defaultFallbackRole) {
 }
 
-std::shared_ptr<Participant> DataRuleRouting::select(const Task& task,
-                                                     const InstanceData& data,
-                                                     const ParticipantDirectory& directory) {
+Participant* DataRuleRouting::select(const Task& task,
+                                     const InstanceData& data,
+                                     const ParticipantDirectory& directory) {
     (void)task;
 
     std::string targetRole = "";
@@ -53,11 +53,11 @@ std::shared_ptr<Participant> DataRuleRouting::select(const Task& task,
         return nullptr;
     }
 
-    return candidates.front();
+    return candidates.front().get();
 }
 
-std::unique_ptr<RoutingStrategy> DataRuleRouting::clone() const {
-    return std::unique_ptr<RoutingStrategy>(new DataRuleRouting(*this));
+RoutingStrategy* DataRuleRouting::clone() const {
+    return new DataRuleRouting(*this);
 }
 
 std::string DataRuleRouting::getField() const {

@@ -46,11 +46,11 @@ public:
      * @param task The task requesting routing and assignment.
      * @param data The runtime instance payload containing form/process attributes.
      * @param directory The organization directory containing active participants and roles.
-     * @return std::shared_ptr<Participant> Shared pointer to the chosen participant, or nullptr if no candidate found.
+     * @return Participant* Pointer to the chosen participant, or nullptr if no candidate found.
      */
-    virtual std::shared_ptr<Participant> select(const Task& task,
-                                                const InstanceData& data,
-                                                const ParticipantDirectory& directory) = 0;
+    virtual Participant* select(const Task& task,
+                                const InstanceData& data,
+                                const ParticipantDirectory& directory) = 0;
 
     /**
      * @brief Creates a deep polymorphic copy of this strategy instance (Prototype pattern).
@@ -58,9 +58,9 @@ public:
      * Enables workflow definitions and task templates to be cloned when new workflow
      * instances are spawned.
      *
-     * @return std::unique_ptr<RoutingStrategy> Owned clone of this routing strategy.
+     * @return RoutingStrategy* Newly allocated clone of this routing strategy (caller owns).
      */
-    virtual std::unique_ptr<RoutingStrategy> clone() const = 0;
+    virtual RoutingStrategy* clone() const = 0;
 };
 
 #endif // ROUTINGSTRATEGY_H
