@@ -45,7 +45,7 @@ HistoryLog::~HistoryLog()
 {
     for(map<string,vector<WorkflowSnapshot*>>::iterator it=snapshots.begin();it!=snapshots.end();++it)
     {
-        for(size_t i=0;i<it->second.size();i)
+        for(size_t i=0;i<it->second.size();i++)
         {
             delete it->second[i];
         }
