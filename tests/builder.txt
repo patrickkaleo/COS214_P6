@@ -1,3 +1,6 @@
+# Onboarding workflow used by the builder tests.
+# Blank lines and lines starting with # are ignored.
+
 DEFINITION
 WF-100|Onboarding|1
 
@@ -5,18 +8,42 @@ WORKITEMS
 process|INTAKE|-|Application Intake
 task|CAPTURE|INTAKE|Capture Application
 task|VERIFY|INTAKE|Verify Application
+process|REVIEW|INTAKE|Faculty Review
+task|SCREEN|REVIEW|Screen Documents
+task|DECIDE|REVIEW|Decide Outcome
+task|NOTIFY|INTAKE|Notify Applicant
+# Incomplete and unknown lines must not become work items.
+task|BROKEN|INTAKE
+not-a-task|GHOST|INTAKE|Ghost Item
 
 DEPENDENCIES
 CAPTURE|VERIFY|approved
+VERIFY|SCREEN|approved
+SCREEN|DECIDE|complete
+DECIDE|NOTIFY|approved
+DECIDE|NOTIFY|rejected
+# Missing outcome is ignored.
+CAPTURE|NOTIFY
 
 ROUTING
 CAPTURE|role|Admissions Officer
 VERIFY|data|severity|Exception Analyst|low|Warehouse Clerk|high|Exception Analyst
+SCREEN|role|Faculty Clerk
+DECIDE|data|risk|Risk Officer|low|Reviewer|high|Senior Reviewer
+# Role name missing, so NOTIFY stays without a strategy.
+NOTIFY|role
 
 SERVICES
 service|CAPTURE|Document Verification Service
+service|NOTIFY|Email Notification Service
+service|MISSING|Nowhere Service
 
 EXTRAS
 checkpoint|CAPTURE
+checkpoint|DECIDE
 priority|VERIFY|2
 audit|VERIFY
+audit|SCREEN
+priority|DECIDE|5
+# No level, so NOTIFY is not wrapped.
+priority|NOTIFY
