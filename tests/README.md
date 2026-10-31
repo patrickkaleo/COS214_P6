@@ -16,7 +16,8 @@ tests/
 ├── test_state_adapter.cpp       # Angela Ramaboea (State, External Service Adapters)
 ├── test_builder.cpp             # Patrick Simuyemba (Builder & Director) - [To be added]
 ├── test_command_facade.cpp      # Katlego Sentsho (Command & Facade) - [To be added]
-└── test_composite.cpp           # Tebogo Mokgwatsane (Composite & Iterator) - [To be added]
+├── test_composite.cpp           # Tebogo Mokgwatsane (Composite & Iterator) - [To be added]
+└── test_workflow_integration.cpp # Angela Ramaboea (both industries end to end through the facade)
 ```
 
 ---
