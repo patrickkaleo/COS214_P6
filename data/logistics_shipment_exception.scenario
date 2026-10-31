@@ -1,0 +1,14 @@
+# What the TUI needs to present and run this industry. No engine code changes per industry.
+INDUSTRY|Logistics
+PROCESS|Shipment Exception Handling
+DEFINITION|data/logistics_shipment_exception.workflow
+ABOUT|A delayed or damaged shipment is logged and checked against the courier's tracking system. Severity decides who assesses it. The shipment is then either recovered, with the carrier rebooking and the customer being notified in parallel, or written off with a damage claim.
+EXPECTED|The exception closes with the shipment rerouted and the customer informed, or with a damage claim filed. Critical cases have no Operations Manager on the roster, so they escalate until someone claims them.
+PARTICIPANT|log-clerk|Bongani Dube|Warehouse Clerk
+PARTICIPANT|log-sup|Fatima Patel|Warehouse Supervisor
+PARTICIPANT|log-analyst|Kagiso Molefe|Exception Analyst
+PARTICIPANT|log-liaison|Zanele Nkosi|Customer Liaison
+PARTICIPANT|log-claims|Pieter Venter|Claims Handler
+INPUT|waybill|Waybill (seeded: WB1001 in transit, WB1002 delayed, WB1003 damaged; others fail)|WB1002
+INPUT|severity|Severity (low, high or critical)|high
+INPUT|destinationHub|New hub (Johannesburg, Durban, Cape Town or Gqeberha; others fail)|Cape Town
