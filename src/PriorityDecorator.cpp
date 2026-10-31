@@ -27,9 +27,6 @@ int PriorityDecorator::getPriority() const {
 }
 
 void PriorityDecorator::onAvailable() {
-    // Extra behaviour
-    cout << "[PriorityDecorator] \"" << getName() << "\" flagged as priority level " << level_ << "\n";
-    // Then forward
     WorkItemDecorator::onAvailable();
 }
 
