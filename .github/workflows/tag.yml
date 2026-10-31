@@ -2,15 +2,37 @@ name: Tag pipeline
 
 on:
   push:
-    tags:
-      - "**"
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run tests
+        run: docker compose run --rm tests
+
+      - name: Check memory
+        run: >
+          docker compose run --rm tests
+          valgrind
+          --leak-check=full
+          --show-leak-kinds=definite,indirect
+          --errors-for-leak-kinds=definite,indirect
+          --track-origins=yes
+          --error-exitcode=1
+          ./tividy_tests
+
   ci:
     name: Build
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -45,6 +67,8 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
           files: tividy
           fail_on_unmatched_files: true
           generate_release_notes: true
