@@ -1,0 +1,57 @@
+# Logistics shipment exception.
+#
+# Same rule language as the university definition. "*" matches any successful
+# completion, including a sub-process that finishes with "completed".
+# "rejected" matches reject(). Complete ASSESS with "reroute" or "hold".
+# The other task is cancelled. CLOSE opens only after that branch has finished,
+# then NOTIFY_CUSTOMER runs and CLOSE_CASE waits for it.
+#
+# Rejecting LOG_EXCEPTION or CLASSIFY rejects the shipment: REPORT is rejected
+# and HANDLE and CLOSE are cancelled.
+#
+# Roles are the participant role strings. CLASSIFY calls TrackingService.
+# REROUTE calls CarrierAdapter. Both names are ExternalService::name().
+
+DEFINITION
+SHIP_EX|Shipment Exception|1
+
+WORKITEMS
+process|SHIP_EX|-|Shipment Exception
+process|REPORT|SHIP_EX|Exception Report
+task|LOG_EXCEPTION|REPORT|Log Exception
+task|CLASSIFY|REPORT|Classify Severity
+process|HANDLE|SHIP_EX|Exception Handling
+task|ASSESS|HANDLE|Assess Impact
+task|REROUTE|HANDLE|Reroute Shipment
+task|HOLD|HANDLE|Hold Shipment
+process|CLOSE|SHIP_EX|Case Closure
+task|NOTIFY_CUSTOMER|CLOSE|Notify Customer
+task|CLOSE_CASE|CLOSE|Close Case
+
+DEPENDENCIES
+LOG_EXCEPTION|CLASSIFY|*
+REPORT|HANDLE|*
+ASSESS|REROUTE|reroute
+ASSESS|HOLD|hold
+HANDLE|CLOSE|*
+NOTIFY_CUSTOMER|CLOSE_CASE|*
+
+ROUTING
+LOG_EXCEPTION|role|WarehouseClerk
+CLASSIFY|role|ExceptionAnalyst
+ASSESS|role|LogisticsCoordinator
+REROUTE|role|Dispatcher
+HOLD|role|WarehouseSupervisor
+NOTIFY_CUSTOMER|role|CustomerService
+CLOSE_CASE|role|LogisticsCoordinator
+
+SERVICES
+service|CLASSIFY|TrackingService
+service|REROUTE|CarrierAdapter
+
+EXTRAS
+checkpoint|CLASSIFY
+checkpoint|REROUTE
+priority|ASSESS|2
+audit|ASSESS
+audit|CLOSE_CASE

@@ -1,21 +1,41 @@
 services:
+  # Image build compiles inside the image. This service copies those
+  # binaries onto the project directory so they exist on the host.
+  binaries:
+    image: cos214_p6-tividy
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /app
+    volumes:
+      - .:/export
+    command: ["cp", "-f", "/app/tividy", "/app/tividy_tests", "/export/"]
+
   tividy:
+    image: cos214_p6-tividy
     build:
       context: .
       dockerfile: Dockerfile
     stdin_open: true
     tty: true
     command: ["./tividy"]
+    depends_on:
+      binaries:
+        condition: service_completed_successfully
     cap_add:
       - SYS_PTRACE
     security_opt:
       - seccomp:unconfined
 
   tests:
+    image: cos214_p6-tividy
     build:
       context: .
       dockerfile: Dockerfile
     command: ["./tividy_tests"]
+    depends_on:
+      binaries:
+        condition: service_completed_successfully
     cap_add:
       - SYS_PTRACE
     security_opt:
