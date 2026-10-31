@@ -1,8 +1,12 @@
 #ifndef FILEWORKFLOWDEFINITIONBUILDER_H
 #define FILEWORKFLOWDEFINITIONBUILDER_H
 
+#include "AlwaysAcceptRule.h"
+#include "ApprovalRouting.h"
+#include "ConcreteApprovalHandler.h"
 #include "DataRuleRouting.h"
 #include "RoleBasedRouting.h"
+#include "ThresholdRule.h"
 
 #include <fstream>
 #include <map>
@@ -39,6 +43,13 @@
  * checkpoint|DECISION
  * priority|FACULTY_REVIEW|2
  * audit|DECISION
+ * deadline|DECISION|48
+ * @endcode
+ *
+ * Besides role and data routing, ROUTING accepts an approval chain, where each role approves
+ * up to its limit and the final role accepts whatever is left:
+ * @code
+ * AWARD|approval|amount|Financial Aid Officer|50000|Faculty Manager|150000|Dean
  * @endcode
  */
 class FileWorkflowDefinitionBuilder : public WorkflowDefinitionBuilder

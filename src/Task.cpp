@@ -22,6 +22,8 @@ Task::Task(const string& id, const string& itemName)
     : WorkItem(id, itemName),
       routing_(nullptr),
       serviceName_(""),
+      deadlineHours_(0),
+      dueAt_(0),
       checkpoint_(false),
       instanceData_(nullptr),
       directory_(nullptr),
@@ -50,7 +52,39 @@ bool Task::route() {
 }
 
 void Task::onAvailable() {
+    if (deadlineHours_ > 0) {
+        dueAt_ = time(nullptr) + deadlineHours_ * 3600;
+    }
     route();
+}
+
+void Task::setDeadlineHours(int hours) {
+    deadlineHours_ = hours;
+}
+
+int Task::getDeadlineHours() const {
+    return deadlineHours_;
+}
+
+bool Task::checkDeadline(time_t now) {
+    if (dueAt_ == 0 || now < dueAt_ || isFinished() || getStateName() == "Escalated") {
+        return false;
+    }
+
+    Participant* previous = getAssignee();
+    setOutcome("Deadline passed");
+    if (!escalate()) {
+        return false;
+    }
+    dueAt_ = time(nullptr) + deadlineHours_ * 3600;
+
+    if (routing_ && instanceData_ && directory_) {
+        Participant* next = routing_->select(*this, *instanceData_, *directory_);
+        if (next && next != previous) {
+            assign(next);
+        }
+    }
+    return true;
 }
 
 WorkItem* Task::clone() const {
@@ -59,6 +93,7 @@ WorkItem* Task::clone() const {
     copy->setInstanceId(getInstanceId());
     copy->serviceName_ = serviceName_;
     copy->checkpoint_ = checkpoint_;
+    copy->deadlineHours_ = deadlineHours_;
     copy->setEscalationLevel(getEscalationLevel());
 
     if (routing_) {
@@ -115,24 +150,27 @@ void Task::performWork(InstanceData& data) {
         return;
     }
 
-    if (!services_) {
-        // Cannot resolve adapter (escalate for manual handling)
-        escalate();
-        return;
-    }
-
-    ExternalService* svc = services_->find(serviceName_);
+    ExternalService* svc = services_ ? services_->find(serviceName_) : nullptr;
     if (!svc) {
+        // Cannot resolve adapter (escalate for manual handling)
+        serviceMessage_ = "Service '" + serviceName_ + "' is not registered";
+        setOutcome(serviceMessage_);
         escalate();
         return;
     }
 
-    ServiceRequest req;
+    ServiceRequest req(serviceName_, data.getMap());
     ServiceResult result = svc->invoke(req);
 
-    if (result.success) {
-        complete("ok");
-    } else {
+    result.applyTo(data);
+    serviceMessage_ = result.message;
+
+    if (!result.success) {
+        setOutcome(result.message);
         escalate();
     }
+}
+
+string Task::getServiceMessage() const {
+    return serviceMessage_;
 }

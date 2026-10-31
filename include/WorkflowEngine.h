@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "AuditLogger.h"
 #include "ParticipantDirectory.h"
 #include "ServiceRegistry.h"
 
@@ -40,6 +41,9 @@ private:
   // External service adapters
   ServiceRegistry services;
 
+  // Filled by AuditDecorators, which also see attempts the items refuse
+  AuditLogger attemptLog;
+
   // Registered event listeners
   std::vector<WorkflowEventListener *> listeners;
 
@@ -69,6 +73,8 @@ public:
   ParticipantDirectory &getDirectory();
 
   ServiceRegistry &getServiceRegistry();
+
+  const AuditLogger &getAttemptLog() const;
 
   // Observer registration
   void addListener(WorkflowEventListener *listener);

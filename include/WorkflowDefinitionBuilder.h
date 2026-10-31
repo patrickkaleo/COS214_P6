@@ -119,6 +119,13 @@ protected:
 	void setService(string itemId, string serviceName);
 
 	/**
+	 * @brief Give the work item with this id a deadline.
+	 * @param itemId id of the work item
+	 * @param hours hours allowed once the item opens or is escalated
+	 */
+	void setDeadline(string itemId, int hours);
+
+	/**
 	 * @brief Mark the work item with this id as a checkpoint.
 	 * @param itemId id of the item whose checkpoint flag is raised
 	 */

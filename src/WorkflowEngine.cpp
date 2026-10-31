@@ -7,8 +7,16 @@
 #include "WorkItemAction.h"
 #include "WorkflowEventListener.h"
 #include "EventDispatcher.h"
+#include "DependencyMediator.h"
+#include "DependencyRule.h"
+#include "DepthFirstWorkItemIterator.h"
+#include "AuditDecorator.h"
+#include "PriorityDecorator.h"
+#include "SubProcess.h"
+#include "Task.h"
 
 #include <string>
+#include <vector>
 
 // Constructor
 WorkflowEngine::WorkflowEngine()
@@ -82,13 +90,80 @@ WorkflowInstance *WorkflowEngine::createInstance(
     return nullptr;
   }
 
+  WorkflowDefinition *definition = found->second;
+
+  // Prototype: every instance runs its own copy of the definition's tree
+  WorkItem *tree = definition->instantiateTree();
+  SubProcess *root = dynamic_cast<SubProcess *>(tree);
+
+  if (root == nullptr)
+  {
+    delete tree;
+    return nullptr;
+  }
+
+  // Apply the definition's decorators to this instance's copy of the tree
+  for (const ItemDecoration &decoration : definition->getDecorations())
+  {
+    WorkItem *item = root->find(decoration.itemId);
+
+    if (item == nullptr || item == root)
+    {
+      continue;
+    }
+
+    WorkItem *wrapper = nullptr;
+    if (decoration.kind == ItemDecoration::PRIORITY)
+    {
+      // Priority lives on the decorator; escalation level counts real escalations
+      item->setEscalationLevel(0);
+      wrapper = new PriorityDecorator(item, decoration.level);
+    }
+    else
+    {
+      wrapper = new AuditDecorator(item, &attemptLog);
+    }
+
+    if (!item->getParent()->decorateChild(item, wrapper))
+    {
+      // Not reachable for a tree built by add(); don't let the wrapper delete a live child
+      delete tree;
+      return nullptr;
+    }
+  }
+
+  // Each instance gets its own mediator with its own copy of the rules
+  std::vector<DependencyRule> rules;
+  for (DependencyRule *rule : definition->getRules())
+  {
+    rules.push_back(*rule);
+  }
+
+  DependencyMediator *mediator = new DependencyMediator(rules);
+  mediator->registerTree(*root);
+
   // Generate unique instance ID
   std::string id =
       "instance-" + std::to_string(nextInstanceNumber++);
 
   // Create instance from registered definition
   WorkflowInstance *instance =
-      new WorkflowInstance(id, found->second, data);
+      new WorkflowInstance(id, definition, root, mediator, data, &directory);
+
+  // Items route on this instance's data and report events under its id
+  root->setRoutingContext(&instance->getData(), &directory);
+
+  DepthFirstWorkItemIterator items(root);
+  for (items.first(); !items.isDone(); items.next())
+  {
+    items.current()->setInstanceId(id);
+
+    Task *task = dynamic_cast<Task *>(items.current()->undecorated());
+    if (task != nullptr)
+    {
+      task->setServiceRegistry(&services);
+    }
+  }
 
   // Engine takes ownership
   instances[id] = instance;
@@ -120,6 +195,12 @@ ParticipantDirectory &WorkflowEngine::getDirectory()
 ServiceRegistry &WorkflowEngine::getServiceRegistry()
 {
   return services;
+}
+
+// Get the attempts recorded by AuditDecorators
+const AuditLogger &WorkflowEngine::getAttemptLog() const
+{
+  return attemptLog;
 }
 
 // Register Observer listener
@@ -192,8 +273,17 @@ bool WorkflowEngine::undoLastAction()
 // Deadline checking
 void WorkflowEngine::checkDeadlines(std::time_t now)
 {
-  // Deadline handling must be connected to the
-  // WorkflowInstance deadline implementation.
+  for (auto &entry : instances)
+  {
+    DepthFirstWorkItemIterator items(entry.second->getRoot());
 
-  (void)now;
+    for (items.first(); !items.isDone(); items.next())
+    {
+      Task *task = dynamic_cast<Task *>(items.current()->undecorated());
+      if (task != nullptr)
+      {
+        task->checkDeadline(now);
+      }
+    }
+  }
 }

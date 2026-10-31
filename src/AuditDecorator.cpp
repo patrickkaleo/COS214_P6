@@ -59,8 +59,7 @@ void AuditDecorator::audit(const string& action) const {
         type = EventType::ESCALATED;
     }
 
-    // instanceId is empty here (WorkItem does not own instance id) Listeners still get item id/name/outcome for the audit trail.
-    WorkflowEvent event(type, /*instanceId*/ "", getId(), getName(), outcome);
+    WorkflowEvent event(type, getInstanceId(), getId(), getName(), outcome);
     logger_->onEvent(event);
 }
 

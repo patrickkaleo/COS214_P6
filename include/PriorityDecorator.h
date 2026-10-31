@@ -37,7 +37,7 @@ public:
     /**
      * @return Configured priority level.
      */
-    int getPriority() const;
+    int getPriority() const override;
 
     /**
      * @brief Flag the item as urgent, then forward onAvailable to the inner item.

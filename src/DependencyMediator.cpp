@@ -73,6 +73,20 @@ void DependencyMediator::itemChanged(WorkItem& item) {
     }
 }
 
+void DependencyMediator::resynchronise() {
+    decided.clear();
+    openedBranches.clear();
+    for (std::map<std::string, WorkItem*>::const_iterator it = items.begin(); it != items.end(); ++it) {
+        if (it->second->getStateName() == "Created") {
+            continue;
+        }
+        decided.insert(it->first);
+        if (dynamic_cast<SubProcess*>(it->second->undecorated()) != nullptr) {
+            openedBranches.insert(it->first);
+        }
+    }
+}
+
 WorkItem* DependencyMediator::findItem(const std::string& id) const {
     std::map<std::string, WorkItem*>::const_iterator found = items.find(id);
     return found == items.end() ? nullptr : found->second;

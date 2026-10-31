@@ -73,6 +73,15 @@ public:
     bool remove(const std::string& id);
 
     /**
+     * @brief Replace a child with a decorator wrapping it. The child is not deleted,
+     *        because the decorator now owns it.
+     * @param child Current child.
+     * @param wrapper Decorator around @p child (takes ownership).
+     * @return true if @p child was found.
+     */
+    bool decorateChild(WorkItem* child, WorkItem* wrapper);
+
+    /**
      * @brief Access a child by zero-based index.
      * @param index Child index.
      * @return Pointer to the child, or nullptr if out of range.

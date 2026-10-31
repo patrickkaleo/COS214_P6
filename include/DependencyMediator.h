@@ -66,6 +66,14 @@ public:
     void itemChanged(WorkItem& item) override;
     void openChildren(SubProcess& subProcess) override;
 
+    /**
+     * @brief Rebuilds the opened and decided records from the items' current states.
+     *
+     * Called after a snapshot is restored. Without it, an item that was opened and then
+     * rolled back would count as already decided and could never open again.
+     */
+    void resynchronise();
+
     /// @return The registered item with this id, or nullptr.
     WorkItem* findItem(const std::string& id) const;
 

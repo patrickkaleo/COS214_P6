@@ -117,6 +117,16 @@ void WorkflowDefinitionBuilder::setService(
 	task->setServiceName(serviceName);
 }
 
+void WorkflowDefinitionBuilder::setDeadline(string itemId, int hours)
+{
+	Task *task = dynamic_cast<Task *>(findItem(itemId));
+
+	if (task == nullptr)
+		return;
+
+	task->setDeadlineHours(hours);
+}
+
 void WorkflowDefinitionBuilder::markCheckpoint(
 		string itemId)
 {
@@ -139,9 +149,7 @@ void WorkflowDefinitionBuilder::addPriority(string itemId, int level)
 		{
 			task->setEscalationLevel(level);
 		}
-		WorkItem *wrapped = new PriorityDecorator(item, level);
-		replaceItem(item, wrapped);
-		items[itemId] = wrapped;
+		definition->addDecoration({itemId, ItemDecoration::PRIORITY, level});
 	}
 }
 
@@ -150,10 +158,7 @@ void WorkflowDefinitionBuilder::addAudit(string itemId)
 	WorkItem *item = findItem(itemId);
 	if (item)
 	{
-		AuditLogger *auditor = new AuditLogger(false);
-		WorkItem *wrapped = new AuditDecorator(item, auditor);
-		replaceItem(item, wrapped);
-		items[itemId] = wrapped;
+		definition->addDecoration({itemId, ItemDecoration::AUDIT, 0});
 	}
 }
 

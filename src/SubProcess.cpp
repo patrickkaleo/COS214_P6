@@ -81,6 +81,15 @@ bool SubProcess::remove(const string& id) {
     return false;
 }
 
+bool SubProcess::decorateChild(WorkItem* child, WorkItem* wrapper) {
+    auto it = std::find(children_.begin(), children_.end(), child);
+    if (it == children_.end()) {
+        return false;
+    }
+    *it = wrapper;
+    return true;
+}
+
 WorkItem* SubProcess::getChild(int index) const {
     if (index < 0 || index >= static_cast<int>(children_.size())) {
         return nullptr;

@@ -10,6 +10,10 @@
 #include "WorkflowEventListener.h"
 #include "EventDispatcher.h"
 #include "FileWorkflowDefinitionBuilder.h"
+#include "DepthFirstWorkItemIterator.h"
+#include "ParticipantDirectory.h"
+#include "SubProcess.h"
+#include "Task.h"
 
 #include <fstream>
 
@@ -261,4 +265,87 @@ std::string TividyWorkflowFacade::getStatus(
   }
 
   return instance->status();
+}
+
+// Find a participant in the directory.
+Participant *TividyWorkflowFacade::findParticipant(
+    const std::string &id)
+{
+  return engine.getDirectory().findById(id).get();
+}
+
+// Summarise every work item of an instance.
+std::vector<WorkItemInfo> TividyWorkflowFacade::getWorkItems(
+    const std::string &instId)
+{
+  std::vector<WorkItemInfo> result;
+
+  WorkflowInstance *instance =
+      engine.getInstance(instId);
+
+  if (instance == nullptr)
+  {
+    return result;
+  }
+
+  DepthFirstWorkItemIterator items(instance->getRoot());
+
+  for (items.first(); !items.isDone(); items.next())
+  {
+    WorkItem *item = items.current();
+
+    WorkItemInfo info;
+    info.id = item->getId();
+    info.name = item->getName();
+    info.state = item->getStateName();
+    info.outcome = item->getOutcome();
+    info.escalationLevel = item->getEscalationLevel();
+    info.composite = dynamic_cast<SubProcess *>(item->undecorated()) != nullptr;
+    info.priority = item->getPriority();
+    info.outcomes = instance->outcomesFrom(item->getId());
+
+    for (SubProcess *parent = item->getParent(); parent != nullptr; parent = parent->getParent())
+    {
+      ++info.depth;
+    }
+
+    if (item->getAssignee() != nullptr)
+    {
+      info.assigneeId = item->getAssignee()->getId();
+      info.assigneeName = item->getAssignee()->getName();
+    }
+
+    Task *task = dynamic_cast<Task *>(item->undecorated());
+    if (task != nullptr)
+    {
+      info.deadlineHours = task->getDeadlineHours();
+      info.serviceName = task->getServiceName();
+      info.serviceMessage = task->getServiceMessage();
+    }
+
+    result.push_back(info);
+  }
+
+  return result;
+}
+
+// Attempts recorded by AuditDecorators.
+const std::vector<std::string> &TividyWorkflowFacade::getAuditedAttempts() const
+{
+  return engine.getAttemptLog().getAuditTrail();
+}
+
+// Retrieve the current data of an instance.
+std::map<std::string, std::string> TividyWorkflowFacade::getInstanceData(
+    const std::string &instId)
+{
+  WorkflowInstance *instance =
+      engine.getInstance(instId);
+
+  if (instance == nullptr)
+  {
+    return std::map<std::string, std::string>();
+  }
+
+  return instance->getData().getMap();
 }

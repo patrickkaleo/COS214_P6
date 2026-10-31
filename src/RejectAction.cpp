@@ -6,6 +6,11 @@ RejectAction::RejectAction(WorkflowInstance *instance, const std::string &itemId
 
 bool RejectAction::doExecute(WorkItem &item)
 {
+  // Only the assignee may reject the item
+  if (item.getAssignee() != actor)
+  {
+    return false;
+  }
   return item.reject(reason);
 }
 

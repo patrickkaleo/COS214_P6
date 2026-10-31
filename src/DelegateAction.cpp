@@ -7,7 +7,8 @@ DelegateAction::DelegateAction(WorkflowInstance *instance, const std::string &it
 
 bool DelegateAction::doExecute(WorkItem &item)
 {
-  if (to == nullptr)
+  // Only the assignee may hand the item to someone else
+  if (to == nullptr || item.getAssignee() != actor)
   {
     return false;
   }

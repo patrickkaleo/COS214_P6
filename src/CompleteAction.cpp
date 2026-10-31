@@ -6,6 +6,11 @@ CompleteAction::CompleteAction(WorkflowInstance *instance, const std::string &it
 
 bool CompleteAction::doExecute(WorkItem &item)
 {
+  // Only the assignee may complete the item
+  if (item.getAssignee() != actor)
+  {
+    return false;
+  }
   return item.complete(outcome);
 }
 

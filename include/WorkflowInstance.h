@@ -3,6 +3,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 #include "WorkflowDefinition.h"
 #include "DependencyMediator.h"
 #include "SubProcess.h"
@@ -27,6 +28,7 @@ private:
 									 std::map<std::string, std::string> &states,
 									 std::map<std::string, std::string> &assignees,
 									 std::map<std::string, std::string> &outcomes) const;
+	void captureEscalations(WorkItem *item, std::map<std::string, int> &levels) const;
 	void clearAssignees(WorkItem *item);
 	WorkItemState *createStateFromName(const std::string &stateName) const;
 
@@ -47,6 +49,9 @@ public:
 	bool start();
 	const std::string &getId() const;
 	WorkItem *findItem(const std::string &itemId) const;
+	SubProcess *getRoot() const;
+	// Outcomes a completion of this item can take a branch on ("*" and "rejected" are not choices)
+	std::vector<std::string> outcomesFrom(const std::string &itemId) const;
 	InstanceData &getData();
 	std::string status() const;
 	WorkflowSnapshot *createSnapshot(const std::string &label);

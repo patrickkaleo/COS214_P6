@@ -10,6 +10,23 @@ using namespace std;
 #include "RoutingStrategy.h"
 
 /**
+ * @struct ItemDecoration
+ * @brief A decorator a work item should run with. The definition keeps its tree plain and
+ *        each instance wraps its own copy, using a logger that belongs to the engine.
+ */
+struct ItemDecoration
+{
+	enum Kind
+	{
+		PRIORITY,
+		AUDIT
+	};
+	string itemId;
+	Kind kind;
+	int level;
+};
+
+/**
  * @class WorkflowDefition
  * @brief Finished workflow product. Holds the root work-item tree and the dependency rules.
  * Two live definitions cannot share an id.
@@ -22,6 +39,7 @@ private:
 	int version;
 	WorkItem *root;
 	vector<DependencyRule *> rules;
+	vector<ItemDecoration> decorations;
 
 public:
 	/**
@@ -98,6 +116,18 @@ public:
 	 * @param newRule rule with fromId, toId and outcome. This definition takes ownership.
 	 */
 	void addRule(DependencyRule *newRule);
+
+	/**
+	 * @brief Record a decorator for instances to apply to one work item.
+	 * @param decoration item id, kind and level
+	 */
+	void addDecoration(const ItemDecoration &decoration);
+
+	/**
+	 * @brief return the recorded decorations, in the order they wrap
+	 * @return const vector<ItemDecoration>&
+	 */
+	const vector<ItemDecoration> &getDecorations() const;
 
 	/**
 	 * @brief Clone the root work item so a new instance can run from that root.

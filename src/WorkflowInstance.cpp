@@ -11,6 +11,7 @@
 #include "Task.h"
 #include "Participant.h"
 #include "ParticipantDirectory.h"
+#include <algorithm>
 #include <memory>
 #include <map>
 #include <iostream>
@@ -73,6 +74,32 @@ InstanceData &WorkflowInstance::getData()
 {
     return data;
 }
+SubProcess *WorkflowInstance::getRoot() const
+{
+    return rootProcess;
+}
+vector<string> WorkflowInstance::outcomesFrom(const string &itemId) const
+{
+    vector<string> outcomes;
+    if (mediator == NULL)
+    {
+        return outcomes;
+    }
+    const vector<DependencyRule> &rules = mediator->getRules();
+    for (size_t i = 0; i < rules.size(); ++i)
+    {
+        const string &outcome = rules[i].outcome;
+        if (rules[i].fromId != itemId || outcome == "*" || outcome == "rejected")
+        {
+            continue;
+        }
+        if (find(outcomes.begin(), outcomes.end(), outcome) == outcomes.end())
+        {
+            outcomes.push_back(outcome);
+        }
+    }
+    return outcomes;
+}
 WorkItem *WorkflowInstance::findItem(const string &itemId) const
 {
     if (rootProcess == NULL)
@@ -93,7 +120,7 @@ WorkItem *WorkflowInstance::findItemRecursive(WorkItem *current, const string &i
     {
         return current;
     }
-    SubProcess *process = dynamic_cast<SubProcess *>(current);
+    SubProcess *process = dynamic_cast<SubProcess *>(current->undecorated());
     if (process == NULL)
     {
         return NULL;
@@ -115,7 +142,7 @@ string WorkflowInstance::status() const
     {
         return "invalid";
     }
-    string stateName = rootProcess->getName();
+    string stateName = rootProcess->getStateName();
     if (stateName == "Completed")
     {
         return "completed";
@@ -136,7 +163,7 @@ void WorkflowInstance::captureItem(WorkItem *item, map<string, string> &states, 
     states[item->getId()] = item->getStateName();
 
     outcomes[item->getId()] = item->getOutcome();
-    Task *task = dynamic_cast<Task *>(item);
+    Task *task = dynamic_cast<Task *>(item == NULL ? NULL : item->undecorated());
 
     if (task != NULL && task->getAssignee() != NULL)
     {
@@ -145,7 +172,7 @@ void WorkflowInstance::captureItem(WorkItem *item, map<string, string> &states, 
 
     // If this is a SubProcess,
     // recursively capture all children
-    SubProcess *process = dynamic_cast<SubProcess *>(item);
+    SubProcess *process = dynamic_cast<SubProcess *>(item->undecorated());
 
     if (process != NULL)
     {
@@ -153,6 +180,15 @@ void WorkflowInstance::captureItem(WorkItem *item, map<string, string> &states, 
         {
             captureItem(process->getChild(i), states, assignees, outcomes);
         }
+    }
+}
+
+void WorkflowInstance::captureEscalations(WorkItem *item, map<string, int> &levels) const
+{
+    levels[item->getId()] = item->getEscalationLevel();
+    for (int i = 0; i < item->childCount(); ++i)
+    {
+        captureEscalations(item->getChild(i), levels);
     }
 }
 
@@ -164,7 +200,9 @@ WorkflowSnapshot *WorkflowInstance::createSnapshot(const string &label)
 
     captureItem(rootProcess, itemStates, assignees, outcomes);
 
-    return new WorkflowSnapshot(itemStates, assignees, outcomes, data, label);
+    WorkflowSnapshot *snapshot = new WorkflowSnapshot(itemStates, assignees, outcomes, data, label);
+    captureEscalations(rootProcess, snapshot->escalationLevels);
+    return snapshot;
 }
 
 void WorkflowInstance::restoreSnapshot(const WorkflowSnapshot &snapshot)
@@ -199,6 +237,17 @@ void WorkflowInstance::restoreSnapshot(const WorkflowSnapshot &snapshot)
         }
     }
 
+    // Restore WorkItem escalation counts
+    for (map<string, int>::const_iterator it = snapshot.escalationLevels.begin(); it != snapshot.escalationLevels.end(); ++it)
+    {
+        WorkItem *item = findItem(it->first);
+
+        if (item != NULL)
+        {
+            item->setEscalationLevel(it->second);
+        }
+    }
+
     // Clear assignments created after snapshot
     clearAssignees(rootProcess);
 
@@ -207,7 +256,7 @@ void WorkflowInstance::restoreSnapshot(const WorkflowSnapshot &snapshot)
     {
         WorkItem *item = findItem(it->first);
 
-        Task *task = dynamic_cast<Task *>(item);
+        Task *task = dynamic_cast<Task *>(item == NULL ? NULL : item->undecorated());
 
         if (task == NULL)
         {
@@ -222,6 +271,12 @@ void WorkflowInstance::restoreSnapshot(const WorkflowSnapshot &snapshot)
         std::shared_ptr<Participant> participant = participants->findById(it->second);
         task->setAssignee(participant.get());
     }
+
+    // The mediator's record of what it opened must match the restored states
+    if (mediator != NULL)
+    {
+        mediator->resynchronise();
+    }
 }
 void WorkflowInstance::clearAssignees(WorkItem *item)
 {
@@ -230,14 +285,14 @@ void WorkflowInstance::clearAssignees(WorkItem *item)
         return;
     }
 
-    Task *task = dynamic_cast<Task *>(item);
+    Task *task = dynamic_cast<Task *>(item == NULL ? NULL : item->undecorated());
 
     if (task != NULL)
     {
         task->setAssignee(nullptr);
     }
 
-    SubProcess *process = dynamic_cast<SubProcess *>(item);
+    SubProcess *process = dynamic_cast<SubProcess *>(item->undecorated());
     if (process != NULL)
     {
         for (int i = 0; i < process->childCount(); ++i)

@@ -17,6 +17,7 @@ private:
 	std::map<std::string, std::string> outcomes;
 	std::map<std::string, std::string> assignees;
 	std::map<std::string, std::string> itemStates;
+	std::map<std::string, int> escalationLevels;
 
 public:
 	WorkflowSnapshot(const std::map<std::string, std::string> &itemStates,

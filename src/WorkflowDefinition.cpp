@@ -128,6 +128,16 @@ void WorkflowDefinition::addRule(DependencyRule *newRule)
 		this->rules.push_back(newRule);
 }
 
+void WorkflowDefinition::addDecoration(const ItemDecoration &decoration)
+{
+	decorations.push_back(decoration);
+}
+
+const vector<ItemDecoration> &WorkflowDefinition::getDecorations() const
+{
+	return decorations;
+}
+
 WorkItem *WorkflowDefinition::instantiateTree()
 {
 	if (root == nullptr)

@@ -1,5 +1,7 @@
 #include "FileWorkflowDefinitionBuilder.h"
 
+#include <cstdlib>
+
 string trim(string text)
 {
 	while (!text.empty() && (text[text.size() - 1] == '\r' || text[text.size() - 1] == ' ' || text[text.size() - 1] == '\t'))
@@ -237,6 +239,50 @@ void FileWorkflowDefinitionBuilder::buildRouting()
 			}
 			setRouting(itemId, routing);
 		}
+		else if (kind == "approval")
+		{
+			// ITEM|approval|field|Role|limit|Role|limit|...|FinalRole
+			// Each role approves up to its limit; the final role accepts anything left.
+			string field;
+			if (!fieldAt(fields, 2, field))
+			{
+				continue;
+			}
+			ApprovalHandler *first = nullptr;
+			ApprovalHandler *last = nullptr;
+			for (size_t level = 3; level < fields.size(); level += 2)
+			{
+				string roleName;
+				if (!fieldAt(fields, level, roleName))
+				{
+					continue;
+				}
+				ApprovalRule *rule = nullptr;
+				string limitText;
+				if (fieldAt(fields, level + 1, limitText))
+				{
+					rule = new ThresholdRule(field, atof(limitText.c_str()));
+				}
+				else
+				{
+					rule = new AlwaysAcceptRule();
+				}
+				ApprovalHandler *handler = new ConcreteApprovalHandler(roleName, rule);
+				if (last != nullptr)
+				{
+					last->setNext(handler);
+				}
+				else
+				{
+					first = handler;
+				}
+				last = handler;
+			}
+			if (first != nullptr)
+			{
+				setRouting(itemId, new ApprovalRouting(first));
+			}
+		}
 	}
 }
 
@@ -275,6 +321,19 @@ void FileWorkflowDefinitionBuilder::buildExtras()
 		else if (keyword == "audit")
 		{
 			addAudit(itemId);
+		}
+		else if (keyword == "deadline")
+		{
+			string hoursText;
+			int hours = 0;
+			if (fieldAt(fields, 2, hoursText))
+			{
+				istringstream number(hoursText);
+				if (number >> hours)
+				{
+					setDeadline(itemId, hours);
+				}
+			}
 		}
 	}
 }

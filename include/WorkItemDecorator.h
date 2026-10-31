@@ -66,6 +66,33 @@ public:
      */
     void onAvailable() override;
 
+    // forward everything else, so a decorated item in a tree behaves as the item itself
+
+    WorkItemState* getState() const override;
+    void setState(WorkItemState* state) override;
+    void setAssignee(Participant* participant) override;
+    void setOutcome(const std::string& outcome) override;
+    void incrementEscalation() override;
+    bool isFinished() const override;
+    std::string getStateName() const override;
+    std::string getOutcome() const override;
+    Participant* getAssignee() const override;
+    int getEscalationLevel() const override;
+    void setEscalationLevel(int level) override;
+    std::string getInstanceId() const override;
+    void setInstanceId(const std::string& id) override;
+    SubProcess* getParent() const override;
+    void setParent(SubProcess* parent) override;
+    void attach(WorkflowEventListener* listener) override;
+    void detach(WorkflowEventListener* listener) override;
+    void setMediator(WorkflowMediator* mediator) override;
+    WorkflowMediator* getMediator() const override;
+    int childCount() const override;
+    WorkItem* getChild(int index) const override;
+    WorkItem* undecorated() override;
+    int getPriority() const override;
+    void setRoutingContext(const InstanceData* data, const ParticipantDirectory* directory) override;
+
     /**
      * @brief Pure virtual clone – each concrete decorator decides how to copy.
      * @return Newly allocated decorator wrapping a clone of the inner item.
