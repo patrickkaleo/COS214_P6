@@ -1,5 +1,7 @@
 CXX = g++
 CXXFLAGS = -std=c++11 -Wall -Wextra -g -Iinclude
+# Generate .d files so a changed header rebuilds everything that includes it
+DEPFLAGS = -MMD -MP
 
 SRCDIR = src
 TESTDIR = tests
@@ -34,12 +36,12 @@ $(TEST_TARGET): $(TEST_OBJS) $(COMMON_OBJS)
 # Pattern rule for engine and demo objects
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< -o $@
 
 # Pattern rule for modular test objects
 $(OBJDIR)/$(TESTDIR)/%.o: $(TESTDIR)/%.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< -o $@
 
 run: $(TARGET)
 	./$(TARGET)
@@ -59,3 +61,5 @@ docs:
 
 clean:
 	rm -rf $(OBJDIR) $(TARGET) $(TEST_TARGET)
+
+-include $(MAIN_OBJ:.o=.d) $(COMMON_OBJS:.o=.d) $(TEST_OBJS:.o=.d)
