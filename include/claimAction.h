@@ -3,7 +3,7 @@
 
 #include "WorkItemAction.h"
 
-class ClaimAction
+class ClaimAction : public WorkItemAction
 {
 protected:
 	bool doExecute(WorkItem &item);
@@ -11,7 +11,7 @@ protected:
 public:
 	ClaimAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor);
 
-	std::string describe();
+	std::string describe() const;
 };
 
 #endif

@@ -2,7 +2,7 @@
  * @file ApprovalRouting.cpp
  * @brief Implementation of approval-based task routing strategy delegating to Chain of Responsibility.
  * @author Enock Nyamweya
- * @version 2.0
+ * @version 1.0
  */
 
 #include "ApprovalRouting.h"
@@ -10,49 +10,60 @@
 #include "ApprovalRequest.h"
 #include "InstanceData.h"
 #include "ParticipantDirectory.h"
+#include "Task.h"
 
 ApprovalRouting::ApprovalRouting()
     : chain(nullptr) {
-}
-
-ApprovalRouting::ApprovalRouting(std::unique_ptr<ApprovalHandler> handlerChain)
-    : chain(std::move(handlerChain)) {
 }
 
 ApprovalRouting::ApprovalRouting(ApprovalHandler* handlerChain)
     : chain(handlerChain) {
 }
 
-std::shared_ptr<Participant> ApprovalRouting::select(const Task& task,
-                                                     const InstanceData& data,
-                                                     const ParticipantDirectory& directory) {
-    (void)directory;
+ApprovalRouting::~ApprovalRouting() {
+    delete chain;
+    chain = nullptr;
+}
 
+Participant* ApprovalRouting::select(const Task& task,
+                                     const InstanceData& data,
+                                     const ParticipantDirectory& directory) {
     if (!chain) {
         return nullptr;
     }
 
-    ApprovalRequest request;
-    request.item = &task;
-    request.data = &data;
-    request.level = 0;
-    request.directory = &directory;
+    // Encapsulate approval context in an ApprovalRequest value object.
+    // Each escalation of the task moves the request one handler further along the chain.
+    ApprovalRequest request(&task, &data, task.getEscalationLevel(), &directory);
 
+    // Delegate processing to the Chain of Responsibility
     return chain->handle(request);
 }
 
-std::unique_ptr<RoutingStrategy> ApprovalRouting::clone() const {
-    return std::unique_ptr<RoutingStrategy>(new ApprovalRouting(nullptr));
+RoutingStrategy* ApprovalRouting::clone() const {
+    // Each instance's task gets its own copy of the definition's chain.
+    return new ApprovalRouting(chain ? chain->clone() : nullptr);
 }
 
 ApprovalHandler* ApprovalRouting::getChain() const {
-    return chain.get();
-}
-
-void ApprovalRouting::setChain(std::unique_ptr<ApprovalHandler> handlerChain) {
-    chain = std::move(handlerChain);
+    return chain;
 }
 
 void ApprovalRouting::setChain(ApprovalHandler* handlerChain) {
-    chain.reset(handlerChain);
+    if (chain != handlerChain) {
+        delete chain;
+        chain = handlerChain;
+    }
+}
+
+std::vector<std::string> ApprovalRouting::describeChain() const {
+    std::vector<std::string> levels;
+    if (!chain) {
+        return levels;
+    }
+    std::unique_ptr<Iterator<ApprovalHandler>> it = chain->createIterator();
+    for (it->first(); !it->isDone(); it->next()) {
+        levels.push_back(it->current()->describe());
+    }
+    return levels;
 }

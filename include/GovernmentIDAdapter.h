@@ -26,8 +26,8 @@
  * A negative answer is still a successful call: the workflow branches on
  * @c identityVerified. Only an invalid request or an offline registry fails.
  *
- * Registered as "DocumentVerificationService", the name used by
- * UniversityApplicationDefinitionBuilder for the VERIFY_DOCS task.
+ * Registered as "IdentityVerificationService", the service name a workflow definition
+ * uses for its identity check.
  */
 class GovernmentIDAdapter : public ExternalService {
 private:

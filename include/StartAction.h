@@ -3,15 +3,16 @@
 
 #include "WorkItemAction.h"
 
-class StartAction
-{
+class StartAction : public WorkItemAction {
 protected:
-	bool doExecute(WorkItem &item);
+    bool doExecute(WorkItem& item) override;
 
 public:
-	StartAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor);
+    StartAction(WorkflowInstance* instance,
+                const std::string& itemId,
+                Participant* actor);
 
-	std::string describe() const;
+    std::string describe() const override;
 };
 
 #endif

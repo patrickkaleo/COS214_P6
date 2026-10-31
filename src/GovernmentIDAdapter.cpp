@@ -59,7 +59,7 @@ ServiceResult GovernmentIDAdapter::invoke(const ServiceRequest& request) {
 }
 
 std::string GovernmentIDAdapter::name() const {
-    return "DocumentVerificationService";
+    return "IdentityVerificationService";
 }
 
 NationalIdRegistry& GovernmentIDAdapter::getRegistry() {

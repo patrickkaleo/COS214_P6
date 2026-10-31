@@ -18,9 +18,9 @@ RoleBasedRouting::RoleBasedRouting(const std::string& roleName)
     : role(roleName) {
 }
 
-std::shared_ptr<Participant> RoleBasedRouting::select(const Task& task,
-                                                     const InstanceData& data,
-                                                     const ParticipantDirectory& directory) {
+Participant* RoleBasedRouting::select(const Task& task,
+                                      const InstanceData& data,
+                                      const ParticipantDirectory& directory) {
     (void)task; // Unused in standard role filtering
     (void)data; // Role routing does not inspect instance payload
 
@@ -35,11 +35,11 @@ std::shared_ptr<Participant> RoleBasedRouting::select(const Task& task,
     }
 
     // Allocate work to the first available matching candidate
-    return candidates.front();
+    return candidates.front().get();
 }
 
-std::unique_ptr<RoutingStrategy> RoleBasedRouting::clone() const {
-    return std::unique_ptr<RoutingStrategy>(new RoleBasedRouting(*this));
+RoutingStrategy* RoleBasedRouting::clone() const {
+    return new RoleBasedRouting(*this);
 }
 
 std::string RoleBasedRouting::getRole() const {

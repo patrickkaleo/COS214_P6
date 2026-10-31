@@ -1,7 +1,6 @@
 /**
  * @file WorkItem.cpp
- * @brief WorkItem lifecycle delegation to WorkItemState and event publication.
- * @author Angela Ramaboea
+ * @brief WorkItem implementation aligned with WorkItem.h (State + Composite + Observer hooks).
  * @version 1.0
  */
 
@@ -9,76 +8,121 @@
 #include "WorkItemState.h"
 #include "CreatedState.h"
 #include "EventDispatcher.h"
+#include "WorkflowEvent.h"
+#include "WorkflowMediator.h"
+#include "Participant.h"
+#include "SubProcess.h"
 
-WorkItem::WorkItem(const std::string& id, const std::string& itemName)
-    : itemID(id),
-      name(itemName),
+#include <algorithm>
+#include <string>
+
+using namespace std;
+
+// Construction / destruction
+WorkItem::WorkItem(const string& id, const string& name)
+    : id_(id),
+      name_(name),
       instanceId(""),
-      outcome(""),
-      state(new CreatedState()),
+      outcome_(""),
+      state_(new CreatedState()),
       assignee(nullptr),
       escalationLevel(0),
-      parent(nullptr) {
-}
+      parent_(nullptr),
+      mediator_(nullptr)
+{}
 
 WorkItem::WorkItem(const WorkItem& other)
-    : itemID(other.itemID),
-      name(other.name),
+    : id_(other.id_),
+      name_(other.name_),
       instanceId(other.instanceId),
-      outcome(other.outcome),
-      state(other.state->clone()),
+      outcome_(other.outcome_),
+      state_(other.state_ ? other.state_->clone() : nullptr),
       assignee(other.assignee),
       escalationLevel(other.escalationLevel),
-      parent(nullptr) { // the copying composite re-links its children
+      parent_(nullptr),
+      mediator_(nullptr)
+{}
+
+WorkItem::~WorkItem() {
+    delete state_;
 }
 
-WorkItem::~WorkItem() = default;
-
+// Lifecycle
 bool WorkItem::makeAvailable() {
-    if (!state->makeAvailable(*this)) {
+    if (!state_) return false;
+    if (!state_->makeAvailable(*this)) {
         return false;
     }
     onAvailable();
     return true;
 }
 
-bool WorkItem::assign(Participant* participant) {
-    return state->assign(*this, participant);
+bool WorkItem::assign(Participant* p) {
+    if (!state_) return false;
+    return state_->assign(*this, p);
 }
 
 bool WorkItem::start() {
-    return state->start(*this);
+    if (!state_) return false;
+    return state_->start(*this);
 }
 
-bool WorkItem::complete(const std::string& result) {
-    return state->complete(*this, result);
+bool WorkItem::complete(const string& outcome) {
+    if (!state_) return false;
+    if (!state_->complete(*this, outcome)) return false;
+    finished();
+    return true;
 }
 
-bool WorkItem::reject(const std::string& reason) {
-    return state->reject(*this, reason);
+bool WorkItem::reject(const string& reason) {
+    if (!state_) return false;
+    if (!state_->reject(*this, reason)) return false;
+    finished();
+    return true;
 }
 
 bool WorkItem::cancel() {
-    return state->cancel(*this);
+    if (!state_) return false;
+    if (!state_->cancel(*this)) return false;
+    finished();
+    return true;
 }
 
 bool WorkItem::escalate() {
-    return state->escalate(*this);
+    if (!state_) return false;
+    return state_->escalate(*this);
 }
 
+void WorkItem::finished() {
+    onFinished();
+    if (mediator_) {
+        mediator_->itemChanged(*this);
+    }
+}
+
+void WorkItem::onFinished() {
+}
+
+// State transition + EventDispatcher (per-item listeners)
 void WorkItem::changeState(WorkItemState* next, EventType event) {
-    state.reset(next); // deletes the previous state
+    if (state_ == next) return;
+    delete state_;
+    state_ = next;
 
-    EventDispatcher::getInstance().notifyListeners(
-        WorkflowEvent(event, instanceId, itemID, name, outcome));
+    WorkflowEvent ev(event, instanceId, id_, name_, outcome_);
+    EventDispatcher::getInstance().notifyListeners(ev);
+    notify(ev);
 }
 
+void WorkItem::setState(WorkItemState* s) {
+    if (state_ == s) return;
+    delete state_;
+    state_ = s;
+}
+
+// Helpers
 void WorkItem::setAssignee(Participant* participant) {
     assignee = participant;
-}
-
-void WorkItem::setOutcome(const std::string& result) {
-    outcome = result;
 }
 
 void WorkItem::incrementEscalation() {
@@ -86,45 +130,52 @@ void WorkItem::incrementEscalation() {
 }
 
 bool WorkItem::isFinished() const {
-    return state->isFinal();
+    if (!state_) return false;
+    return state_->isFinal();
 }
 
-std::string WorkItem::getStateName() const {
-    return state->name();
+string WorkItem::getStateName() const {
+    if (!state_) return "None";
+    return state_->name();
 }
 
-std::string WorkItem::getId() const {
-    return itemID;
+// Observer support
+void WorkItem::attach(WorkflowEventListener* l) {
+    if (!l) return;
+    for (auto* existing : listeners_) {
+        if (existing == l) return;
+    }
+    listeners_.push_back(l);
 }
 
-std::string WorkItem::getName() const {
-    return name;
+void WorkItem::detach(WorkflowEventListener* l) {
+    listeners_.erase(
+        remove(listeners_.begin(), listeners_.end(), l),
+        listeners_.end());
 }
 
-std::string WorkItem::getOutcome() const {
-    return outcome;
+void WorkItem::notify(const WorkflowEvent& event) {
+    for (auto* listener : listeners_) {
+        if (listener) {
+            listener->onEvent(event);
+        }
+    }
 }
 
-Participant* WorkItem::getAssignee() const {
-    return assignee;
+int WorkItem::childCount() const {
+    return 0;
 }
 
-int WorkItem::getEscalationLevel() const {
-    return escalationLevel;
+WorkItem* WorkItem::getChild(int index) const {
+    (void)index;
+    return nullptr;
 }
 
-std::string WorkItem::getInstanceId() const {
-    return instanceId;
-}
-
-void WorkItem::setInstanceId(const std::string& id) {
-    instanceId = id;
-}
-
-SubProcess* WorkItem::getParent() const {
-    return parent;
-}
-
-void WorkItem::setParent(SubProcess* p) {
-    parent = p;
+void WorkItem::setRoutingContext(const InstanceData* data, const ParticipantDirectory* directory) {
+    for (int i = 0; i < childCount(); ++i) {
+        WorkItem* c = getChild(i);
+        if (c) {
+            c->setRoutingContext(data, directory);
+        }
+    }
 }

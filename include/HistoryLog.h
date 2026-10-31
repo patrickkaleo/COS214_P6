@@ -1,17 +1,30 @@
+
 #ifndef HISTORYLOG_H
 #define HISTORYLOG_H
 
-class HistoryLog {
+#include <string>
+#include <map>
+#include <vector>
+#include "WorkflowSnapshot.h"
 
+class HistoryLog
+{
 private:
-	map<string, vector<WorkflowSnapshot*>> snapshots;
+	std::map<std::string, std::vector<WorkflowSnapshot *>> snapshots;
 
 public:
-	void pushSnapshot(string InstanceID, WorkflowSnapshot* snapshot);
+	HistoryLog() = default;
+	~HistoryLog();
 
-	WorkflowSnapshot* popSnapshot();
+	// Store a snapshot for a specific workflow instance
+	void pushSnapshots(const std::string &instanceID,
+										 WorkflowSnapshot *snapshot);
 
-	WorkFlowSnapshot* latest(string InstanceID);
+	// Remove and return the newest snapshot
+	WorkflowSnapshot *popSnapshots(const std::string &instanceID);
+
+	// View the newest snapshot without removing it
+	const WorkflowSnapshot *latest(const std::string &instanceID) const;
 };
 
 #endif

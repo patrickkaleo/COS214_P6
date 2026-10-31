@@ -5,6 +5,17 @@ services:
       dockerfile: Dockerfile
     stdin_open: true
     tty: true
+    command: ["./tividy"]
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["./tividy_tests"]
     cap_add:
       - SYS_PTRACE
     security_opt:

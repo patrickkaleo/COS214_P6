@@ -53,15 +53,15 @@ public:
      * @param directory The participant directory to search.
      * @return std::shared_ptr<Participant> Shared pointer to the assigned participant, or nullptr.
      */
-    virtual std::shared_ptr<Participant> select(const Task& task,
-                                                const InstanceData& data,
-                                                const ParticipantDirectory& directory) override;
+    virtual Participant* select(const Task& task,
+                                const InstanceData& data,
+                                const ParticipantDirectory& directory) override;
 
     /**
      * @brief Clones this strategy instance for workflow instantiation.
-     * @return std::unique_ptr<RoutingStrategy> Owned clone of this strategy.
+     * @return RoutingStrategy* Newly allocated clone of this strategy.
      */
-    virtual std::unique_ptr<RoutingStrategy> clone() const override;
+    virtual RoutingStrategy* clone() const override;
 
     std::string getRole() const;
     void setRole(const std::string& roleName);

@@ -9,6 +9,9 @@
 #include "ExternalService.h"
 #include "WorkflowEventListener.h"
 #include "EventDispatcher.h"
+#include "FileWorkflowDefinitionBuilder.h"
+
+#include <fstream>
 
 #include "ClaimAction.h"
 #include "StartAction.h"
@@ -23,7 +26,7 @@ std::string TividyWorkflowFacade::registerDefinition(
 {
 
   WorkflowDefinition *definition =
-      director.construct(builder);
+      director.construct(&builder);
 
   if (definition == nullptr)
   {
@@ -34,17 +37,40 @@ std::string TividyWorkflowFacade::registerDefinition(
   return engine.registerDefinition(definition);
 }
 
+std::string TividyWorkflowFacade::registerDefinitionFromFile(const std::string &filePath)
+{
+  std::ifstream input(filePath.c_str());
+
+  if (!input.is_open())
+  {
+    return "";
+  }
+
+  input.close();
+
+  FileWorkflowDefinitionBuilder builder(filePath);
+
+  return registerDefinition(builder);
+}
+
 // Add a participant to the directory.
+
 void TividyWorkflowFacade::addParticipant(
     const std::string &id,
     const std::string &name,
     const std::vector<std::string> &roles)
 {
+  Participant *participant = new Participant(
+      id,
+      name,
+      roles.empty() ? "" : roles[0]);
 
-  Participant *participant =
-      new Participant(id, name, roles);
+  for (size_t i = 1; i < roles.size(); ++i)
+  {
+    participant->addRole(roles[i]);
+  }
 
-  engine.getDirectory().add(participant);
+  engine.getDirectory().addParticipant(participant);
 }
 
 // Register an external system adapter.
@@ -212,7 +238,7 @@ bool TividyWorkflowFacade::cancel(
 // Undo most recent successful action.
 bool TividyWorkflowFacade::undoLast()
 {
-  return engine.undoLast();
+  return engine.undoLastAction();
 }
 
 // Delegate deadline handling to the engine.

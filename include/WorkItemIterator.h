@@ -1,17 +1,25 @@
 #ifndef WORKITEMITERATOR_H
 #define WORKITEMITERATOR_H
 
-class WorkItemIterator {
+/**
+ * @file WorkItemIterator.h
+ * @brief Iterator interface over a work-item tree.
+ * @author Angelo Anthony
+ * @version 1.0
+ */
 
+#include "Iterator.h"
 
-public:
-	virtual void first() = 0;
+class WorkItem;
 
-	virtual void next() = 0;
-
-	virtual bool isDone() = 0;
-
-	virtual WorkItem* current() = 0;
+/**
+ * @class WorkItemIterator
+ * @brief Iterator over the WorkItem Composite (Task leaves and SubProcess branches).
+ *
+ * Returned by SubProcess::createIterator(). Used to register a tree with its
+ * mediator, to find items by id and to list current work in the interface.
+ */
+class WorkItemIterator : public Iterator<WorkItem> {
 };
 
-#endif
+#endif // WORKITEMITERATOR_H
