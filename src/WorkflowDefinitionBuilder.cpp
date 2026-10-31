@@ -134,6 +134,11 @@ void WorkflowDefinitionBuilder::addPriority(string itemId, int level)
 	WorkItem *item = findItem(itemId);
 	if (item)
 	{
+		Task *task = dynamic_cast<Task *>(item);
+		if (task)
+		{
+			task->setEscalationLevel(level);
+		}
 		WorkItem *wrapped = new PriorityDecorator(item, level);
 		replaceItem(item, wrapped);
 		items[itemId] = wrapped;

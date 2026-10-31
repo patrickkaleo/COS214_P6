@@ -26,7 +26,7 @@ protected:
 	/**
 	 * @brief Definition being assembled. Null after getResult() hands it to the caller.
 	 */
-	WorkflowDefinition *definition;
+	WorkflowDefinition *definition = nullptr;
 	map<string, WorkItem*> items; // for finding items in o(logn)
 
 public:
@@ -34,7 +34,7 @@ public:
 	 * @brief Delete a definition that was never handed over by getResult().
 	 */
 	virtual ~WorkflowDefinitionBuilder();
-	WorkflowDefinitionBuilder() = default;
+	WorkflowDefinitionBuilder() : definition(nullptr) {}
 
 	WorkflowDefinitionBuilder(const WorkflowDefinitionBuilder &) = delete;
 	WorkflowDefinitionBuilder &operator=(const WorkflowDefinitionBuilder &) = delete;
