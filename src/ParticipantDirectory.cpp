@@ -6,6 +6,10 @@
  */
 
 #include "ParticipantDirectory.h"
+
+const std::vector<std::shared_ptr<Participant>>& ParticipantDirectory::getAll() const {
+    return participants;
+}
 #include "Participant.h"
 
 ParticipantDirectory::ParticipantDirectory()

@@ -2,7 +2,7 @@
 #include "WorkItem.h"
 
 ClaimAction::ClaimAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor)
-    : WorkItemAction(instance, itemId, actor) {}
+    : WorkItemAction(instance, itemId, actor, "claim") {}
 
 bool ClaimAction::doExecute(WorkItem &item)
 {

@@ -22,6 +22,7 @@
 struct ServiceResult {
     bool success;                               ///< Whether the external call succeeded.
     std::string message;                        ///< Human-readable summary or error.
+    std::string outcome;                        ///< Workflow outcome; "rejected" is a business rejection.
     std::map<std::string, std::string> outputs; ///< Named outputs to store in InstanceData.
 
     ServiceResult() : success(false) {}
@@ -32,10 +33,12 @@ struct ServiceResult {
      * @param out Named outputs.
      */
     static ServiceResult ok(const std::string& msg,
-                            const std::map<std::string, std::string>& out = std::map<std::string, std::string>()) {
+                            const std::map<std::string, std::string>& out = std::map<std::string, std::string>(),
+                            const std::string& workflowOutcome = "") {
         ServiceResult r;
         r.success = true;
         r.message = msg;
+        r.outcome = workflowOutcome;
         r.outputs = out;
         return r;
     }

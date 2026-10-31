@@ -35,7 +35,7 @@ ServiceResult CarrierAdapter::invoke(const ServiceRequest& request) {
             std::map<std::string, std::string> out;
             out["rerouteReference"] = confirmation;
             out["newHub"] = hub;
-            return ServiceResult::ok("Shipment " + waybill + " rerouted to " + hub, out);
+            return ServiceResult::ok("Shipment " + waybill + " rerouted to " + hub, out, "rerouted");
         }
         case CarrierBookingSystem::NO_CAPACITY:
             return ServiceResult::failure("No carrier capacity at " + hub);

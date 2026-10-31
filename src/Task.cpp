@@ -13,8 +13,12 @@
 #include "ExternalService.h"
 #include "ServiceRequest.h"
 #include "ServiceResult.h"
+#include "ApprovalRouting.h"
+#include "WorkItemDecorator.h"
 
 #include <iostream>
+#include <exception>
+#include <memory>
 
 using namespace std;
 
@@ -23,6 +27,7 @@ Task::Task(const string& id, const string& itemName)
       routing_(nullptr),
       serviceName_(""),
       checkpoint_(false),
+      deadlineHours_(0),
       instanceData_(nullptr),
       directory_(nullptr),
       services_(nullptr)
@@ -40,6 +45,10 @@ bool Task::route() {
     Participant* p = routing_->select(*this, *instanceData_, *directory_);
     if (p) {
         if (assign(p)) {
+            const ApprovalRouting* approval = dynamic_cast<const ApprovalRouting*>(routing_);
+            if (approval && approval->getSelectedLevel() >= 0) {
+                setEscalationLevel(approval->getSelectedLevel());
+            }
             setAssignee(p);
             return true;
         }
@@ -59,6 +68,7 @@ WorkItem* Task::clone() const {
     copy->setInstanceId(getInstanceId());
     copy->serviceName_ = serviceName_;
     copy->checkpoint_ = checkpoint_;
+    copy->deadlineHours_ = deadlineHours_;
     copy->setEscalationLevel(getEscalationLevel());
 
     if (routing_) {
@@ -107,32 +117,68 @@ void Task::setServiceRegistry(ServiceRegistry* registry) {
 }
 
 void Task::performWork(InstanceData& data) {
-    // Keep a pointer so onAvailable or later steps can still see the same payload
+    if (serviceName_.empty()) return;
+    executeService(data, "ok");
+}
+
+bool Task::executeService(InstanceData& data, const string& requestedOutcome,
+                          WorkItem* transitionTarget) {
+    // Validate before invoking an adapter: refused/repeated commands must never
+    // repeat a service operation.
+    WorkItem* target = transitionTarget ? transitionTarget : this;
+    WorkItem* unwrapped = target;
+    while (WorkItemDecorator* decorator = dynamic_cast<WorkItemDecorator*>(unwrapped))
+        unwrapped = decorator->getInner();
+    if (unwrapped != this || target->getStateName() != "InProgress") return false;
     instanceData_ = &data;
+    if (serviceName_.empty()) return target->complete(requestedOutcome);
 
-    // No external service configured (nothing to invoke)
-    if (serviceName_.empty()) {
-        return;
-    }
-
-    if (!services_) {
-        // Cannot resolve adapter (escalate for manual handling)
-        escalate();
-        return;
-    }
-
-    ExternalService* svc = services_->find(serviceName_);
-    if (!svc) {
-        escalate();
-        return;
-    }
-
-    ServiceRequest req;
-    ServiceResult result = svc->invoke(req);
-
-    if (result.success) {
-        complete("ok");
+    ServiceResult result;
+    ExternalService* service = services_ ? services_->find(serviceName_) : nullptr;
+    if (!service) {
+        result = ServiceResult::failure("Service is not registered: " + serviceName_);
     } else {
-        escalate();
+        try {
+            result = service->invoke(ServiceRequest(serviceName_, data.getMap()));
+        } catch (const std::exception& error) {
+            result = ServiceResult::failure(string("Service failed: ") + error.what());
+        } catch (...) {
+            result = ServiceResult::failure("Service failed with an unknown error");
+        }
     }
+
+    const string key = "service." + getId() + ".";
+    if (result.success) result.applyTo(data);
+    data.set(key + "success", result.success ? "true" : "false");
+    data.set(key + "message", result.message);
+    data.set(key + "outcome", result.outcome);
+    if (!result.success) return target->escalate();
+    if (result.outcome == "rejected") return target->reject(result.message);
+    return target->complete(result.outcome.empty() ? requestedOutcome : result.outcome);
+}
+
+bool Task::serviceFailed() const {
+    return instanceData_ && instanceData_->get("service." + getId() + ".success") == "false";
+}
+
+string Task::lastServiceError() const {
+    return serviceFailed() ? instanceData_->get("service." + getId() + ".message") : "";
+}
+
+void Task::setDeadlineHours(int hours) {
+    deadlineHours_ = hours > 0 ? hours : 0;
+}
+
+int Task::getDeadlineHours() const {
+    if (deadlineHours_ > 0) return deadlineHours_;
+    const ApprovalRouting* approval = dynamic_cast<const ApprovalRouting*>(routing_);
+    if (!approval) return 0;
+    // Re-evaluate against restored data/level instead of retaining a selection
+    // cached before undo. The copy keeps inspection free of routing mutations.
+    if (instanceData_ && directory_) {
+        std::unique_ptr<RoutingStrategy> copy(approval->clone());
+        copy->select(*this, *instanceData_, *directory_);
+        return static_cast<ApprovalRouting*>(copy.get())->getDeadlineHours();
+    }
+    return approval->getDeadlineHours();
 }

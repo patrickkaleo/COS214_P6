@@ -45,6 +45,7 @@ private:
 
   // Generates unique instance IDs
   unsigned long nextInstanceNumber;
+  std::string lastError;
 
 public:
   WorkflowEngine();
@@ -63,10 +64,15 @@ public:
       const InstanceData &data);
 
   WorkflowInstance *getInstance(
-      const std::string &instanceId);
+      const std::string &instanceId) const;
+  std::vector<std::string> definitionIds() const;
+  std::vector<std::string> instanceIds() const;
+  std::vector<std::string> historyDescriptions() const;
+  const std::string &getLastError() const { return lastError; }
 
   // Access to shared subsystems
   ParticipantDirectory &getDirectory();
+  const ParticipantDirectory &getDirectory() const;
 
   ServiceRegistry &getServiceRegistry();
 

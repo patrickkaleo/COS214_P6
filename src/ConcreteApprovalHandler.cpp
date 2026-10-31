@@ -28,16 +28,23 @@ Participant* ConcreteApprovalHandler::handle(ApprovalRequest& request) {
         // The task was escalated past this level (e.g. its deadline passed here).
         ApprovalRequest escalated(request);
         --escalated.level;
-        return passToNext(escalated);
+        Participant* participant = passToNext(escalated);
+        request.deadlineHours = escalated.deadlineHours;
+        request.selectedLevel = participant && escalated.selectedLevel >= 0 ? escalated.selectedLevel + 1 : -1;
+        return participant;
     }
 
     if (rule && rule->accepts(request) && request.directory != nullptr) {
         auto approvers = request.directory->withRole(approverRole);
         if (!approvers.empty()) {
+            request.deadlineHours = deadlineHours;
+            request.selectedLevel = 0;
             return approvers.front().get();
         }
     }
-    return passToNext(request);
+    Participant* participant = passToNext(request);
+    if (participant && request.selectedLevel >= 0) ++request.selectedLevel;
+    return participant;
 }
 
 ApprovalHandler* ConcreteApprovalHandler::clone() const {

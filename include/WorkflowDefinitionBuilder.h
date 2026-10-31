@@ -70,6 +70,14 @@ public:
 	 */
 	WorkflowDefinition *getResult();
 
+	/**
+	 * @brief Validate a finished tree and its dependency graph before execution.
+	 * @throws std::invalid_argument when the definition is structurally invalid.
+	 * The definition remains owned by the caller. Also used for definitions built
+	 * directly in code, so file and programmatic registration follow the same rules.
+	 */
+	static void validateDefinition(WorkflowDefinition *definition);
+
 protected:
 	/**
 	 * @brief Create the product after the id, name and version are known.
@@ -123,6 +131,9 @@ protected:
 	 * @param itemId id of the item whose checkpoint flag is raised
 	 */
 	void markCheckpoint(string itemId);
+
+	/** @brief Configure a task deadline, in hours (1..87600), after activation. */
+	void setDeadlineHours(string itemId, int hours);
 
 	/**
 	 * @brief Wrap the work item with this id in a priority decorator.

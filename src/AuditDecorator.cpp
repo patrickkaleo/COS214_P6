@@ -59,48 +59,53 @@ void AuditDecorator::audit(const string& action) const {
         type = EventType::ESCALATED;
     }
 
-    // instanceId is empty here (WorkItem does not own instance id) Listeners still get item id/name/outcome for the audit trail.
-    WorkflowEvent event(type, /*instanceId*/ "", getId(), getName(), outcome);
+    WorkflowEvent event(type, getInstanceId(), getId(), getName(), outcome);
     logger_->onEvent(event);
 }
 
 bool AuditDecorator::makeAvailable() {
+    if (!WorkItemDecorator::makeAvailable()) return false;
     audit("makeAvailable");
-    return WorkItemDecorator::makeAvailable();
+    return true;
 }
 
 bool AuditDecorator::assign(Participant* participant) {
+    if (!WorkItemDecorator::assign(participant)) return false;
     audit("assign");
-    return WorkItemDecorator::assign(participant);
+    return true;
 }
 
 bool AuditDecorator::start() {
+    if (!WorkItemDecorator::start()) return false;
     audit("start");
-    return WorkItemDecorator::start();
+    return true;
 }
 
 bool AuditDecorator::complete(const string& outcome) {
+    if (!WorkItemDecorator::complete(outcome)) return false;
     audit("complete(outcome=" + outcome + ")");
-    return WorkItemDecorator::complete(outcome);
+    return true;
 }
 
 bool AuditDecorator::reject(const string& reason) {
+    if (!WorkItemDecorator::reject(reason)) return false;
     audit("reject(reason=" + reason + ")");
-    return WorkItemDecorator::reject(reason);
+    return true;
 }
 
 bool AuditDecorator::cancel() {
+    if (!WorkItemDecorator::cancel()) return false;
     audit("cancel");
-    return WorkItemDecorator::cancel();
+    return true;
 }
 
 bool AuditDecorator::escalate() {
+    if (!WorkItemDecorator::escalate()) return false;
     audit("escalate");
-    return WorkItemDecorator::escalate();
+    return true;
 }
 
 void AuditDecorator::onAvailable() {
-    audit("onAvailable");
     WorkItemDecorator::onAvailable();
 }
 

@@ -1,6 +1,6 @@
 /**
  * @file Task.h
- * @brief Leaf of the Composite pattern – atomic work item.
+ * @brief Leaf of the Composite pattern â€“ atomic work item.
  * @details Holds routing strategy, assignee, service itemName, checkpoint flag and
  *          escalation level.
  * @version 1.0
@@ -107,10 +107,30 @@ public:
      */
     virtual void performWork(InstanceData& context);
 
+    /**
+     * @brief Complete through the configured service using the instance payload.
+     * @return true when completed, rejected, or escalated after a failed service;
+     *         false when the lifecycle does not permit execution. Failed calls
+     *         retain no service outputs. The command owns the pre-call snapshot.
+     */
+    bool executeService(InstanceData& context, const std::string& requestedOutcome,
+                        WorkItem* transitionTarget = nullptr);
+
+    /// Failure details live in InstanceData, so snapshot restore also restores them.
+    bool serviceFailed() const;
+    std::string lastServiceError() const;
+
+    /// Optional task deadline; zero falls back to the selected approval handler.
+    void setDeadlineHours(int hours);
+
+    /// Configured deadline or that of the approval handler selected by the chain.
+    int getDeadlineHours() const;
+
 private:
     RoutingStrategy* routing_;             /**< Owned. */
     std::string serviceName_;              /**< Key into ServiceRegistry. */
     bool checkpoint_;                      /**< Take Memento before external call. */
+    int deadlineHours_;                    /**< Explicit configured duration, 0 = routing default. */
     const InstanceData* instanceData_;     /**< Not owned. */
     const ParticipantDirectory* directory_;/**< Not owned. */
     ServiceRegistry* services_;            /**< Not owned. */

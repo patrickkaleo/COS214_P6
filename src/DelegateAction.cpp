@@ -1,13 +1,14 @@
 #include "DelegateAction.h"
 #include "WorkItem.h"
 #include "Participant.h"
+#include "WorkflowInstance.h"
 
 DelegateAction::DelegateAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor, Participant *to)
-    : WorkItemAction(instance, itemId, actor), to(to) {}
+    : WorkItemAction(instance, itemId, actor, "delegate"), to(to) {}
 
 bool DelegateAction::doExecute(WorkItem &item)
 {
-  if (to == nullptr)
+  if (to == nullptr || !instance->canAssign(item, to))
   {
     return false;
   }
@@ -16,5 +17,5 @@ bool DelegateAction::doExecute(WorkItem &item)
 
 std::string DelegateAction::describe() const
 {
-  return "DelegateAction: " + itemId + ", To: " + to->getName();
+  return "DelegateAction: " + itemId + ", To: " + (to ? to->getName() : "(none)");
 }

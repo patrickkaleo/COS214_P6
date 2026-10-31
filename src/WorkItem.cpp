@@ -142,22 +142,31 @@ string WorkItem::getStateName() const {
 // Observer support
 void WorkItem::attach(WorkflowEventListener* l) {
     if (!l) return;
-    for (auto* existing : listeners_) {
-        if (existing == l) return;
+    for (const auto& existing : listeners_) {
+        if (existing->active && existing->listener == l) return;
     }
-    listeners_.push_back(l);
+    listeners_.push_back(std::make_shared<ListenerRegistration>(l));
 }
 
 void WorkItem::detach(WorkflowEventListener* l) {
+    for (const auto& registration : listeners_) {
+        if (registration->listener == l) registration->active = false;
+    }
     listeners_.erase(
-        remove(listeners_.begin(), listeners_.end(), l),
+        remove_if(listeners_.begin(), listeners_.end(),
+                  [](const std::shared_ptr<ListenerRegistration>& registration) {
+                      return !registration->active;
+                  }),
         listeners_.end());
 }
 
 void WorkItem::notify(const WorkflowEvent& event) {
-    for (auto* listener : listeners_) {
-        if (listener) {
-            listener->onEvent(event);
+    // Keep registration identities stable while callbacks add, detach or reattach.
+    // A detached listener may already have been destroyed, so never dereference it.
+    const auto snapshot = listeners_;
+    for (const auto& registration : snapshot) {
+        if (registration->active) {
+            registration->listener->onEvent(event);
         }
     }
 }

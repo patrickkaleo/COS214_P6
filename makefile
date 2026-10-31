@@ -19,6 +19,10 @@ COMMON_OBJS = $(patsubst $(SRCDIR)/%.cpp, $(OBJDIR)/%.o, $(COMMON_SRCS))
 TEST_SRCS = $(wildcard $(TESTDIR)/*.cpp)
 TEST_OBJS = $(patsubst $(TESTDIR)/%.cpp, $(OBJDIR)/$(TESTDIR)/%.o, $(TEST_SRCS))
 
+# Rebuild dependants when public headers change, including on incremental builds.
+-include $(MAIN_OBJ:.o=.d) $(COMMON_OBJS:.o=.d) $(TEST_OBJS:.o=.d)
+.DEFAULT_GOAL := all
+
 .PHONY: all run test valgrind gdb docs clean
 
 all: $(TARGET) $(TEST_TARGET)
@@ -34,12 +38,12 @@ $(TEST_TARGET): $(TEST_OBJS) $(COMMON_OBJS)
 # Pattern rule for engine and demo objects
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 # Pattern rule for modular test objects
 $(OBJDIR)/$(TESTDIR)/%.o: $(TESTDIR)/%.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 run: $(TARGET)
 	./$(TARGET)
@@ -48,7 +52,7 @@ test: $(TEST_TARGET)
 	./$(TEST_TARGET)
 
 valgrind: $(TEST_TARGET)
-	valgrind --leak-check=full --track-origins=yes --show-leak-kinds=all ./$(TEST_TARGET)
+	valgrind --error-exitcode=1 --leak-check=full --track-origins=yes --show-leak-kinds=all ./$(TEST_TARGET)
 
 gdb: $(TARGET)
 	gdb ./$(TARGET)

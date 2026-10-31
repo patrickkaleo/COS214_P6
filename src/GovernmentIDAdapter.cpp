@@ -21,7 +21,7 @@ ServiceResult identityResult(bool verified, const std::string& status, const std
     std::map<std::string, std::string> out;
     out["identityVerified"] = verified ? "true" : "false";
     out["identityStatus"] = status;
-    return ServiceResult::ok(msg, out);
+    return ServiceResult::ok(msg, out, verified ? "verified" : "rejected");
 }
 
 } // namespace

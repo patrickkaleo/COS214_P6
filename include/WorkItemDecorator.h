@@ -60,6 +60,33 @@ public:
     /** @brief Forward escalate to the inner item. */
     bool escalate() override;
 
+    // The inner item is the single source of lifecycle state and runtime wiring.
+    void changeState(WorkItemState* next, EventType event) override;
+    void setState(WorkItemState* state) override;
+    WorkItemState* getState() const override;
+    void setAssignee(Participant* participant) override;
+    Participant* getAssignee() const override;
+    void setOutcome(const std::string& outcome) override;
+    std::string getOutcome() const override;
+    void incrementEscalation() override;
+    int getEscalationLevel() const override;
+    void setEscalationLevel(int level) override;
+    bool isFinished() const override;
+    std::string getStateName() const override;
+    std::string getInstanceId() const override;
+    void setInstanceId(const std::string& id) override;
+    SubProcess* getParent() const override;
+    void setParent(SubProcess* parent) override;
+    WorkflowMediator* getMediator() const override;
+    void setMediator(WorkflowMediator* mediator) override;
+    void attach(WorkflowEventListener* listener) override;
+    void detach(WorkflowEventListener* listener) override;
+    void notify(const WorkflowEvent& event) override;
+    int childCount() const override;
+    WorkItem* getChild(int index) const override;
+    void setRoutingContext(const InstanceData* data, const ParticipantDirectory* directory) override;
+    void onFinished() override;
+
     /**
      * @brief Forward onAvailable to the inner item.
      *        Concrete decorators add behaviour then call this.

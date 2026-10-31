@@ -39,6 +39,7 @@
  * checkpoint|DECISION
  * priority|FACULTY_REVIEW|2
  * audit|DECISION
+ * deadline|DECISION|24
  * @endcode
  */
 class FileWorkflowDefinitionBuilder : public WorkflowDefinitionBuilder
@@ -55,7 +56,8 @@ public:
 
 	/**
 	 * @brief Read DEFINITION and build the work-item tree from WORKITEMS.
-	 * Does nothing further when the file cannot be read or the id is already in use.
+	 * Malformed records throw std::invalid_argument; unreadable files throw
+	 * std::runtime_error. The builder retains ownership if a build step fails.
 	 */
 	void buildStructure() override;
 
@@ -75,7 +77,8 @@ public:
 	void buildRouting() override;
 
 	/**
-	 * @brief Apply the checkpoints, priorities and audits listed under EXTRAS.
+	 * @brief Apply checkpoints, priorities, audits and deadlines listed under EXTRAS.
+	 * Deadline hours must be an integer from 1 to 87600.
 	 */
 	void buildExtras() override;
 
@@ -101,6 +104,7 @@ private:
 	 * @brief Split the file into the definition header and each build section.
 	 */
 	void readFile();
+	void invalidRecord(const string &section, size_t index, const string &reason) const;
 };
 
 #endif

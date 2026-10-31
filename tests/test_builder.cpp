@@ -12,6 +12,7 @@
 #include "WorkItemDecorator.h"
 #include "RoleBasedRouting.h"
 #include "DataRuleRouting.h"
+#include <stdexcept>
 
 namespace {
 
@@ -184,7 +185,7 @@ TEST_SUITE("Patrick Simuyemba - Builder design pattern ") {
 		delete definition;
 	}
 
-	TEST_CASE("Builder: dependency rules keep file order and skipped lines add nothing") {
+	TEST_CASE("Builder: dependency rules keep file order and comments add nothing") {
 		WorkflowDefinition* definition = buildFromFile(kBuilderFile);
 		REQUIRE(definition != nullptr);
 		SubProcess* intake = dynamic_cast<SubProcess*>(definition->getRoot());
@@ -253,14 +254,8 @@ TEST_SUITE("Patrick Simuyemba - Builder design pattern ") {
 		delete definition;
 	}
 
-	TEST_CASE("Builder: a missing file yields a definition with no root") {
-		WorkflowDefinition* definition = buildFromFile("tests/no-such-builder.txt");
-		REQUIRE(definition != nullptr);
-		CHECK(definition->getId().empty());
-		CHECK(definition->getName().empty());
-		CHECK(definition->getRoot() == nullptr);
-		CHECK(definition->getRules().empty());
-		delete definition;
+	TEST_CASE("Builder: a missing file reports a read error") {
+		CHECK_THROWS_AS(buildFromFile("tests/no-such-builder.txt"), std::runtime_error);
 	}
 
 	TEST_CASE("Builder: a second live definition cannot reuse the same id") {

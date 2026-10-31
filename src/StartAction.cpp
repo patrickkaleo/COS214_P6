@@ -2,7 +2,7 @@
 #include "WorkItem.h"
 
 StartAction::StartAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor)
-    : WorkItemAction(instance, itemId, actor) {}
+    : WorkItemAction(instance, itemId, actor, "start") {}
 
 bool StartAction::doExecute(WorkItem &item)
 {

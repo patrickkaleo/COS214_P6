@@ -8,6 +8,7 @@
 #include "BankGatewayAdapter.h"
 #include <cmath>
 #include <cstdlib>
+#include <limits>
 
 namespace {
 
@@ -17,11 +18,17 @@ bool randsToCents(const std::string& amount, long long& cents) {
         return false;
     }
     char* end = nullptr;
-    double rands = std::strtod(amount.c_str(), &end);
+    long double rands = std::strtold(amount.c_str(), &end);
     if (end == amount.c_str() || *end != '\0' || !std::isfinite(rands)) {
         return false;
     }
-    cents = std::llround(rands * 100.0);
+    long double rounded = std::round(rands * 100.0L);
+    if (!std::isfinite(rounded) ||
+        rounded < static_cast<long double>(std::numeric_limits<long long>::min()) ||
+        rounded >= -static_cast<long double>(std::numeric_limits<long long>::min())) {
+        return false;
+    }
+    cents = static_cast<long long>(rounded);
     return true;
 }
 
@@ -57,7 +64,7 @@ ServiceResult BankGatewayAdapter::invoke(const ServiceRequest& request) {
     std::map<std::string, std::string> out;
     out["paymentReference"] = response.transactionId;
     out["paymentStatus"] = "PAID";
-    return ServiceResult::ok("Payment " + response.transactionId + " accepted", out);
+    return ServiceResult::ok("Payment " + response.transactionId + " accepted", out, "paid");
 }
 
 std::string BankGatewayAdapter::name() const {

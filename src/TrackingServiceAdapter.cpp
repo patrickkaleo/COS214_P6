@@ -54,7 +54,7 @@ ServiceResult TrackingServiceAdapter::invoke(const ServiceRequest& request) {
     out["shipmentStatus"] = fields[1];
     out["lastLocation"] = fields[2];
     out["delayHours"] = hours.str();
-    return ServiceResult::ok("Shipment " + waybill + " is " + fields[1], out);
+    return ServiceResult::ok("Shipment " + waybill + " is " + fields[1], out, "tracked");
 }
 
 std::string TrackingServiceAdapter::name() const {

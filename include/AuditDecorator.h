@@ -17,7 +17,7 @@ class Participant;
 
 /**
  * @class AuditDecorator
- * @brief Logs before/after details of every operation, then forwards to the
+ * @brief Records accepted lifecycle operations after forwarding to the
  *        inner WorkItem. The AuditLogger pointer is NOT owned (it lives in
  *        the WorkflowEngine / listener list).
  *
@@ -42,29 +42,29 @@ public:
 
     // audited lifecycle overrides
 
-    /** @brief Log then forward makeAvailable. */
+    /** @brief Forward makeAvailable and log an accepted transition. */
     bool makeAvailable() override;
 
-    /** @brief Log then forward assign. */
+    /** @brief Forward assign and log an accepted transition. */
     bool assign(Participant* participant) override;
 
-    /** @brief Log then forward start. */
+    /** @brief Forward start and log an accepted transition. */
     bool start() override;
 
-    /** @brief Log then forward complete. */
+    /** @brief Forward complete and log an accepted transition. */
     bool complete(const std::string& outcome) override;
 
-    /** @brief Log then forward reject. */
+    /** @brief Forward reject and log an accepted transition. */
     bool reject(const std::string& reason) override;
 
-    /** @brief Log then forward cancel. */
+    /** @brief Forward cancel and log an accepted transition. */
     bool cancel() override;
 
-    /** @brief Log then forward escalate. */
+    /** @brief Forward escalate and log an accepted transition. */
     bool escalate() override;
 
     /**
-     * @brief Log then forward onAvailable to the inner item.
+     * @brief Forward the availability hook; makeAvailable records its accepted transition.
      */
     void onAvailable() override;
 

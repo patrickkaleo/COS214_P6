@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <memory>
 
 #include "WorkflowEvent.h"   // EventType
 
@@ -103,77 +104,77 @@ public:
      * @param next  Newly allocated state object (WorkItem takes ownership).
      * @param event Event type corresponding to the transition.
      */
-    void changeState(WorkItemState* next, EventType event);
+    virtual void changeState(WorkItemState* next, EventType event);
 
     /**
      * @brief Replace the state object directly without firing a lifecycle event.
      *        Used by Memento restore and initial state wiring.
      * @param s New state (takes ownership; deletes old state).
      */
-    void setState(WorkItemState* s);
+    virtual void setState(WorkItemState* s);
 
     /**
      * @brief Access the current state object.
      * @return Pointer to the owned WorkItemState (may be nullptr).
      */
-    WorkItemState* getState() const { return state_; }
+    virtual WorkItemState* getState() const { return state_; }
 
     /** @brief Sets the participant assigned to this work item.
      *  @param participant Participant to assign; ownership is not transferred.
      */
-    void setAssignee(Participant* participant);
+    virtual void setAssignee(Participant* participant);
 
     /**
      * @brief Set the outcome string (normally done by complete/reject/cancel).
      * @param o Outcome value.
      */
-    void setOutcome(const std::string& o) { outcome_ = o; }
+    virtual void setOutcome(const std::string& o) { outcome_ = o; }
 
     /** @brief Increases the escalation level by one.
      */
-    void incrementEscalation();
+    virtual void incrementEscalation();
 
     /**
      * @brief Whether this item is in a terminal state (Completed / Rejected / Cancelled).
      * @return true if no further lifecycle operations are legal.
      */
-    bool isFinished() const;
+    virtual bool isFinished() const;
 
     /**
      * @brief Human-readable name of the current state.
      * @return State name string (e.g. "Created", "Available", "Assigned", ...).
      */
-    std::string getStateName() const;
+    virtual std::string getStateName() const;
 
     // Getters and Setters
     std::string getId() const { return id_; }
     std::string getName() const { return name_; }
-    std::string getOutcome() const { return outcome_; }
+    virtual std::string getOutcome() const { return outcome_; }
 
     /** @brief Gets the participant assigned to this work item.
      *  @return The assigned participant, or nullptr if none is assigned.
      */
-    Participant* getAssignee() const { return assignee; }
+    virtual Participant* getAssignee() const { return assignee; }
 
     /** @brief Gets the current escalation level.
      *  @return The escalation level.
      */
-    int getEscalationLevel() const { return escalationLevel; }
+    virtual int getEscalationLevel() const { return escalationLevel; }
 
     /** @brief Sets the escalation level directly.
      *  @param level The new escalation level.
      */
-    void setEscalationLevel(int level) { escalationLevel = level; }
+    virtual void setEscalationLevel(int level) { escalationLevel = level; }
 
     /** @brief Gets the unique identifier for this work-item instance.
      *  @return The instance identifier.
      */
-    std::string getInstanceId() const { return instanceId; }
+    virtual std::string getInstanceId() const { return instanceId; }
 
     /** @brief Sets the unique identifier for this work-item instance.
      *  @param id The instance identifier to store.
      */
-    void setInstanceId(const std::string& id) { instanceId = id; }
+    virtual void setInstanceId(const std::string& id) { instanceId = id; }
 
     // structure
 
@@ -181,33 +182,34 @@ public:
      * @brief Parent composite, if any.
      * @return Pointer to owning SubProcess, or nullptr for the root.
      */
-    SubProcess* getParent() const { return parent_; }
+    virtual SubProcess* getParent() const { return parent_; }
 
     /**
      * @brief Set the parent composite (not owned).
      * @param p Parent SubProcess.
      */
-    void setParent(SubProcess* p) { parent_ = p; }
+    virtual void setParent(SubProcess* p) { parent_ = p; }
 
     // Observer support
 
     /**
      * @brief Subscribe a listener to lifecycle events on this item.
-     * @param l Listener (not owned).
+     * @param l Listener (not owned). Detach before destroying the listener.
      */
-    void attach(WorkflowEventListener* l);
+    virtual void attach(WorkflowEventListener* l);
 
     /**
      * @brief Unsubscribe a listener.
      * @param l Listener previously attached.
      */
-    void detach(WorkflowEventListener* l);
+    virtual void detach(WorkflowEventListener* l);
 
     /**
      * @brief Publish an event to all attached listeners.
+     *        Additions wait for the next dispatch; detached registrations are skipped.
      * @param event Event payload matching WorkflowEventListener::onEvent.
      */
-    void notify(const WorkflowEvent& event);
+    virtual void notify(const WorkflowEvent& event);
 
     // Mediator
 
@@ -215,12 +217,12 @@ public:
      * @brief Attach the instance mediator (not owned).
      * @param m DependencyMediator or equivalent.
      */
-    void setMediator(WorkflowMediator* m) { mediator_ = m; }
+    virtual void setMediator(WorkflowMediator* m) { mediator_ = m; }
 
     /**
      * @return The mediator currently attached, or nullptr.
      */
-    WorkflowMediator* getMediator() const { return mediator_; }
+    virtual WorkflowMediator* getMediator() const { return mediator_; }
 
     /// @name Uniform child access (Composite)
     /// A leaf has no children; SubProcess overrides both.
@@ -266,7 +268,13 @@ protected:
     Participant* assignee;   
     int escalationLevel;
     SubProcess* parent_;                                   /**< Not owned. */
-    std::vector<WorkflowEventListener*> listeners_;        /**< Not owned. */
+    struct ListenerRegistration {
+        explicit ListenerRegistration(WorkflowEventListener* value)
+            : listener(value), active(true) {}
+        WorkflowEventListener* listener;                  /**< Not owned. */
+        bool active;
+    };
+    std::vector<std::shared_ptr<ListenerRegistration> > listeners_;
     WorkflowMediator* mediator_;                           /**< Not owned. */
 };
 

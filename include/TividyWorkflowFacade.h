@@ -18,6 +18,7 @@ class Participant;
 class ExternalService;
 class WorkflowEventListener;
 class WorkflowDefinitionBuilder;
+class WorkItemAction;
 
 class TividyWorkflowFacade
 {
@@ -25,6 +26,8 @@ class TividyWorkflowFacade
 private:
 	WorkflowEngine engine;
 	WorkflowDirector director;
+	std::string lastError;
+	bool runAction(WorkItemAction *action);
 
 public:
 	/**
@@ -168,6 +171,17 @@ public:
 
 	std::string registerDefinitionFromFile(
 			const std::string &filePath);
+
+	WorkflowInstance *getInstance(const std::string &instanceId) const;
+	std::vector<std::string> definitionIds() const;
+	std::vector<std::string> instanceIds() const;
+	std::vector<std::string> actionHistory() const;
+	Participant *findParticipant(const std::string &id) const;
+	std::vector<Participant *> participants() const;
+	std::vector<std::string> availableActions(const std::string &instanceId,
+	                                          const std::string &itemId,
+	                                          Participant *actor) const;
+	const std::string &getLastError() const { return lastError; }
 };
 
 #endif

@@ -61,6 +61,7 @@ public:
     std::shared_ptr<Participant> findById(const std::string& id) const;
 
     size_t size() const;
+    const std::vector<std::shared_ptr<Participant>>& getAll() const;
     void clear();
 };
 
