@@ -71,6 +71,20 @@ void SubProcess::add(WorkItem* child) {
     children_.push_back(child);
 }
 
+bool SubProcess::replaceChild(WorkItem* current, WorkItem* replacement) {
+    if (!current || !replacement) {
+        return false;
+    }
+    for (auto& child : children_) {
+        if (child == current) {
+            replacement->setParent(this);
+            child = replacement;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool SubProcess::remove(const string& id) {
     auto it = find_if(children_.begin(), children_.end(), [&id](WorkItem* w) { return w && w->getId() == id; });
     if (it != children_.end()) {

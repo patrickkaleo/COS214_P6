@@ -145,9 +145,11 @@ protected:
 	WorkItem *findItem(string itemId);
 
 	/**
-	 * @brief Replace the work-item pointer with the replacement.
-	 * @param current pointer that is changed
-	 * @param replacement work item now stored in that pointer
+	 * @brief Put the replacement where current sits in the work-item tree.
+	 *        The parent, or the definition root, owns the replacement.
+	 *        The replacement is expected to own current (a decorator wrapping it).
+	 * @param current item being wrapped. Updated to the replacement when the tree accepts it.
+	 * @param replacement decorator now stored in the tree and in the id map
 	 */
 	void replaceItem(WorkItem *&current, WorkItem *replacement);
 };

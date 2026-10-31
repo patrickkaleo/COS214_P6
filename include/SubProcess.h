@@ -66,6 +66,16 @@ public:
     void add(WorkItem* child);
 
     /**
+     * @brief Swap a direct child for a replacement without deleting either item.
+     *        The replacement becomes the owned child. The previous child is no
+     *        longer owned here, so a decorator can adopt it.
+     * @param current Item currently stored as a direct child.
+     * @param replacement Item that takes its place (ownership transfers here).
+     * @return true when the child pointer was updated.
+     */
+    bool replaceChild(WorkItem* current, WorkItem* replacement);
+
+    /**
      * @brief Remove and delete the child with the given id.
      * @param id Identifier of the child to remove.
      * @return true if a child was removed, false otherwise.

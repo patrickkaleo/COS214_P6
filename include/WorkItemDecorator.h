@@ -77,6 +77,12 @@ public:
      */
     WorkItem* getInner() const;
 
+    /**
+     * @brief Give up ownership of the wrapped item without deleting it.
+     * @return The inner item, or nullptr when this decorator holds nothing.
+     */
+    WorkItem* releaseInner();
+
 protected:
     WorkItem* inner_;   /**< Owned wrapped item. */
 };

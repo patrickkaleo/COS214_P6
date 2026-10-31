@@ -1,4 +1,5 @@
 #include "WorkflowDefinition.h"
+#include "AuditLogger.h"
 #include "WorkItemDecorator.h"
 
 #include <set>
@@ -51,6 +52,12 @@ WorkflowDefinition::~WorkflowDefinition()
 		if (rule)
 			delete rule;
 	}
+
+	for (size_t i = 0; i < auditors.size(); ++i)
+	{
+		delete auditors[i];
+	}
+	auditors.clear();
 }
 
 string WorkflowDefinition::getId()
@@ -126,6 +133,12 @@ void WorkflowDefinition::addRule(DependencyRule *newRule)
 {
 	if (newRule)
 		this->rules.push_back(newRule);
+}
+
+void WorkflowDefinition::addAuditLogger(AuditLogger *logger)
+{
+	if (logger)
+		auditors.push_back(logger);
 }
 
 WorkItem *WorkflowDefinition::instantiateTree()

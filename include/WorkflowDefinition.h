@@ -9,6 +9,8 @@ using namespace std;
 #include "WorkItem.h"
 #include "RoutingStrategy.h"
 
+class AuditLogger;
+
 /**
  * @class WorkflowDefition
  * @brief Finished workflow product. Holds the root work-item tree and the dependency rules.
@@ -22,6 +24,7 @@ private:
 	int version;
 	WorkItem *root;
 	vector<DependencyRule *> rules;
+	vector<AuditLogger *> auditors;
 
 public:
 	/**
@@ -98,6 +101,13 @@ public:
 	 * @param newRule rule with fromId, toId and outcome. This definition takes ownership.
 	 */
 	void addRule(DependencyRule *newRule);
+
+	/**
+	 * @brief Keep an audit logger created while wrapping a work item.
+	 *        AuditDecorator does not own its logger. This definition does.
+	 * @param logger logger used by an audit decorator. This definition deletes it.
+	 */
+	void addAuditLogger(AuditLogger *logger);
 
 	/**
 	 * @brief Clone the root work item so a new instance can run from that root.

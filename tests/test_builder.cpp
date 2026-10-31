@@ -7,11 +7,13 @@
 
 #include "WorkflowDirector.h"
 #include "FileWorkflowDefinitionBuilder.h"
+#include "AuditDecorator.h"
+#include "PriorityDecorator.h"
 
 TEST_SUITE("Patrick Simuyemba - Builder design pattern ") {
 
 	TEST_CASE("Builder: created definition matches the workflow structure from builder.txt") {
-		const std::string filePath = "builder.txt";
+		const std::string filePath = "tests/builder.txt";
 		FileWorkflowDefinitionBuilder builder(filePath);
 		WorkflowDirector director;
 
@@ -37,7 +39,18 @@ TEST_SUITE("Patrick Simuyemba - Builder design pattern ") {
 		CHECK(capture->isCheckpoint() == true);
 		CHECK(capture->getRouting() != nullptr);
 
-		Task* verify = dynamic_cast<Task*>(intake->getChild(1));
+		WorkItem* verifyNode = intake->getChild(1);
+		REQUIRE(verifyNode != nullptr);
+		CHECK(verifyNode->getId() == "VERIFY");
+		CHECK(verifyNode->getName() == "Verify Application");
+
+		AuditDecorator* audited = dynamic_cast<AuditDecorator*>(verifyNode);
+		REQUIRE(audited != nullptr);
+		PriorityDecorator* prioritised = dynamic_cast<PriorityDecorator*>(audited->getInner());
+		REQUIRE(prioritised != nullptr);
+		CHECK(prioritised->getPriority() == 2);
+
+		Task* verify = dynamic_cast<Task*>(prioritised->getInner());
 		REQUIRE(verify != nullptr);
 		CHECK(verify->getId() == "VERIFY");
 		CHECK(verify->getName() == "Verify Application");

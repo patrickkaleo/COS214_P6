@@ -1,4 +1,5 @@
 #include "WorkflowDefinitionBuilder.h"
+#include "WorkItemDecorator.h"
 WorkflowDefinitionBuilder::~WorkflowDefinitionBuilder()
 {
 	if (this->definition)
@@ -132,32 +133,104 @@ void WorkflowDefinitionBuilder::markCheckpoint(
 void WorkflowDefinitionBuilder::addPriority(string itemId, int level)
 {
 	WorkItem *item = findItem(itemId);
-	if (item)
+	if (item == nullptr)
+		return;
+
+	WorkItem *core = item;
+	while (WorkItemDecorator *layer = dynamic_cast<WorkItemDecorator *>(core))
 	{
-		Task *task = dynamic_cast<Task *>(item);
-		if (task)
-		{
-			task->setEscalationLevel(level);
-		}
-		WorkItem *wrapped = new PriorityDecorator(item, level);
-		replaceItem(item, wrapped);
-		items[itemId] = wrapped;
+		if (layer->getInner() == nullptr)
+			break;
+		core = layer->getInner();
 	}
+
+	Task *task = dynamic_cast<Task *>(core);
+	if (task)
+	{
+		task->setEscalationLevel(level);
+	}
+
+	WorkItem *wrapped = new PriorityDecorator(item, level);
+	replaceItem(item, wrapped);
 }
 
 void WorkflowDefinitionBuilder::addAudit(string itemId)
 {
+	if (definition == nullptr || definition->getRoot() == nullptr)
+		return;
+
+	// Decorate the node that is actually in the tree. After a priority wrap,
+	// that node is the priority decorator, and audit goes around it.
 	WorkItem *item = findItem(itemId);
-	if (item)
+	SubProcess *root = dynamic_cast<SubProcess *>(definition->getRoot());
+	if (root != nullptr)
 	{
-		AuditLogger *auditor = new AuditLogger(false);
-		WorkItem *wrapped = new AuditDecorator(item, auditor);
-		replaceItem(item, wrapped);
-		items[itemId] = wrapped;
+		WorkItem *inTree = root->find(itemId);
+		if (inTree != nullptr)
+			item = inTree;
 	}
+	if (item == nullptr)
+		return;
+
+	// AuditDecorator does not own the logger. The definition deletes it.
+	AuditLogger *auditor = new AuditLogger(false);
+	definition->addAuditLogger(auditor);
+
+	SubProcess *parent = item->getParent();
+	AuditDecorator *decorated = new AuditDecorator(item, auditor);
+	bool placed = false;
+	if (parent != nullptr)
+	{
+		placed = parent->replaceChild(item, decorated);
+	}
+	else if (definition->getRoot() == item)
+	{
+		definition->setRoot(decorated);
+		placed = definition->getRoot() == decorated;
+	}
+
+	if (placed)
+	{
+		items[itemId] = decorated;
+		return;
+	}
+
+	// The wrapper never joined the tree. Drop it without deleting the item
+	// the parent still owns.
+	decorated->releaseInner();
+	delete decorated;
 }
 
 void WorkflowDefinitionBuilder::replaceItem(WorkItem *&current, WorkItem *replacement)
 {
-	current = replacement;
+	if (current == nullptr || replacement == nullptr || current == replacement)
+		return;
+
+	bool placed = false;
+	SubProcess *parent = current->getParent();
+	if (parent != nullptr)
+	{
+		placed = parent->replaceChild(current, replacement);
+	}
+	else if (definition != nullptr && definition->getRoot() == current)
+	{
+		definition->setRoot(replacement);
+		placed = definition->getRoot() == replacement;
+	}
+
+	if (placed)
+	{
+		items[replacement->getId()] = replacement;
+		current = replacement;
+		return;
+	}
+
+	// The wrapper never joined the tree. Drop it without deleting the item
+	// the parent or the definition root still owns.
+	WorkItemDecorator *shell = dynamic_cast<WorkItemDecorator *>(replacement);
+	if (shell != nullptr)
+	{
+		shell->releaseInner();
+	}
+	delete replacement;
 }

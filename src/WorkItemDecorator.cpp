@@ -62,3 +62,9 @@ void WorkItemDecorator::onAvailable() {
 WorkItem* WorkItemDecorator::getInner() const {
     return inner_;
 }
+
+WorkItem* WorkItemDecorator::releaseInner() {
+    WorkItem* inner = inner_;
+    inner_ = nullptr;
+    return inner;
+}
