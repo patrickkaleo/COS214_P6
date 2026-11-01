@@ -1,11 +1,125 @@
 #include "WorkflowDefinition.h"
+#include "AuditDecorator.h"
 #include "AuditLogger.h"
+#include "DataRuleRouting.h"
+#include "PriorityDecorator.h"
+#include "RoleBasedRouting.h"
+#include "SubProcess.h"
+#include "Task.h"
 #include "WorkItemDecorator.h"
 
+#include <iostream>
 #include <set>
 
 namespace
 {
+void describeItem(WorkItem *item, int depth, set<WorkItem *> &seen)
+{
+	if (item == nullptr || !seen.insert(item).second)
+	{
+		return;
+	}
+
+	WorkItem *core = item;
+	string wraps;
+	while (WorkItemDecorator *layer = dynamic_cast<WorkItemDecorator *>(core))
+	{
+		seen.insert(core);
+		if (PriorityDecorator *priority = dynamic_cast<PriorityDecorator *>(layer))
+		{
+			wraps += " [priority " + to_string(priority->getPriority()) + "]";
+		}
+		else if (dynamic_cast<AuditDecorator *>(layer) != nullptr)
+		{
+			wraps += " [audit]";
+		}
+		else
+		{
+			wraps += " [decorator]";
+		}
+		WorkItem *inner = layer->getInner();
+		if (inner == nullptr || inner == core || seen.count(inner) != 0)
+		{
+			core = inner;
+			break;
+		}
+		core = inner;
+	}
+	if (core != nullptr)
+	{
+		seen.insert(core);
+	}
+
+	for (int i = 0; i < depth; ++i)
+	{
+		cout << "  ";
+	}
+	cout << item->getId() << " | " << item->getName();
+	SubProcess *process = dynamic_cast<SubProcess *>(core);
+	Task *task = dynamic_cast<Task *>(core);
+	if (process != nullptr)
+	{
+		cout << " [process]";
+	}
+	else if (task != nullptr)
+	{
+		cout << " [task]";
+	}
+	cout << wraps;
+	if (task != nullptr)
+	{
+		if (task->isCheckpoint())
+		{
+			cout << " checkpoint";
+		}
+		if (!task->getServiceName().empty())
+		{
+			cout << " service=\"" << task->getServiceName() << "\"";
+		}
+		if (task->getDeadlineHours() > 0)
+		{
+			cout << " deadline=" << task->getDeadlineHours() << "h";
+		}
+		cout << " escalation=" << task->getEscalationLevel();
+		RoutingStrategy *routing = task->getRouting();
+		RoleBasedRouting *role = dynamic_cast<RoleBasedRouting *>(routing);
+		DataRuleRouting *data = dynamic_cast<DataRuleRouting *>(routing);
+		if (role != nullptr)
+		{
+			cout << " routing=role:" << role->getRole();
+		}
+		else if (data != nullptr)
+		{
+			cout << " routing=data:" << data->getField()
+				 << " fallback=" << data->getFallbackRole();
+			map<string, string> mapping = data->getMapping();
+			for (map<string, string>::const_iterator rule = mapping.begin(); rule != mapping.end(); ++rule)
+			{
+				cout << " " << rule->first << "->" << rule->second;
+			}
+		}
+		else if (routing != nullptr)
+		{
+			cout << " routing=set";
+		}
+	}
+	cout << "\n";
+
+	WorkItem *container = process != nullptr ? static_cast<WorkItem *>(process) : item;
+	if (container == nullptr)
+	{
+		return;
+	}
+	for (int i = 0; i < container->childCount(); ++i)
+	{
+		WorkItem *child = container->getChild(i);
+		if (child != nullptr && child != item && child != container)
+		{
+			describeItem(child, depth + 1, seen);
+		}
+	}
+}
+
 set<string> usedDefinitionIds;
 
 bool reserveId(const string &id)
@@ -146,4 +260,28 @@ WorkItem *WorkflowDefinition::instantiateTree()
 	if (root == nullptr)
 		return nullptr;
 	return root->clone();
+}
+
+void WorkflowDefinition::describe()
+{
+	cout << getId() << "|" << getName() << "|" << getVersion() << "\n";
+	if (root == nullptr)
+	{
+		cout << "(no root)\n";
+	}
+	else
+	{
+		set<WorkItem *> seen;
+		describeItem(root, 0, seen);
+	}
+	cout << "DEPENDENCIES\n";
+	for (size_t i = 0; i < rules.size(); ++i)
+	{
+		DependencyRule *rule = rules[i];
+		if (rule == nullptr)
+		{
+			continue;
+		}
+		cout << rule->fromId << "|" << rule->toId << "|" << rule->outcome << "\n";
+	}
 }

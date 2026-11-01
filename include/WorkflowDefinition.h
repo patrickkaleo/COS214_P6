@@ -114,6 +114,12 @@ public:
 	 * @return WorkItem* deep copy of the root, or nullptr when the definition has no root
 	 */
 	WorkItem *instantiateTree();
+
+	/**
+	 * @brief Print this definition to standard output.
+	 *        Writes the id, name, version, the work-item tree, and the dependency rules.
+	 */
+	void describe();
 };
 
 #endif
