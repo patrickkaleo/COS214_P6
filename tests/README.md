@@ -10,7 +10,7 @@ The suite does not read `scenarios/*.scenario`. A scenario file is for the termi
 
 ```cpp
 TividyWorkflowFacade facade;
-std::string id = facade.registerDefinitionFromFile("definitions/university_bursary.txt");
+std::string id = facade.registerDefinitionFromFile("definitions/university_bursary.definition");
 facade.addParticipant("edu-admissions", "Lerato Khumalo", {"AdmissionsOfficer"});
 InstanceData data;
 data.set("surname", "Mokoena");
@@ -23,8 +23,8 @@ facade.startInstance(id, data);
 | Definition | Loaded by |
 | --- | --- |
 | `tests/builder.txt` | `test_builder.cpp` |
-| `definitions/university_bursary.txt` | `test_definition_description.cpp`, `test_roles_and_delegation.cpp`, `test_scenario_flows.cpp` |
-| `definitions/shipment_exception.txt` | `test_definition_description.cpp`, `test_scenario_rosters.cpp`, `test_scenario_flows.cpp` |
+| `definitions/university_bursary.definition` | `test_definition_description.cpp`, `test_roles_and_delegation.cpp`, `test_scenario_flows.cpp` |
+| `definitions/shipment_exception.definition` | `test_definition_description.cpp`, `test_scenario_rosters.cpp`, `test_scenario_flows.cpp` |
 
 `test_scenario_flows.cpp` and `test_scenario_rosters.cpp` run those definitions through `TividyWorkflowFacade`. The word scenario in the file names is the industry run, not a `.scenario` file. The healthcare, insurance, and manufacturing files under `definitions/*.definition` are for the interface. This suite does not load them.
 

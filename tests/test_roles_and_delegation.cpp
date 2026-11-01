@@ -30,7 +30,7 @@ struct University {
     std::string definition;
 
     University() {
-        definition = facade.registerDefinitionFromFile("definitions/university_bursary.txt");
+        definition = facade.registerDefinitionFromFile("definitions/university_bursary.definition");
         facade.addService(new GovernmentIDAdapter());
         facade.addService(new BankGatewayAdapter());
         facade.addService(new TrackingServiceAdapter());

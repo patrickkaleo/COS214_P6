@@ -4,9 +4,20 @@ TIVIDY is a generic workflow engine. A workflow is a text definition: a tree of 
 
 ## Running the interface
 
-From the project directory, run `make run`. The interface reads `definitions/` and `scenarios/`, so it has to start here.
+From the project directory, run `make run` (or `docker compose run --rm tividy` to build and run interactively inside Docker, and `docker compose run --rm tests` to run the test suite). The interface reads `definitions/` and `scenarios/`, so it has to start here.
 
 It opens by asking which workflow you want, then who you are from its participants. The main menu then covers only that workflow; `0` goes back to choose another, and exits from there. Menu option 5 changes participant, and a work item's menu offers **Act as the assignee**. Actions marked as allowed are the ones the engine will accept. The others stay selectable so that you can see the engine refuse them and why. In a table, `▸` marks work you can act on now. Colour turns off when output is not a terminal or `NO_COLOR` is set.
+
+| TUI Key / Option | Where | What it does |
+|---|---|---|
+| `▸` | Work-item table | Marks a task or process you can act on right now |
+| **Act as the assignee** | Inside a work item's menu | Switches your active participant directly to that item's assignee |
+| **Allowed** vs other actions | Inside a work item's menu | Allowed actions succeed; disallowed actions stay selectable so you can see the engine refuse them and why |
+| `u` | Instance screen | Restores the `WorkflowSnapshot` taken before the last action (cannot recall an external service call such as a bank payment) |
+| `c` | Instance screen | Lists the `WorkItemAction` command history executed on that instance |
+| `5` | Main workflow menu | Switch active participant within the current scenario's roster |
+| `9` | Main workflow menu | View active task deadlines and advance the clock (in hours) to trigger SLA escalations |
+| `0` | Any menu | Go back to choose another workflow, or exit from the opening screen |
 
 A participant starts each instance and types in its details, because nothing about a run is stored in a file. The scenario says who may start it and what to ask. Completing some tasks asks for more, such as the bursary amount at Verify Funding Documents. The engine generates the instance id. These values match the test data behind the external services.
 
@@ -71,13 +82,13 @@ The interface offers a workflow when both files are present and the ids match.
 
 | Industry | Definition | Scenario | Id |
 |---|---|---|---|
-| Education | `definitions/university_bursary.txt` | `scenarios/education.scenario` | `UNI_BURSARY` |
-| Logistics | `definitions/shipment_exception.txt` | `scenarios/logistics.scenario` | `SHIP_EX` |
+| Education | `definitions/university_bursary.definition` | `scenarios/education.scenario` | `UNI_BURSARY` |
+| Logistics | `definitions/shipment_exception.definition` | `scenarios/logistics.scenario` | `SHIP_EX` |
 | Healthcare | `definitions/hospital_admission.definition` | `scenarios/healthcare.scenario` | `HOSP_ADMIT` |
 | Insurance | `definitions/insurance_claim.definition` | `scenarios/insurance.scenario` | `INS_CLAIM` |
 | Manufacturing | `definitions/production_order.definition` | `scenarios/manufacturing.scenario` | `PROD_ORDER` |
 
-`definitions/def1.txt` and `scenarios/test.scenario` are loaded as well. Their id is `TRIAL`.
+
 
 From the project directory, `./tividy` or `make run` reads both folders. Choose the industry, then a participant whose role is `STARTED_BY`. The questions are that scenario's `FIELD` lines. The buttons at complete are its `OUTCOMES` lines. The tree, the states, and a refusal come from the definition.
 
@@ -238,7 +249,7 @@ flowchart LR
 
 A process whose parent id is `-` is the root. `priority` sets the task escalation level and wraps the tree node in a `PriorityDecorator`. `audit` wraps that node in an `AuditDecorator`. The definition owns the logger, because the decorator does not. Wrapping replaces the node in its parent, and the decorator owns the previous node. Checkpoint and service lines are applied to the task, so a checkpoint for an item is listed before that item is wrapped.
 
-`definitions/university_bursary.txt` and `definitions/shipment_exception.txt` are full examples, and so are `definitions/hospital_admission.definition`, `definitions/insurance_claim.definition`, and `definitions/production_order.definition`. `tests/builder.txt` is the fixture for the builder tests. The section [Using definitions and scenarios](#using-definitions-and-scenarios) is how those files are paired with `scenarios/*.scenario` and handed to the engine.
+`definitions/university_bursary.definition`, `definitions/shipment_exception.definition`, `definitions/hospital_admission.definition`, `definitions/insurance_claim.definition`, and `definitions/production_order.definition` are full examples. `tests/builder.txt` is the fixture for the builder tests. The section [Using definitions and scenarios](#using-definitions-and-scenarios) is how those files are paired with `scenarios/*.scenario` and handed to the engine.
 
 ## Layout
 
@@ -273,6 +284,6 @@ Docker builds the same targets and runs the tests:
 docker compose run --rm tests
 ```
 
-The `tividy` compose service copies `tividy` and `tividy_tests` onto the host and then runs `./tividy`.
+The `tividy` compose service copies `tividy` and `tividy_tests` onto the host and then runs `./tividy` interactively (`docker compose run --rm tividy`). On pull requests targeting `main`, the GitHub Actions pipeline (`.github/workflows/tag.yml`) automatically runs `docker compose run --rm tests`, runs the Valgrind memory check, extracts the compiled `tividy` binary artifact, and publishes a tagged GitHub Release.
 
 Doxygen output goes to `docs/html/` after `make docs`.

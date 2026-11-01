@@ -15,7 +15,7 @@
 
 namespace {
 
-const char* const WORKFLOW = "definitions/shipment_exception.txt";
+const char* const WORKFLOW = "definitions/shipment_exception.definition";
 
 /// Two rosters with the same id and role, but separate people.
 struct Rosters {

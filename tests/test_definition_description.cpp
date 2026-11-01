@@ -64,7 +64,7 @@ TEST_SUITE("Workflow descriptions from definition files") {
 
     TEST_CASE("The facade reports the name and description of a registered workflow") {
         TividyWorkflowFacade facade;
-        const std::string id = facade.registerDefinitionFromFile("definitions/university_bursary.txt");
+        const std::string id = facade.registerDefinitionFromFile("definitions/university_bursary.definition");
         REQUIRE(id == "UNI_BURSARY");
 
         CHECK(facade.definitionName(id) == "University and Bursary Application");
@@ -75,7 +75,7 @@ TEST_SUITE("Workflow descriptions from definition files") {
 
     TEST_CASE("Every prepared workflow has a description") {
         TividyWorkflowFacade facade;
-        for (const char* path : {"definitions/university_bursary.txt", "definitions/shipment_exception.txt"}) {
+        for (const char* path : {"definitions/university_bursary.definition", "definitions/shipment_exception.definition", "definitions/hospital_admission.definition", "definitions/insurance_claim.definition", "definitions/production_order.definition"}) {
             const std::string id = facade.registerDefinitionFromFile(path);
             REQUIRE_FALSE(id.empty());
             CHECK_FALSE(facade.definitionDescription(id).empty());
