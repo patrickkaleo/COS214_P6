@@ -13,11 +13,11 @@
 #include "Task.h"
 
 ApprovalRouting::ApprovalRouting()
-    : chain(nullptr) {
+    : chain(nullptr), selectedDeadlineHours(0), selectedLevel(-1) {
 }
 
 ApprovalRouting::ApprovalRouting(ApprovalHandler* handlerChain)
-    : chain(handlerChain) {
+    : chain(handlerChain), selectedDeadlineHours(0), selectedLevel(-1) {
 }
 
 ApprovalRouting::~ApprovalRouting() {
@@ -29,6 +29,8 @@ Participant* ApprovalRouting::select(const Task& task,
                                      const InstanceData& data,
                                      const ParticipantDirectory& directory) {
     if (!chain) {
+        selectedDeadlineHours = 0;
+        selectedLevel = -1;
         return nullptr;
     }
 
@@ -37,7 +39,10 @@ Participant* ApprovalRouting::select(const Task& task,
     ApprovalRequest request(&task, &data, task.getEscalationLevel(), &directory);
 
     // Delegate processing to the Chain of Responsibility
-    return chain->handle(request);
+    Participant* participant = chain->handle(request);
+    selectedDeadlineHours = participant ? request.deadlineHours : 0;
+    selectedLevel = participant ? request.selectedLevel : -1;
+    return participant;
 }
 
 RoutingStrategy* ApprovalRouting::clone() const {
@@ -49,10 +54,20 @@ ApprovalHandler* ApprovalRouting::getChain() const {
     return chain;
 }
 
+int ApprovalRouting::getDeadlineHours() const {
+    return selectedDeadlineHours;
+}
+
+int ApprovalRouting::getSelectedLevel() const {
+    return selectedLevel;
+}
+
 void ApprovalRouting::setChain(ApprovalHandler* handlerChain) {
     if (chain != handlerChain) {
         delete chain;
         chain = handlerChain;
+        selectedDeadlineHours = 0;
+        selectedLevel = -1;
     }
 }
 

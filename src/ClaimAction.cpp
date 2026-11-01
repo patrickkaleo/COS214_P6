@@ -2,15 +2,10 @@
 #include "WorkItem.h"
 
 ClaimAction::ClaimAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor)
-    : WorkItemAction(instance, itemId, actor) {}
+    : WorkItemAction(instance, itemId, actor, "claim") {}
 
 bool ClaimAction::doExecute(WorkItem &item)
 {
-  // Claiming is for unassigned work; reassigning someone else's is delegation
-  if (item.getAssignee() != nullptr)
-  {
-    return false;
-  }
   return item.assign(actor);
 }
 

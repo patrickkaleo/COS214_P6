@@ -1,339 +1,209 @@
 #include "FileWorkflowDefinitionBuilder.h"
+#include <set>
+#include <stdexcept>
 
-#include <cstdlib>
-
-string trim(string text)
-{
-	while (!text.empty() && (text[text.size() - 1] == '\r' || text[text.size() - 1] == ' ' || text[text.size() - 1] == '\t'))
-	{
-		text.erase(text.size() - 1);
-	}
-	size_t start = 0;
-	while (start < text.size() && (text[start] == ' ' || text[start] == '\t'))
-	{
-		++start;
-	}
-	return text.substr(start);
+namespace {
+string trim(const string &text) {
+    const size_t start = text.find_first_not_of(" \t\r");
+    if (start == string::npos) return "";
+    return text.substr(start, text.find_last_not_of(" \t\r") - start + 1);
+}
+vector<string> fieldsOf(const string &line) {
+    vector<string> fields;
+    size_t start = 0;
+    for (;;) {
+        const size_t end = line.find('|', start);
+        fields.push_back(trim(line.substr(start, end == string::npos ? end : end - start)));
+        if (end == string::npos) return fields;
+        start = end + 1;
+    }
+}
+bool completeFields(const vector<string> &fields, size_t count) {
+    if (fields.size() != count) return false;
+    for (size_t i = 0; i < fields.size(); ++i)
+        if (fields[i].empty()) return false;
+    return true;
+}
+bool integerOf(const string &text, int &value) {
+    istringstream number(text);
+    if (!(number >> value)) return false;
+    number >> ws;
+    return number.eof();
+}
 }
 
-vector<string> fieldsOf(const string &line)
-{
-	vector<string> fields;
-	string field;
-	for (size_t i = 0; i < line.size(); ++i)
-	{
-		if (line[i] == '|')
-		{
-			fields.push_back(trim(field));
-			field.clear();
-		}
-		else
-		{
-			field.push_back(line[i]);
-		}
-	}
-	fields.push_back(trim(field));
-	return fields;
+FileWorkflowDefinitionBuilder::FileWorkflowDefinitionBuilder(string path)
+    : filePath(path), loaded(false) { readFile(); }
+
+void FileWorkflowDefinitionBuilder::invalidRecord(
+    const string &section, size_t index, const string &reason) const {
+    throw invalid_argument(filePath + ": " + section + " record " +
+        to_string(index + 1) + ": " + reason);
 }
 
-bool fieldAt(const vector<string> &fields, size_t index, string &value)
-{
-	if (index >= fields.size() || fields[index].empty())
-	{
-		return false;
-	}
-	value = fields[index];
-	return true;
+void FileWorkflowDefinitionBuilder::readFile() {
+    definitionLines.clear();
+    workItemLines.clear();
+    dependencyLines.clear();
+    routingLines.clear();
+    serviceLines.clear();
+    extraLines.clear();
+    loaded = false;
+    ifstream file(filePath.c_str());
+    if (!file) throw runtime_error("Cannot read workflow file: " + filePath);
+
+    string section, line;
+    set<string> sections;
+    size_t lineNumber = 0;
+    while (getline(file, line)) {
+        ++lineNumber;
+        line = trim(line);
+        if (line.empty() || line[0] == '#') continue;
+        if (line == "DEFINITION" || line == "WORKITEMS" || line == "DEPENDENCIES" ||
+            line == "ROUTING" || line == "SERVICES" || line == "EXTRAS") {
+            if (!sections.insert(line).second)
+                throw invalid_argument(filePath + ": line " + to_string(lineNumber) +
+                    ": duplicate section " + line);
+            section = line;
+            continue;
+        }
+        if (section.empty())
+            throw invalid_argument(filePath + ": line " + to_string(lineNumber) +
+                ": expected a section heading");
+        if (section == "DEFINITION") definitionLines.push_back(line);
+        else if (section == "WORKITEMS") workItemLines.push_back(line);
+        else if (section == "DEPENDENCIES") dependencyLines.push_back(line);
+        else if (section == "ROUTING") routingLines.push_back(line);
+        else if (section == "SERVICES") serviceLines.push_back(line);
+        else if (section == "EXTRAS") extraLines.push_back(line);
+    }
+    if (file.bad()) throw runtime_error("Could not finish reading workflow file: " + filePath);
+    loaded = true;
 }
 
-FileWorkflowDefinitionBuilder::FileWorkflowDefinitionBuilder(string filePath)
-	: filePath(filePath), loaded(false)
-{
-	readFile();
+void FileWorkflowDefinitionBuilder::buildStructure() {
+    if (!loaded) readFile();
+    if (definitionLines.size() != 1)
+        invalidRecord("DEFINITION", 0, "exactly one id|name|version record is required");
+    const vector<string> header = fieldsOf(definitionLines[0]);
+    int version = 0;
+    if (!completeFields(header, 3) || !integerOf(header[2], version) || version < 1)
+        invalidRecord("DEFINITION", 0, "expected id|name|positive integer version");
+
+    vector<vector<string> > records;
+    map<string, size_t> identifiers;
+    size_t roots = 0;
+    for (size_t i = 0; i < workItemLines.size(); ++i) {
+        const vector<string> fields = fieldsOf(workItemLines[i]);
+        if (!completeFields(fields, 4) || (fields[0] != "process" && fields[0] != "task"))
+            invalidRecord("WORKITEMS", i, "expected process|id|parent|name or task|id|parent|name");
+        if (fields[1] == "-" || !identifiers.insert(make_pair(fields[1], i)).second)
+            invalidRecord("WORKITEMS", i, "duplicate or reserved item id: " + fields[1]);
+        if (fields[2] == "-") {
+            if (fields[0] != "process") invalidRecord("WORKITEMS", i, "the root must be a process");
+            ++roots;
+        }
+        records.push_back(fields);
+    }
+    if (roots != 1) invalidRecord("WORKITEMS", 0, "exactly one root process is required");
+    for (size_t i = 0; i < records.size(); ++i) {
+        if (records[i][2] == "-") continue;
+        map<string, size_t>::const_iterator parent = identifiers.find(records[i][2]);
+        if (parent == identifiers.end() || records[parent->second][0] != "process")
+            invalidRecord("WORKITEMS", i, "parent is not a known process: " + records[i][2]);
+        if (records[i][1] == records[i][2])
+            invalidRecord("WORKITEMS", i, "an item cannot be its own parent");
+    }
+
+    startDefinition(header[0], header[1], version);
+    // Allow declarations in any order without ever attaching to a missing parent.
+    vector<bool> built(records.size(), false);
+    size_t remaining = records.size();
+    while (remaining != 0) {
+        bool progress = false;
+        for (size_t i = 0; i < records.size(); ++i) {
+            if (built[i] || (records[i][2] != "-" && findItem(records[i][2]) == nullptr)) continue;
+            if (records[i][0] == "process") addProcess(records[i][1], records[i][3], records[i][2]);
+            else addTask(records[i][1], records[i][3], records[i][2]);
+            built[i] = true;
+            --remaining;
+            progress = true;
+        }
+        if (!progress) invalidRecord("WORKITEMS", 0, "parent relationships contain a cycle");
+    }
 }
 
-void FileWorkflowDefinitionBuilder::readFile()
-{
-	definitionLines.clear();
-	workItemLines.clear();
-	dependencyLines.clear();
-	routingLines.clear();
-	serviceLines.clear();
-	extraLines.clear();
-
-	// open file
-	ifstream file(filePath.c_str());
-	if (!file)
-		return;
-
-	string section = "";
-	string line;
-	while (getline(file, line))
-	{
-		line = trim(line);
-		if (line.empty() || line[0] == '#')
-			continue; // skip commented lines
-
-		// determine where the next few lines go, which vector
-		if (line == "DEFINITION" || line == "WORKITEMS" || line == "DEPENDENCIES" || line == "ROUTING" || line == "SERVICES" || line == "EXTRAS")
-		{
-			section = line;
-			continue;
-		}
-
-		if (section == "DEFINITION")
-		{
-			definitionLines.push_back(line);
-		}
-		else if (section == "WORKITEMS")
-		{
-			workItemLines.push_back(line);
-		}
-		else if (section == "DEPENDENCIES")
-		{
-			dependencyLines.push_back(line);
-		}
-		else if (section == "ROUTING")
-		{
-			routingLines.push_back(line);
-		}
-		else if (section == "SERVICES")
-		{
-			serviceLines.push_back(line);
-		}
-		else if (section == "EXTRAS")
-		{
-			extraLines.push_back(line);
-		}
-	}
-	loaded = true;
+void FileWorkflowDefinitionBuilder::buildDependencies() {
+    if (definition == nullptr) return;
+    for (size_t i = 0; i < dependencyLines.size(); ++i) {
+        const vector<string> fields = fieldsOf(dependencyLines[i]);
+        if (!completeFields(fields, 3)) invalidRecord("DEPENDENCIES", i, "expected fromId|toId|outcome");
+        try { addDependency(fields[0], fields[1], fields[2]); }
+        catch (const invalid_argument &error) { invalidRecord("DEPENDENCIES", i, error.what()); }
+    }
 }
 
-void FileWorkflowDefinitionBuilder::buildStructure()
-{
-	if (!loaded)
-	{
-		readFile();
-	}
-
-	string id;
-	string name;
-	int version = 1;
-	if (!definitionLines.empty())
-	{
-		vector<string> fields = fieldsOf(definitionLines[0]);
-		string versionText;
-		if (fieldAt(fields, 0, id) && fieldAt(fields, 1, name) && fieldAt(fields, 2, versionText))
-		{
-			istringstream number(versionText);
-			number >> version;
-		}
-	}
-	startDefinition(id, name, version);
-	if (definition == nullptr)
-	{
-		return;
-	}
-
-	for (size_t i = 0; i < workItemLines.size(); ++i)
-	{
-		vector<string> fields = fieldsOf(workItemLines[i]);
-		string keyword;
-		string id;
-		string parentId;
-		string itemName;
-		if (!fieldAt(fields, 0, keyword) || !fieldAt(fields, 1, id) || !fieldAt(fields, 2, parentId) || !fieldAt(fields, 3, itemName))
-		{
-			continue;
-		}
-		if (keyword == "process")
-		{
-			addProcess(id, itemName, parentId);
-		}
-		else if (keyword == "task")
-		{
-			addTask(id, itemName, parentId);
-		}
-	}
+void FileWorkflowDefinitionBuilder::buildServices() {
+    if (definition == nullptr) return;
+    set<string> servicedItems;
+    for (size_t i = 0; i < serviceLines.size(); ++i) {
+        const vector<string> fields = fieldsOf(serviceLines[i]);
+        if (!completeFields(fields, 3) || fields[0] != "service")
+            invalidRecord("SERVICES", i, "expected service|taskId|serviceName");
+        if (!servicedItems.insert(fields[1]).second)
+            invalidRecord("SERVICES", i, "duplicate service for item: " + fields[1]);
+        try { setService(fields[1], fields[2]); }
+        catch (const invalid_argument &error) { invalidRecord("SERVICES", i, error.what()); }
+    }
 }
 
-void FileWorkflowDefinitionBuilder::buildDependencies()
-{
-	if (definition == nullptr)
-	{
-		return;
-	}
-	for (size_t i = 0; i < dependencyLines.size(); ++i)
-	{
-		vector<string> fields = fieldsOf(dependencyLines[i]);
-		string fromId;
-		string toId;
-		string outcome;
-		if (fieldAt(fields, 0, fromId) && fieldAt(fields, 1, toId) && fieldAt(fields, 2, outcome))
-		{
-			addDependency(fromId, toId, outcome);
-		}
-	}
+void FileWorkflowDefinitionBuilder::buildRouting() {
+    if (definition == nullptr) return;
+    set<string> routedItems;
+    for (size_t i = 0; i < routingLines.size(); ++i) {
+        const vector<string> fields = fieldsOf(routingLines[i]);
+        if (fields.size() < 2 || !completeFields(fields, fields.size()))
+            invalidRecord("ROUTING", i, "routing fields must not be empty");
+        if (!routedItems.insert(fields[0]).second)
+            invalidRecord("ROUTING", i, "duplicate routing for item: " + fields[0]);
+        try {
+            if (fields[1] == "role" && fields.size() == 3) {
+                setRouting(fields[0], new RoleBasedRouting(fields[2]));
+            } else if (fields[1] == "data" && fields.size() >= 4 && fields.size() % 2 == 0) {
+                map<string, string> rules;
+                for (size_t pair = 4; pair < fields.size(); pair += 2) {
+                    if (!rules.insert(make_pair(fields[pair], fields[pair + 1])).second)
+                        throw invalid_argument("duplicate data-routing value: " + fields[pair]);
+                }
+                setRouting(fields[0], new DataRuleRouting(fields[2], rules, fields[3]));
+            } else {
+                throw invalid_argument("expected item|role|roleName or item|data|field|fallback|value|role pairs");
+            }
+        } catch (const invalid_argument &error) { invalidRecord("ROUTING", i, error.what()); }
+    }
 }
 
-void FileWorkflowDefinitionBuilder::buildServices()
-{
-	if (definition == nullptr)
-	{
-		return;
-	}
-	for (size_t i = 0; i < serviceLines.size(); ++i)
-	{
-		vector<string> fields = fieldsOf(serviceLines[i]);
-		string keyword;
-		string itemId;
-		string serviceName;
-		if (!fieldAt(fields, 0, keyword) || keyword != "service" || !fieldAt(fields, 1, itemId) || !fieldAt(fields, 2, serviceName))
-		{
-			continue;
-		}
-		setService(itemId, serviceName);
-	}
-}
-
-void FileWorkflowDefinitionBuilder::buildRouting()
-{
-	if (definition == nullptr)
-	{
-		return;
-	}
-	for (size_t i = 0; i < routingLines.size(); ++i)
-	{
-		vector<string> fields = fieldsOf(routingLines[i]);
-		string itemId;
-		string kind;
-		if (!fieldAt(fields, 0, itemId) || !fieldAt(fields, 1, kind))
-		{
-			continue;
-		}
-		if (kind == "role")
-		{
-			string roleName;
-			if (fieldAt(fields, 2, roleName))
-			{
-				setRouting(itemId, new RoleBasedRouting(roleName));
-			}
-		}
-		else if (kind == "data")
-		{
-			string field;
-			string fallback;
-			if (!fieldAt(fields, 2, field) || !fieldAt(fields, 3, fallback))
-			{
-				continue;
-			}
-			DataRuleRouting *routing = new DataRuleRouting(field, map<string, string>(), fallback);
-			for (size_t pair = 4; pair + 1 < fields.size(); pair += 2)
-			{
-				string value;
-				string roleName;
-				if (fieldAt(fields, pair, value) && fieldAt(fields, pair + 1, roleName))
-				{
-					routing->addRule(value, roleName);
-				}
-			}
-			setRouting(itemId, routing);
-		}
-		else if (kind == "approval")
-		{
-			// ITEM|approval|field|Role|limit|Role|limit|...|FinalRole
-			// Each role approves up to its limit; the final role accepts anything left.
-			string field;
-			if (!fieldAt(fields, 2, field))
-			{
-				continue;
-			}
-			ApprovalHandler *first = nullptr;
-			ApprovalHandler *last = nullptr;
-			for (size_t level = 3; level < fields.size(); level += 2)
-			{
-				string roleName;
-				if (!fieldAt(fields, level, roleName))
-				{
-					continue;
-				}
-				ApprovalRule *rule = nullptr;
-				string limitText;
-				if (fieldAt(fields, level + 1, limitText))
-				{
-					rule = new ThresholdRule(field, atof(limitText.c_str()));
-				}
-				else
-				{
-					rule = new AlwaysAcceptRule();
-				}
-				ApprovalHandler *handler = new ConcreteApprovalHandler(roleName, rule);
-				if (last != nullptr)
-				{
-					last->setNext(handler);
-				}
-				else
-				{
-					first = handler;
-				}
-				last = handler;
-			}
-			if (first != nullptr)
-			{
-				setRouting(itemId, new ApprovalRouting(first));
-			}
-		}
-	}
-}
-
-void FileWorkflowDefinitionBuilder::buildExtras()
-{
-	if (definition == nullptr)
-	{
-		return;
-	}
-	for (size_t i = 0; i < extraLines.size(); ++i)
-	{
-		vector<string> fields = fieldsOf(extraLines[i]);
-		string keyword;
-		string itemId;
-		if (!fieldAt(fields, 0, keyword) || !fieldAt(fields, 1, itemId))
-		{
-			continue;
-		}
-		if (keyword == "checkpoint")
-		{
-			markCheckpoint(itemId);
-		}
-		else if (keyword == "priority")
-		{
-			string levelText;
-			int level = 0;
-			if (fieldAt(fields, 2, levelText))
-			{
-				istringstream number(levelText);
-				if (number >> level)
-				{
-					addPriority(itemId, level);
-				}
-			}
-		}
-		else if (keyword == "audit")
-		{
-			addAudit(itemId);
-		}
-		else if (keyword == "deadline")
-		{
-			string hoursText;
-			int hours = 0;
-			if (fieldAt(fields, 2, hoursText))
-			{
-				istringstream number(hoursText);
-				if (number >> hours)
-				{
-					setDeadline(itemId, hours);
-				}
-			}
-		}
-	}
+void FileWorkflowDefinitionBuilder::buildExtras() {
+    if (definition == nullptr) return;
+    for (size_t i = 0; i < extraLines.size(); ++i) {
+        const vector<string> fields = fieldsOf(extraLines[i]);
+        if (fields.size() < 2 || !completeFields(fields, fields.size()))
+            invalidRecord("EXTRAS", i, "extra fields must not be empty");
+        try {
+            if (fields[0] == "checkpoint" && fields.size() == 2) markCheckpoint(fields[1]);
+            else if (fields[0] == "audit" && fields.size() == 2) addAudit(fields[1]);
+            else if (fields[0] == "deadline" && fields.size() == 3) {
+                int hours = 0;
+                if (!integerOf(fields[2], hours) || hours < 1 || hours > 87600)
+                    throw invalid_argument("deadline must be an integer from 1 to 87600 hours");
+                setDeadlineHours(fields[1], hours);
+            }
+            else if (fields[0] == "priority" && fields.size() == 3) {
+                int level = 0;
+                if (!integerOf(fields[2], level) || level < 0)
+                    throw invalid_argument("priority must be a nonnegative integer");
+                addPriority(fields[1], level);
+            } else throw invalid_argument("unknown extra or incorrect field count");
+        } catch (const invalid_argument &error) { invalidRecord("EXTRAS", i, error.what()); }
+    }
 }

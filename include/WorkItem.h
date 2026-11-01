@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <memory>
 
 #include "WorkflowEvent.h"   // EventType
 
@@ -103,7 +104,7 @@ public:
      * @param next  Newly allocated state object (WorkItem takes ownership).
      * @param event Event type corresponding to the transition.
      */
-    void changeState(WorkItemState* next, EventType event);
+    virtual void changeState(WorkItemState* next, EventType event);
 
     /**
      * @brief Replace the state object directly without firing a lifecycle event.
@@ -193,7 +194,7 @@ public:
 
     /**
      * @brief Subscribe a listener to lifecycle events on this item.
-     * @param l Listener (not owned).
+     * @param l Listener (not owned). Detach before destroying the listener.
      */
     virtual void attach(WorkflowEventListener* l);
 
@@ -205,9 +206,10 @@ public:
 
     /**
      * @brief Publish an event to all attached listeners.
+     *        Additions wait for the next dispatch; detached registrations are skipped.
      * @param event Event payload matching WorkflowEventListener::onEvent.
      */
-    void notify(const WorkflowEvent& event);
+    virtual void notify(const WorkflowEvent& event);
 
     // Mediator
 
@@ -226,18 +228,6 @@ public:
     /// A leaf has no children; SubProcess overrides both.
     /// @{
     virtual int childCount() const;
-
-    /**
-     * @brief The item with any decorators removed, for code that needs the concrete type.
-     * @return This item; a decorator returns what it ultimately wraps.
-     */
-    virtual WorkItem* undecorated() { return this; }
-
-    /**
-     * @return Priority set by a PriorityDecorator; 0 if there is none.
-     */
-    virtual int getPriority() const { return 0; }
-
     virtual WorkItem* getChild(int index) const;
     /// @}
 
@@ -278,7 +268,13 @@ protected:
     Participant* assignee;   
     int escalationLevel;
     SubProcess* parent_;                                   /**< Not owned. */
-    std::vector<WorkflowEventListener*> listeners_;        /**< Not owned. */
+    struct ListenerRegistration {
+        explicit ListenerRegistration(WorkflowEventListener* value)
+            : listener(value), active(true) {}
+        WorkflowEventListener* listener;                  /**< Not owned. */
+        bool active;
+    };
+    std::vector<std::shared_ptr<ListenerRegistration> > listeners_;
     WorkflowMediator* mediator_;                           /**< Not owned. */
 };
 

@@ -1,3 +1,6 @@
+# Onboarding workflow used by the builder tests.
+# Blank lines and lines starting with # are ignored.
+
 DEFINITION
 WF-100|Onboarding|1
 
@@ -5,18 +8,39 @@ WORKITEMS
 process|INTAKE|-|Application Intake
 task|CAPTURE|INTAKE|Capture Application
 task|VERIFY|INTAKE|Verify Application
+process|REVIEW|INTAKE|Faculty Review
+task|SCREEN|REVIEW|Screen Documents
+task|DECIDE|REVIEW|Decide Outcome
+task|NOTIFY|INTAKE|Notify Applicant
+# Invalid records are tested separately by test_definition_validation.cpp.
+# task|BROKEN|INTAKE
+# not-a-task|GHOST|INTAKE|Ghost Item
 
 DEPENDENCIES
 CAPTURE|VERIFY|approved
+VERIFY|SCREEN|approved
+SCREEN|DECIDE|complete
+DECIDE|NOTIFY|approved
+DECIDE|NOTIFY|rejected
+# CAPTURE|NOTIFY (missing outcome is rejected)
 
 ROUTING
 CAPTURE|role|Admissions Officer
 VERIFY|data|severity|Exception Analyst|low|Warehouse Clerk|high|Exception Analyst
+SCREEN|role|Faculty Clerk
+DECIDE|data|risk|Risk Officer|low|Reviewer|high|Senior Reviewer
+# NOTIFY has no routing strategy in this valid fixture.
 
 SERVICES
 service|CAPTURE|Document Verification Service
+service|NOTIFY|Email Notification Service
+# service|MISSING|Nowhere Service (unknown task is rejected)
 
 EXTRAS
 checkpoint|CAPTURE
+checkpoint|DECIDE
 priority|VERIFY|2
 audit|VERIFY
+audit|SCREEN
+priority|DECIDE|5
+# NOTIFY is not wrapped in this valid fixture.

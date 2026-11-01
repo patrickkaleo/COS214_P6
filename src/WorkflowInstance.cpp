@@ -7,341 +7,300 @@
 #include "CompletedState.h"
 #include "RejectedState.h"
 #include "CancelledState.h"
-#include "SubProcess.h"
 #include "Task.h"
+#include "WorkItemDecorator.h"
 #include "Participant.h"
 #include "ParticipantDirectory.h"
-#include <algorithm>
+#include "RoutingStrategy.h"
+#include "ApprovalRouting.h"
+#include "DepthFirstWorkItemIterator.h"
 #include <memory>
-#include <map>
-#include <iostream>
-using namespace std;
+#include <limits>
+#include <cstdint>
 
-using namespace std;
+namespace {
+WorkItem *coreOf(WorkItem *item) {
+    while (WorkItemDecorator *decorator = dynamic_cast<WorkItemDecorator *>(item)) {
+        item = decorator->getInner();
+    }
+    return item;
+}
 
-// The engine/tests use the three-argument constructor.
-// Instantiate a separate runtime tree so the definition retains its own root.
+std::vector<DependencyRule> definitionRules(const WorkflowDefinition *definition) {
+    std::vector<DependencyRule> result;
+    if (definition) {
+        for (DependencyRule *rule : const_cast<WorkflowDefinition *>(definition)->getRules()) {
+            if (rule) result.push_back(*rule);
+        }
+    }
+    return result;
+}
+}
+
 WorkflowInstance::WorkflowInstance(const std::string &id,
                                    const WorkflowDefinition *definition,
-                                   const InstanceData &data)
-    : Id(id), definition(definition), mediator(new DependencyMediator()),
-      rootProcess(nullptr), data(data), participants(nullptr)
-{
-    if (definition != nullptr)
-    {
-        // instantiateTree() is currently non-const in WorkflowDefinition.h.
-        WorkItem *cloned = const_cast<WorkflowDefinition *>(definition)->instantiateTree();
-        rootProcess = dynamic_cast<SubProcess *>(cloned);
-        if (rootProcess == nullptr)
-            delete cloned;
+                                   const InstanceData &initial)
+    : WorkflowInstance(id, definition, initial, nullptr, nullptr) {}
+
+WorkflowInstance::WorkflowInstance(const std::string &id,
+                                   const WorkflowDefinition *definition,
+                                   const InstanceData &initial,
+                                   ParticipantDirectory *directory,
+                                   ServiceRegistry *services)
+    : Id(id), definition(definition), mediator(new DependencyMediator(definitionRules(definition))),
+      rootProcess(nullptr), data(initial), participants(directory) {
+    if (definition) {
+        rootProcess = const_cast<WorkflowDefinition *>(definition)->instantiateTree();
     }
+    wireRuntime(services);
 }
 
-WorkflowInstance::WorkflowInstance(const string &id,
+WorkflowInstance::WorkflowInstance(const std::string &id,
                                    const WorkflowDefinition *definition,
                                    SubProcess *root,
-                                   DependencyMediator *mediator,
-                                   const InstanceData &data,
+                                   DependencyMediator *instanceMediator,
+                                   const InstanceData &initial,
                                    ParticipantDirectory *directory)
-    : Id(id), definition(definition), mediator(mediator), rootProcess(root),
-      data(data), participants(directory)
-{
+    : Id(id), definition(definition),
+      mediator(instanceMediator ? instanceMediator : new DependencyMediator(definitionRules(definition))),
+      rootProcess(root), data(initial), participants(directory) {
+    wireRuntime(nullptr);
 }
 
-WorkflowInstance::~WorkflowInstance()
-{
+void WorkflowInstance::wireRuntime(ServiceRegistry *services) {
+    if (!rootProcess) return;
+    rootProcess->setRoutingContext(&data, participants);
+    DepthFirstWorkItemIterator it(rootProcess);
+    for (it.first(); !it.isDone(); it.next()) {
+        WorkItem *item = it.current();
+        item->setInstanceId(Id);
+        if (Task *task = dynamic_cast<Task *>(coreOf(item))) {
+            task->setServiceRegistry(services);
+        }
+    }
+    mediator->registerTree(*rootProcess);
+}
+
+WorkflowInstance::~WorkflowInstance() {
     delete rootProcess;
     delete mediator;
-
-    rootProcess = NULL;
-    mediator = NULL;
 }
 
-bool WorkflowInstance::start()
-{
-    if (rootProcess == NULL)
-    {
-        return false;
-    }
-    return rootProcess->makeAvailable();
+bool WorkflowInstance::start() {
+    if (!rootProcess || !dynamic_cast<SubProcess *>(coreOf(rootProcess))) return false;
+    const bool started = rootProcess->makeAvailable();
+    if (started) refreshDeadlines(std::time(nullptr));
+    return started;
 }
 
-const string &WorkflowInstance::getId() const
-{
-    return Id;
+const std::string &WorkflowInstance::getId() const { return Id; }
+InstanceData &WorkflowInstance::getData() { return data; }
+const InstanceData &WorkflowInstance::getData() const { return data; }
+WorkItem *WorkflowInstance::getRoot() const { return rootProcess; }
+std::string WorkflowInstance::getDefinitionId() const {
+    return definition ? const_cast<WorkflowDefinition *>(definition)->getId() : "";
 }
-InstanceData &WorkflowInstance::getData()
-{
-    return data;
-}
-SubProcess *WorkflowInstance::getRoot() const
-{
-    return rootProcess;
-}
-vector<string> WorkflowInstance::outcomesFrom(const string &itemId) const
-{
-    vector<string> outcomes;
-    if (mediator == NULL)
-    {
-        return outcomes;
-    }
-    const vector<DependencyRule> &rules = mediator->getRules();
-    for (size_t i = 0; i < rules.size(); ++i)
-    {
-        const string &outcome = rules[i].outcome;
-        if (rules[i].fromId != itemId || outcome == "*" || outcome == "rejected")
-        {
-            continue;
-        }
-        if (find(outcomes.begin(), outcomes.end(), outcome) == outcomes.end())
-        {
-            outcomes.push_back(outcome);
-        }
-    }
-    return outcomes;
-}
-WorkItem *WorkflowInstance::findItem(const string &itemId) const
-{
-    if (rootProcess == NULL)
-    {
-        return NULL;
-    }
 
+WorkItem *WorkflowInstance::findItem(const std::string &itemId) const {
     return findItemRecursive(rootProcess, itemId);
 }
-// helper function
-WorkItem *WorkflowInstance::findItemRecursive(WorkItem *current, const string &itemId) const
-{
-    if (current == NULL)
-    {
-        return NULL;
-    }
-    if (current->getId() == itemId)
-    {
-        return current;
-    }
-    SubProcess *process = dynamic_cast<SubProcess *>(current->undecorated());
-    if (process == NULL)
-    {
-        return NULL;
-    }
 
-    for (int i = 0; i < process->childCount(); ++i)
-    {
-        WorkItem *found = findItemRecursive(process->getChild(i), itemId);
-        if (found != NULL)
-        {
-            return found;
-        }
+WorkItem *WorkflowInstance::findItemRecursive(WorkItem *current, const std::string &itemId) const {
+    if (!current) return nullptr;
+    if (current->getId() == itemId) return current;
+    for (int i = 0; i < current->childCount(); ++i) {
+        if (WorkItem *found = findItemRecursive(current->getChild(i), itemId)) return found;
     }
-    return NULL;
+    return nullptr;
 }
-string WorkflowInstance::status() const
-{
-    if (rootProcess == NULL)
-    {
-        return "invalid";
-    }
-    string stateName = rootProcess->getStateName();
-    if (stateName == "Completed")
-    {
-        return "completed";
-    }
-    if (stateName == "Rejected" || stateName == "Cancelled")
-    {
-        return "terminated";
-    }
+
+std::string WorkflowInstance::status() const {
+    if (!rootProcess) return "invalid";
+    const std::string state = rootProcess->getStateName();
+    if (state == "Created") return "created";
+    if (state == "Completed") return "completed";
+    if (state == "Rejected" || state == "Cancelled") return "terminated";
     return "running";
 }
-// helper
-void WorkflowInstance::captureItem(WorkItem *item, map<string, string> &states, map<string, string> &assignees, map<string, string> &outcomes) const
-{
-    if (item == NULL)
-    {
-        return;
+
+bool WorkflowInstance::isRegisteredParticipant(const Participant *actor) const {
+    return actor && participants && participants->findById(actor->getId()).get() == actor;
+}
+
+bool WorkflowInstance::canAssign(const WorkItem &item, const Participant *actor) const {
+    if (!isRegisteredParticipant(actor)) return false;
+    Task *task = dynamic_cast<Task *>(coreOf(const_cast<WorkItem *>(&item)));
+    if (!task) return false;
+    if (!task->getRouting()) return true;
+
+    // Evaluate the existing strategy with this candidate alone. This preserves
+    // role/data/approval policy while allowing a qualified second team member.
+    ParticipantDirectory candidateDirectory;
+    candidateDirectory.addParticipant(std::make_shared<Participant>(*actor));
+    std::unique_ptr<RoutingStrategy> strategy(task->getRouting()->clone());
+    if (!strategy || !strategy->select(*task, data, candidateDirectory)) return false;
+    if (ApprovalRouting *candidate = dynamic_cast<ApprovalRouting *>(strategy.get())) {
+        std::unique_ptr<RoutingStrategy> current(task->getRouting()->clone());
+        if (!current->select(*task, data, *participants)) return false;
+        const ApprovalRouting *required = static_cast<const ApprovalRouting *>(current.get());
+        return candidate->getSelectedLevel() == required->getSelectedLevel();
     }
+    return true;
+}
+
+bool WorkflowInstance::canAct(const WorkItem &item, const Participant *actor,
+                             const std::string &action) const {
+    if (!isRegisteredParticipant(actor) || item.isFinished()) return false;
+    const std::string state = item.getStateName();
+    const bool isTask = dynamic_cast<Task *>(coreOf(const_cast<WorkItem *>(&item))) != nullptr;
+    const bool assigned = item.getAssignee() == actor;
+    if (action == "claim") {
+        return isTask && (state == "Available" || state == "Escalated") && canAssign(item, actor);
+    }
+    if (action == "start") return isTask && state == "Assigned" && assigned;
+    if (action == "complete" || action == "reject") {
+        return isTask && state == "InProgress" && assigned;
+    }
+    if (action == "delegate") return isTask && state == "Assigned" && assigned;
+    if (action == "cancel") {
+        if (!isTask) return actor->hasRole("WorkflowAdmin");
+        return assigned || (!item.getAssignee() && state != "Created" && canAssign(item, actor));
+    }
+    return false;
+}
+
+std::vector<std::string> WorkflowInstance::availableActions(const std::string &itemId,
+                                                           const Participant *actor) const {
+    std::vector<std::string> result;
+    WorkItem *item = findItem(itemId);
+    if (!item) return result;
+    const char *actions[] = {"claim", "start", "complete", "reject", "delegate", "cancel"};
+    for (const char *action : actions) {
+        if (canAct(*item, actor, action)) result.push_back(action);
+    }
+    return result;
+}
+
+void WorkflowInstance::captureItem(WorkItem *item,
+                                    std::map<std::string, std::string> &states,
+                                    std::map<std::string, std::string> &assignees,
+                                    std::map<std::string, std::string> &outcomes) const {
+    if (!item) return;
     states[item->getId()] = item->getStateName();
-
     outcomes[item->getId()] = item->getOutcome();
-    Task *task = dynamic_cast<Task *>(item == NULL ? NULL : item->undecorated());
-
-    if (task != NULL && task->getAssignee() != NULL)
-    {
-        assignees[item->getId()] = task->getAssignee()->getId();
-    }
-
-    // If this is a SubProcess,
-    // recursively capture all children
-    SubProcess *process = dynamic_cast<SubProcess *>(item->undecorated());
-
-    if (process != NULL)
-    {
-        for (int i = 0; i < process->childCount(); ++i)
-        {
-            captureItem(process->getChild(i), states, assignees, outcomes);
-        }
+    if (item->getAssignee()) assignees[item->getId()] = item->getAssignee()->getId();
+    for (int i = 0; i < item->childCount(); ++i) {
+        captureItem(item->getChild(i), states, assignees, outcomes);
     }
 }
 
-void WorkflowInstance::captureEscalations(WorkItem *item, map<string, int> &levels) const
-{
-    levels[item->getId()] = item->getEscalationLevel();
-    for (int i = 0; i < item->childCount(); ++i)
-    {
-        captureEscalations(item->getChild(i), levels);
+WorkflowSnapshot *WorkflowInstance::createSnapshot(const std::string &label) {
+    std::map<std::string, std::string> states, assignees, outcomes;
+    captureItem(rootProcess, states, assignees, outcomes);
+    WorkflowSnapshot *snapshot = new WorkflowSnapshot(states, assignees, outcomes, data, label);
+    DepthFirstWorkItemIterator it(rootProcess);
+    for (it.first(); !it.isDone(); it.next()) {
+        WorkItem *item = it.current();
+        snapshot->escalationLevels[item->getId()] = item->getEscalationLevel();
     }
-}
-
-WorkflowSnapshot *WorkflowInstance::createSnapshot(const string &label)
-{
-    map<string, string> itemStates;
-    map<string, string> assignees;
-    map<string, string> outcomes;
-
-    captureItem(rootProcess, itemStates, assignees, outcomes);
-
-    WorkflowSnapshot *snapshot = new WorkflowSnapshot(itemStates, assignees, outcomes, data, label);
-    captureEscalations(rootProcess, snapshot->escalationLevels);
+    if (mediator) {
+        snapshot->openedBranches = mediator->getOpenedBranches();
+        snapshot->decidedItems = mediator->getDecidedItems();
+    }
+    snapshot->deadlines = deadlines;
+    snapshot->deadlineOwners = deadlineOwners;
     return snapshot;
 }
 
-void WorkflowInstance::restoreSnapshot(const WorkflowSnapshot &snapshot)
-{
-    // Restore InstanceData
+void WorkflowInstance::restoreSnapshot(const WorkflowSnapshot &snapshot) {
     data = snapshot.data;
-
-    // Restore WorkItem states
-    for (map<string, string>::const_iterator it = snapshot.itemStates.begin(); it != snapshot.itemStates.end(); ++it)
-    {
-        WorkItem *item = findItem(it->first);
-        if (item == NULL)
-        {
-            continue;
-        }
-
-        WorkItemState *restoredState = createStateFromName(it->second);
-        if (restoredState != NULL)
-        {
-            item->setState(restoredState);
-        }
-    }
-
-    // Restore WorkItem outcomes
-    for (map<string, string>::const_iterator it = snapshot.outcomes.begin(); it != snapshot.outcomes.end(); ++it)
-    {
-        WorkItem *item = findItem(it->first);
-
-        if (item != NULL)
-        {
-            item->setOutcome(it->second);
-        }
-    }
-
-    // Restore WorkItem escalation counts
-    for (map<string, int>::const_iterator it = snapshot.escalationLevels.begin(); it != snapshot.escalationLevels.end(); ++it)
-    {
-        WorkItem *item = findItem(it->first);
-
-        if (item != NULL)
-        {
-            item->setEscalationLevel(it->second);
-        }
-    }
-
-    // Clear assignments created after snapshot
     clearAssignees(rootProcess);
+    for (const auto &entry : snapshot.itemStates) {
+        WorkItem *item = findItem(entry.first);
+        if (!item) continue;
+        if (WorkItemState *state = createStateFromName(entry.second)) item->setState(state);
+    }
+    for (const auto &entry : snapshot.outcomes) {
+        if (WorkItem *item = findItem(entry.first)) item->setOutcome(entry.second);
+    }
+    for (const auto &entry : snapshot.escalationLevels) {
+        if (WorkItem *item = findItem(entry.first)) item->setEscalationLevel(entry.second);
+    }
+    if (participants) {
+        for (const auto &entry : snapshot.assignees) {
+            if (WorkItem *item = findItem(entry.first)) {
+                item->setAssignee(participants->findById(entry.second).get());
+            }
+        }
+    }
+    if (mediator) mediator->restoreBookkeeping(snapshot.openedBranches, snapshot.decidedItems);
+    deadlines = snapshot.deadlines;
+    deadlineOwners = snapshot.deadlineOwners;
+}
 
-    // Restore saved assignments
-    for (map<string, string>::const_iterator it = snapshot.assignees.begin(); it != snapshot.assignees.end(); ++it)
-    {
-        WorkItem *item = findItem(it->first);
+void WorkflowInstance::clearAssignees(WorkItem *item) {
+    if (!item) return;
+    item->setAssignee(nullptr);
+    for (int i = 0; i < item->childCount(); ++i) clearAssignees(item->getChild(i));
+}
 
-        Task *task = dynamic_cast<Task *>(item == NULL ? NULL : item->undecorated());
-
-        if (task == NULL)
-        {
+void WorkflowInstance::refreshDeadlines(std::time_t now) {
+    DepthFirstWorkItemIterator it(rootProcess);
+    for (it.first(); !it.isDone(); it.next()) {
+        WorkItem *item = it.current();
+        Task *task = dynamic_cast<Task *>(coreOf(item));
+        const std::string id = item->getId();
+        const std::string state = item->getStateName();
+        if (!task || !item->getAssignee() || (state != "Assigned" && state != "InProgress")) {
+            deadlines.erase(id);
+            deadlineOwners.erase(id);
             continue;
         }
-
-        if (participants == NULL)
-        {
-            continue;
-        }
-
-        std::shared_ptr<Participant> participant = participants->findById(it->second);
-        task->setAssignee(participant.get());
-    }
-
-    // The mediator's record of what it opened must match the restored states
-    if (mediator != NULL)
-    {
-        mediator->resynchronise();
-    }
-}
-void WorkflowInstance::clearAssignees(WorkItem *item)
-{
-    if (item == NULL)
-    {
-        return;
-    }
-
-    Task *task = dynamic_cast<Task *>(item == NULL ? NULL : item->undecorated());
-
-    if (task != NULL)
-    {
-        task->setAssignee(nullptr);
-    }
-
-    SubProcess *process = dynamic_cast<SubProcess *>(item->undecorated());
-    if (process != NULL)
-    {
-        for (int i = 0; i < process->childCount(); ++i)
-        {
-            clearAssignees(process->getChild(i));
+        const std::string owner = item->getAssignee()->getId() + ":" +
+                                  std::to_string(item->getEscalationLevel());
+        if (deadlineOwners[id] == owner) continue;
+        deadlines.erase(id);
+        deadlineOwners[id] = owner;
+        const int hours = task->getDeadlineHours();
+        if (hours > 0) {
+            const std::uintmax_t seconds = static_cast<std::uintmax_t>(hours) * 3600u;
+            const std::time_t maximum = std::numeric_limits<std::time_t>::max();
+            if (seconds <= static_cast<std::uintmax_t>(maximum)) {
+                const std::time_t duration = static_cast<std::time_t>(seconds);
+                if (now <= maximum - duration) deadlines[id] = now + duration;
+            }
         }
     }
 }
-WorkItemState *WorkflowInstance::createStateFromName(const string &stateName) const
-{
-    if (stateName == "Created")
-    {
-        return new CreatedState();
-    }
 
-    if (stateName == "Available")
-    {
-        return new AvailableState();
+void WorkflowInstance::checkDeadlines(std::time_t now) {
+    refreshDeadlines(now);
+    const std::map<std::string, std::time_t> pending = deadlines;
+    for (const auto &entry : pending) {
+        if (now < entry.second) continue;
+        WorkItem *item = findItem(entry.first);
+        Task *task = dynamic_cast<Task *>(coreOf(item));
+        if (!task || item->isFinished()) continue;
+        deadlines.erase(entry.first);
+        deadlineOwners.erase(entry.first);
+        if (item->escalate() && dynamic_cast<ApprovalRouting *>(task->getRouting())) task->route();
     }
+    refreshDeadlines(now);
+}
 
-    if (stateName == "Assigned")
-    {
-        return new AssignedState();
-    }
+std::time_t WorkflowInstance::getDeadline(const std::string &itemId) const {
+    const auto found = deadlines.find(itemId);
+    return found == deadlines.end() ? 0 : found->second;
+}
 
-    if (stateName == "InProgress")
-    {
-        return new InProgressState;
-    }
-
-    if (stateName == "Escalated")
-    {
-        return new EscalatedState();
-    }
-
-    if (stateName == "Completed")
-    {
-        return new CompletedState();
-    }
-
-    if (stateName == "Rejected")
-    {
-        return new RejectedState();
-    }
-
-    if (stateName == "Cancelled")
-    {
-        return new CancelledState();
-    }
-
-    return NULL;
+WorkItemState *WorkflowInstance::createStateFromName(const std::string &name) const {
+    if (name == "Created") return new CreatedState();
+    if (name == "Available") return new AvailableState();
+    if (name == "Assigned") return new AssignedState();
+    if (name == "InProgress") return new InProgressState();
+    if (name == "Escalated") return new EscalatedState();
+    if (name == "Completed") return new CompletedState();
+    if (name == "Rejected") return new RejectedState();
+    if (name == "Cancelled") return new CancelledState();
+    return nullptr;
 }

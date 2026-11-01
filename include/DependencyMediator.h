@@ -66,19 +66,16 @@ public:
     void itemChanged(WorkItem& item) override;
     void openChildren(SubProcess& subProcess) override;
 
-    /**
-     * @brief Rebuilds the opened and decided records from the items' current states.
-     *
-     * Called after a snapshot is restored. Without it, an item that was opened and then
-     * rolled back would count as already decided and could never open again.
-     */
-    void resynchronise();
-
     /// @return The registered item with this id, or nullptr.
     WorkItem* findItem(const std::string& id) const;
 
     /// @return The rules this mediator works from.
     const std::vector<DependencyRule>& getRules() const;
+
+    const std::set<std::string>& getOpenedBranches() const { return openedBranches; }
+    const std::set<std::string>& getDecidedItems() const { return decided; }
+    void restoreBookkeeping(const std::set<std::string>& opened,
+                            const std::set<std::string>& decisions);
 
 private:
     RuleStatus statusOf(const DependencyRule& rule) const;

@@ -9,22 +9,7 @@ using namespace std;
 #include "WorkItem.h"
 #include "RoutingStrategy.h"
 
-/**
- * @struct ItemDecoration
- * @brief A decorator a work item should run with. The definition keeps its tree plain and
- *        each instance wraps its own copy, using a logger that belongs to the engine.
- */
-struct ItemDecoration
-{
-	enum Kind
-	{
-		PRIORITY,
-		AUDIT
-	};
-	string itemId;
-	Kind kind;
-	int level;
-};
+class AuditLogger;
 
 /**
  * @class WorkflowDefition
@@ -39,7 +24,7 @@ private:
 	int version;
 	WorkItem *root;
 	vector<DependencyRule *> rules;
-	vector<ItemDecoration> decorations;
+	vector<AuditLogger *> auditors;
 
 public:
 	/**
@@ -118,22 +103,23 @@ public:
 	void addRule(DependencyRule *newRule);
 
 	/**
-	 * @brief Record a decorator for instances to apply to one work item.
-	 * @param decoration item id, kind and level
+	 * @brief Keep an audit logger created while wrapping a work item.
+	 *        AuditDecorator does not own its logger. This definition does.
+	 * @param logger logger used by an audit decorator. This definition deletes it.
 	 */
-	void addDecoration(const ItemDecoration &decoration);
-
-	/**
-	 * @brief return the recorded decorations, in the order they wrap
-	 * @return const vector<ItemDecoration>&
-	 */
-	const vector<ItemDecoration> &getDecorations() const;
+	void addAuditLogger(AuditLogger *logger);
 
 	/**
 	 * @brief Clone the root work item so a new instance can run from that root.
 	 * @return WorkItem* deep copy of the root, or nullptr when the definition has no root
 	 */
 	WorkItem *instantiateTree();
+
+	/**
+	 * @brief Print this definition to standard output.
+	 *        Writes the id, name, version, the work-item tree, and the dependency rules.
+	 */
+	void describe();
 };
 
 #endif

@@ -1,6 +1,6 @@
 /**
  * @file Task.h
- * @brief Leaf of the Composite pattern – atomic work item.
+ * @brief Leaf of the Composite pattern â€“ atomic work item.
  * @details Holds routing strategy, assignee, service itemName, checkpoint flag and
  *          escalation level.
  * @version 1.0
@@ -13,7 +13,6 @@
 #include "InstanceData.h"
 #include "ParticipantDirectory.h"
 
-#include <ctime>
 #include <string>
 
 // Forward declarations
@@ -104,46 +103,34 @@ public:
 
     /**
      * @brief Execute the actual work of the task (may call an ExternalService).
-     *
-     * The service's outputs are stored in the instance data and the task stays in
-     * progress, so its participant can choose the outcome from what came back.
-     * A failed or missing service escalates the task.
-     *
      * @param context Runtime context carrying instance data, services, etc.
      */
     virtual void performWork(InstanceData& context);
 
     /**
-     * @brief Set how long the task may wait before it escalates.
-     * @param hours Hours allowed once the task opens or is escalated; 0 means no deadline.
+     * @brief Complete through the configured service using the instance payload.
+     * @return true when completed, rejected, or escalated after a failed service;
+     *         false when the lifecycle does not permit execution. Failed calls
+     *         retain no service outputs. The command owns the pre-call snapshot.
      */
+    bool executeService(InstanceData& context, const std::string& requestedOutcome,
+                        WorkItem* transitionTarget = nullptr);
+
+    /// Failure details live in InstanceData, so snapshot restore also restores them.
+    bool serviceFailed() const;
+    std::string lastServiceError() const;
+
+    /// Optional task deadline; zero falls back to the selected approval handler.
     void setDeadlineHours(int hours);
 
-    /** @return Hours allowed, or 0 if the task has no deadline. */
+    /// Configured deadline or that of the approval handler selected by the chain.
     int getDeadlineHours() const;
-
-    /**
-     * @brief Escalate the task if its deadline has passed.
-     *
-     * The routing strategy is then asked again. An approval chain moves to its next level;
-     * a strategy that can only offer the same person leaves the task escalated for
-     * someone to claim.
-     *
-     * @param now Time to compare against the deadline.
-     * @return true if the task was escalated.
-     */
-    bool checkDeadline(time_t now);
-
-    /** @return Message from the last service call, or empty if none was made. */
-    std::string getServiceMessage() const;
 
 private:
     RoutingStrategy* routing_;             /**< Owned. */
     std::string serviceName_;              /**< Key into ServiceRegistry. */
-    std::string serviceMessage_;           /**< Summary of the last service call. */
-    int deadlineHours_;                    /**< Hours allowed; 0 = no deadline. */
-    time_t dueAt_;                         /**< When the current deadline passes; 0 = not running. */
     bool checkpoint_;                      /**< Take Memento before external call. */
+    int deadlineHours_;                    /**< Explicit configured duration, 0 = routing default. */
     const InstanceData* instanceData_;     /**< Not owned. */
     const ParticipantDirectory* directory_;/**< Not owned. */
     ServiceRegistry* services_;            /**< Not owned. */

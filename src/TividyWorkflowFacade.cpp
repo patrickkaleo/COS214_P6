@@ -10,12 +10,9 @@
 #include "WorkflowEventListener.h"
 #include "EventDispatcher.h"
 #include "FileWorkflowDefinitionBuilder.h"
-#include "DepthFirstWorkItemIterator.h"
-#include "ParticipantDirectory.h"
-#include "SubProcess.h"
-#include "Task.h"
 
 #include <fstream>
+#include <exception>
 
 #include "ClaimAction.h"
 #include "StartAction.h"
@@ -24,37 +21,69 @@
 #include "DelegateAction.h"
 #include "CancelAction.h"
 
+bool TividyWorkflowFacade::runAction(WorkItemAction *action) {
+  const bool success = engine.executeAction(action);
+  lastError = engine.getLastError();
+  return success;
+}
+
+WorkflowInstance *TividyWorkflowFacade::getInstance(const std::string &id) const {
+  return engine.getInstance(id);
+}
+std::vector<std::string> TividyWorkflowFacade::definitionIds() const { return engine.definitionIds(); }
+std::vector<std::string> TividyWorkflowFacade::instanceIds() const { return engine.instanceIds(); }
+std::vector<std::string> TividyWorkflowFacade::actionHistory() const { return engine.historyDescriptions(); }
+Participant *TividyWorkflowFacade::findParticipant(const std::string &id) const {
+  return engine.getDirectory().findById(id).get();
+}
+std::vector<Participant *> TividyWorkflowFacade::participants() const {
+  std::vector<Participant *> result;
+  for (const auto &participant : engine.getDirectory().getAll()) result.push_back(participant.get());
+  return result;
+}
+std::vector<std::string> TividyWorkflowFacade::availableActions(const std::string &instanceId,
+                                                              const std::string &itemId,
+                                                              Participant *actor) const {
+  WorkflowInstance *instance = engine.getInstance(instanceId);
+  return instance ? instance->availableActions(itemId, actor) : std::vector<std::string>();
+}
+
 // Helper: construct definition using Builder pattern.
 std::string TividyWorkflowFacade::registerDefinition(
     WorkflowDefinitionBuilder &builder)
 {
-
-  WorkflowDefinition *definition =
-      director.construct(&builder);
-
-  if (definition == nullptr)
-  {
+  lastError.clear();
+  try {
+    WorkflowDefinition *definition = director.construct(&builder);
+    const std::string id = engine.registerDefinition(definition);
+    if (id.empty()) lastError = engine.getLastError();
+    return id;
+  } catch (const std::exception &error) {
+    lastError = error.what();
     return "";
   }
-
-  // Engine takes ownership of the definition.
-  return engine.registerDefinition(definition);
 }
 
 std::string TividyWorkflowFacade::registerDefinitionFromFile(const std::string &filePath)
 {
+  lastError.clear();
   std::ifstream input(filePath.c_str());
 
   if (!input.is_open())
   {
+    lastError = "Cannot open workflow definition: " + filePath;
     return "";
   }
 
   input.close();
 
-  FileWorkflowDefinitionBuilder builder(filePath);
-
-  return registerDefinition(builder);
+  try {
+    FileWorkflowDefinitionBuilder builder(filePath);
+    return registerDefinition(builder);
+  } catch (const std::exception &error) {
+    lastError = error.what();
+    return "";
+  }
 }
 
 // Add a participant to the directory.
@@ -64,6 +93,11 @@ void TividyWorkflowFacade::addParticipant(
     const std::string &name,
     const std::vector<std::string> &roles)
 {
+  lastError.clear();
+  if (id.empty() || name.empty() || engine.getDirectory().findById(id)) {
+    lastError = "Participant ID and name are required, and the ID must be unique.";
+    return;
+  }
   Participant *participant = new Participant(
       id,
       name,
@@ -105,16 +139,20 @@ std::string TividyWorkflowFacade::startInstance(
     const std::string &defId,
     const InstanceData &data)
 {
-
+  lastError.clear();
   WorkflowInstance *instance =
       engine.createInstance(defId, data);
 
   if (instance == nullptr)
   {
+    lastError = engine.getLastError();
     return "";
   }
 
-  instance->start();
+  if (!instance->start()) {
+    lastError = "The workflow could not start: its root is invalid or already started.";
+    return "";
+  }
 
   return instance->getId();
 }
@@ -131,10 +169,11 @@ bool TividyWorkflowFacade::claim(
 
   if (instance == nullptr || actor == nullptr)
   {
+    lastError = "Unknown instance or missing actor.";
     return false;
   }
 
-  return engine.executeAction(
+  return runAction(
       new ClaimAction(instance, itemId, actor));
 }
 
@@ -150,10 +189,11 @@ bool TividyWorkflowFacade::start(
 
   if (instance == nullptr || actor == nullptr)
   {
+    lastError = "Unknown instance or missing actor.";
     return false;
   }
 
-  return engine.executeAction(
+  return runAction(
       new StartAction(instance, itemId, actor));
 }
 
@@ -170,10 +210,11 @@ bool TividyWorkflowFacade::complete(
 
   if (instance == nullptr || actor == nullptr)
   {
+    lastError = "Unknown instance or missing actor.";
     return false;
   }
 
-  return engine.executeAction(
+  return runAction(
       new CompleteAction(
           instance, itemId, actor, outcome));
 }
@@ -191,10 +232,11 @@ bool TividyWorkflowFacade::reject(
 
   if (instance == nullptr || actor == nullptr)
   {
+    lastError = "Unknown instance or missing actor.";
     return false;
   }
 
-  return engine.executeAction(
+  return runAction(
       new RejectAction(
           instance, itemId, actor, reason));
 }
@@ -213,10 +255,11 @@ bool TividyWorkflowFacade::delegate(
   if (instance == nullptr ||
       actor == nullptr || to == nullptr)
   {
+    lastError = "Unknown instance or missing actor.";
     return false;
   }
 
-  return engine.executeAction(
+  return runAction(
       new DelegateAction(instance, itemId, actor, to));
 }
 
@@ -232,17 +275,20 @@ bool TividyWorkflowFacade::cancel(
 
   if (instance == nullptr || actor == nullptr)
   {
+    lastError = "Unknown instance or missing actor.";
     return false;
   }
 
-  return engine.executeAction(
+  return runAction(
       new CancelAction(instance, itemId, actor));
 }
 
 // Undo most recent successful action.
 bool TividyWorkflowFacade::undoLast()
 {
-  return engine.undoLastAction();
+  const bool success = engine.undoLastAction();
+  lastError = engine.getLastError();
+  return success;
 }
 
 // Delegate deadline handling to the engine.
@@ -265,87 +311,4 @@ std::string TividyWorkflowFacade::getStatus(
   }
 
   return instance->status();
-}
-
-// Find a participant in the directory.
-Participant *TividyWorkflowFacade::findParticipant(
-    const std::string &id)
-{
-  return engine.getDirectory().findById(id).get();
-}
-
-// Summarise every work item of an instance.
-std::vector<WorkItemInfo> TividyWorkflowFacade::getWorkItems(
-    const std::string &instId)
-{
-  std::vector<WorkItemInfo> result;
-
-  WorkflowInstance *instance =
-      engine.getInstance(instId);
-
-  if (instance == nullptr)
-  {
-    return result;
-  }
-
-  DepthFirstWorkItemIterator items(instance->getRoot());
-
-  for (items.first(); !items.isDone(); items.next())
-  {
-    WorkItem *item = items.current();
-
-    WorkItemInfo info;
-    info.id = item->getId();
-    info.name = item->getName();
-    info.state = item->getStateName();
-    info.outcome = item->getOutcome();
-    info.escalationLevel = item->getEscalationLevel();
-    info.composite = dynamic_cast<SubProcess *>(item->undecorated()) != nullptr;
-    info.priority = item->getPriority();
-    info.outcomes = instance->outcomesFrom(item->getId());
-
-    for (SubProcess *parent = item->getParent(); parent != nullptr; parent = parent->getParent())
-    {
-      ++info.depth;
-    }
-
-    if (item->getAssignee() != nullptr)
-    {
-      info.assigneeId = item->getAssignee()->getId();
-      info.assigneeName = item->getAssignee()->getName();
-    }
-
-    Task *task = dynamic_cast<Task *>(item->undecorated());
-    if (task != nullptr)
-    {
-      info.deadlineHours = task->getDeadlineHours();
-      info.serviceName = task->getServiceName();
-      info.serviceMessage = task->getServiceMessage();
-    }
-
-    result.push_back(info);
-  }
-
-  return result;
-}
-
-// Attempts recorded by AuditDecorators.
-const std::vector<std::string> &TividyWorkflowFacade::getAuditedAttempts() const
-{
-  return engine.getAttemptLog().getAuditTrail();
-}
-
-// Retrieve the current data of an instance.
-std::map<std::string, std::string> TividyWorkflowFacade::getInstanceData(
-    const std::string &instId)
-{
-  WorkflowInstance *instance =
-      engine.getInstance(instId);
-
-  if (instance == nullptr)
-  {
-    return std::map<std::string, std::string>();
-  }
-
-  return instance->getData().getMap();
 }

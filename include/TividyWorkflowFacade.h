@@ -10,8 +10,6 @@
 #include "WorkflowEngine.h"
 #include "WorkflowDirector.h"
 #include "InstanceData.h"
-#include "WorkItemInfo.h"
-#include <map>
 #include <string>
 #include <vector>
 #include <ctime>
@@ -20,6 +18,7 @@ class Participant;
 class ExternalService;
 class WorkflowEventListener;
 class WorkflowDefinitionBuilder;
+class WorkItemAction;
 
 class TividyWorkflowFacade
 {
@@ -27,6 +26,8 @@ class TividyWorkflowFacade
 private:
 	WorkflowEngine engine;
 	WorkflowDirector director;
+	std::string lastError;
+	bool runAction(WorkItemAction *action);
 
 public:
 	/**
@@ -171,37 +172,16 @@ public:
 	std::string registerDefinitionFromFile(
 			const std::string &filePath);
 
-	/**
-	 * @brief Finds a participant in the directory.
-	 *
-	 * @param id The ID of the participant.
-	 * @return The participant, or nullptr if none has that ID.
-	 */
-	Participant *findParticipant(const std::string &id);
-
-	/**
-	 * @brief Lists every work item of an instance in depth-first order.
-	 *
-	 * @param instanceId The ID of the workflow instance.
-	 * @return One read-only summary per work item; empty if the instance is unknown.
-	 */
-	std::vector<WorkItemInfo> getWorkItems(const std::string &instanceId);
-
-	/**
-	 * @brief Retrieves what AuditDecorators recorded: every operation attempted on an
-	 *        audited item, including those the item then refused.
-	 *
-	 * @return The recorded entries, oldest first.
-	 */
-	const std::vector<std::string> &getAuditedAttempts() const;
-
-	/**
-	 * @brief Retrieves the current data of an instance.
-	 *
-	 * @param instanceId The ID of the workflow instance.
-	 * @return The instance's fields; empty if the instance is unknown.
-	 */
-	std::map<std::string, std::string> getInstanceData(const std::string &instanceId);
+	WorkflowInstance *getInstance(const std::string &instanceId) const;
+	std::vector<std::string> definitionIds() const;
+	std::vector<std::string> instanceIds() const;
+	std::vector<std::string> actionHistory() const;
+	Participant *findParticipant(const std::string &id) const;
+	std::vector<Participant *> participants() const;
+	std::vector<std::string> availableActions(const std::string &instanceId,
+	                                          const std::string &itemId,
+	                                          Participant *actor) const;
+	const std::string &getLastError() const { return lastError; }
 };
 
 #endif

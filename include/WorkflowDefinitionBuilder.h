@@ -70,6 +70,14 @@ public:
 	 */
 	WorkflowDefinition *getResult();
 
+	/**
+	 * @brief Validate a finished tree and its dependency graph before execution.
+	 * @throws std::invalid_argument when the definition is structurally invalid.
+	 * The definition remains owned by the caller. Also used for definitions built
+	 * directly in code, so file and programmatic registration follow the same rules.
+	 */
+	static void validateDefinition(WorkflowDefinition *definition);
+
 protected:
 	/**
 	 * @brief Create the product after the id, name and version are known.
@@ -119,17 +127,13 @@ protected:
 	void setService(string itemId, string serviceName);
 
 	/**
-	 * @brief Give the work item with this id a deadline.
-	 * @param itemId id of the work item
-	 * @param hours hours allowed once the item opens or is escalated
-	 */
-	void setDeadline(string itemId, int hours);
-
-	/**
 	 * @brief Mark the work item with this id as a checkpoint.
 	 * @param itemId id of the item whose checkpoint flag is raised
 	 */
 	void markCheckpoint(string itemId);
+
+	/** @brief Configure a task deadline, in hours (1..87600), after activation. */
+	void setDeadlineHours(string itemId, int hours);
 
 	/**
 	 * @brief Wrap the work item with this id in a priority decorator.
@@ -152,9 +156,11 @@ protected:
 	WorkItem *findItem(string itemId);
 
 	/**
-	 * @brief Replace the work-item pointer with the replacement.
-	 * @param current pointer that is changed
-	 * @param replacement work item now stored in that pointer
+	 * @brief Put the replacement where current sits in the work-item tree.
+	 *        The parent, or the definition root, owns the replacement.
+	 *        The replacement is expected to own current (a decorator wrapping it).
+	 * @param current item being wrapped. Updated to the replacement when the tree accepts it.
+	 * @param replacement decorator now stored in the tree and in the id map
 	 */
 	void replaceItem(WorkItem *&current, WorkItem *replacement);
 };

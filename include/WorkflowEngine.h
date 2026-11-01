@@ -7,7 +7,6 @@
 #include <string>
 #include <vector>
 
-#include "AuditLogger.h"
 #include "ParticipantDirectory.h"
 #include "ServiceRegistry.h"
 
@@ -41,14 +40,12 @@ private:
   // External service adapters
   ServiceRegistry services;
 
-  // Filled by AuditDecorators, which also see attempts the items refuse
-  AuditLogger attemptLog;
-
   // Registered event listeners
   std::vector<WorkflowEventListener *> listeners;
 
   // Generates unique instance IDs
   unsigned long nextInstanceNumber;
+  std::string lastError;
 
 public:
   WorkflowEngine();
@@ -67,14 +64,17 @@ public:
       const InstanceData &data);
 
   WorkflowInstance *getInstance(
-      const std::string &instanceId);
+      const std::string &instanceId) const;
+  std::vector<std::string> definitionIds() const;
+  std::vector<std::string> instanceIds() const;
+  std::vector<std::string> historyDescriptions() const;
+  const std::string &getLastError() const { return lastError; }
 
   // Access to shared subsystems
   ParticipantDirectory &getDirectory();
+  const ParticipantDirectory &getDirectory() const;
 
   ServiceRegistry &getServiceRegistry();
-
-  const AuditLogger &getAttemptLog() const;
 
   // Observer registration
   void addListener(WorkflowEventListener *listener);

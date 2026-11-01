@@ -12,7 +12,7 @@ EventDispatcher::EventDispatcher()
 }
 
 EventDispatcher::~EventDispatcher() {
-    listeners.clear();
+    clearListeners();
 }
 
 EventDispatcher& EventDispatcher::getInstance() {
@@ -26,12 +26,16 @@ void EventDispatcher::attachListener(std::shared_ptr<WorkflowEventListener> list
         return;
     }
     // Prevent duplicate registrations
-    for (const auto& sp : listeners) {
-        if (sp == listener || sp.get() == listener.get()) {
+    for (const auto& registration : listeners) {
+        if (registration->listener.get() == listener.get()) {
+            if (!registration->owning) {
+                registration->listener = listener;
+                registration->owning = true;
+            }
             return;
         }
     }
-    listeners.push_back(listener);
+    listeners.push_back(std::make_shared<Registration>(listener, true));
 }
 
 void EventDispatcher::attachListener(WorkflowEventListener* listener) {
@@ -39,26 +43,19 @@ void EventDispatcher::attachListener(WorkflowEventListener* listener) {
         return;
     }
     // Check if raw listener pointer is already registered
-    for (const auto& sp : listeners) {
-        if (sp.get() == listener) {
+    for (const auto& registration : listeners) {
+        if (registration->listener.get() == listener) {
             return;
         }
     }
     // Wrap with a non-owning custom no-op deleter so stack-allocated listeners
     // or externally managed observers are never deleted by shared_ptr
-    listeners.push_back(std::shared_ptr<WorkflowEventListener>(listener, [](WorkflowEventListener*) {}));
+    std::shared_ptr<WorkflowEventListener> nonOwning(listener, [](WorkflowEventListener*) {});
+    listeners.push_back(std::make_shared<Registration>(nonOwning, false));
 }
 
 void EventDispatcher::detachListener(std::shared_ptr<WorkflowEventListener> listener) {
-    if (!listener) {
-        return;
-    }
-    for (auto it = listeners.begin(); it != listeners.end(); ++it) {
-        if (*it == listener || it->get() == listener.get()) {
-            listeners.erase(it);
-            return;
-        }
-    }
+    detachListener(listener.get());
 }
 
 void EventDispatcher::detachListener(WorkflowEventListener* listener) {
@@ -66,7 +63,11 @@ void EventDispatcher::detachListener(WorkflowEventListener* listener) {
         return;
     }
     for (auto it = listeners.begin(); it != listeners.end(); ++it) {
-        if (it->get() == listener) {
+        if ((*it)->listener.get() == listener) {
+            // Finish changing the collection before releasing an owned observer;
+            // its destructor may itself unsubscribe or publish an event.
+            const auto removed = *it;
+            removed->active = false;
             listeners.erase(it);
             return;
         }
@@ -74,8 +75,11 @@ void EventDispatcher::detachListener(WorkflowEventListener* listener) {
 }
 
 void EventDispatcher::notifyListeners(const WorkflowEvent& event) {
-    for (const auto& listener : listeners) {
-        if (listener) {
+    const auto pending = listeners;
+    for (const auto& registration : pending) {
+        if (registration->active) {
+            // Pin ownership even if the callback removes its own registration.
+            const auto listener = registration->listener;
             listener->onEvent(event);
         }
     }
@@ -86,5 +90,9 @@ size_t EventDispatcher::getListenerCount() const {
 }
 
 void EventDispatcher::clearListeners() {
-    listeners.clear();
+    std::vector<std::shared_ptr<Registration>> removed;
+    removed.swap(listeners);
+    for (const auto& registration : removed) {
+        registration->active = false;
+    }
 }

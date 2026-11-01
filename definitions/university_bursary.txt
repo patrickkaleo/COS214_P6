@@ -1,0 +1,71 @@
+# University application and bursary funding.
+#
+# The mediator opens a later item only when each incoming rule has been decided.
+# "*" matches any successful completion. "rejected" matches reject(), not the
+# reason text. A sub-process finishes with outcome "completed", so a rule that
+# leaves a process uses "*".
+#
+# Rejecting CAPTURE or VERIFY_ID rejects the application: nothing recovers, so
+# the parent is rejected and REVIEW and FUNDING are cancelled.
+# Application documents (VERIFY_DOCS) are not the bursary file. FUNDING_DOCS
+# opens with funding and must succeed before approval. Rejecting FUNDING_DOCS
+# opens the appeal and cancels approval and payment.
+# Complete APPROVE with "approved" to pay. Reject APPROVE to open the appeal
+# and cancel payment. Any other APPROVE outcome cancels both PAY and APPEAL.
+#
+# Roles are the participant role strings. Services are ExternalService::name().
+# incomeBracket is read from instance data. A missing or unknown value uses
+# FinanceManager. low, mid and high select BursaryOfficer, FinanceManager and
+# BursaryCommittee.
+
+DEFINITION
+UNI_BURSARY|University and Bursary Application|1
+
+WORKITEMS
+process|UNI_APP|-|University and Bursary Application
+process|INTAKE|UNI_APP|Application Intake
+task|CAPTURE|INTAKE|Capture Application
+task|VERIFY_ID|INTAKE|Verify Identity
+process|REVIEW|UNI_APP|Application Review
+task|VERIFY_DOCS|REVIEW|Verify Documents
+task|ACADEMIC|REVIEW|Academic Review
+task|DECIDE|REVIEW|Final Decision
+process|FUNDING|UNI_APP|Bursary Funding
+task|FUNDING_DOCS|FUNDING|Verify Funding Documents
+task|APPROVE|FUNDING|Approve Bursary
+task|PAY|FUNDING|Pay Bursary
+task|APPEAL|FUNDING|Notify Appeal Options
+
+DEPENDENCIES
+CAPTURE|VERIFY_ID|*
+INTAKE|REVIEW|*
+VERIFY_DOCS|DECIDE|*
+ACADEMIC|DECIDE|*
+DECIDE|FUNDING|*
+FUNDING_DOCS|APPROVE|*
+FUNDING_DOCS|APPEAL|rejected
+APPROVE|PAY|approved
+APPROVE|APPEAL|rejected
+
+ROUTING
+CAPTURE|role|AdmissionsOfficer
+VERIFY_ID|role|AdmissionsOfficer
+VERIFY_DOCS|role|AdmissionsOfficer
+ACADEMIC|role|FacultyReviewer
+DECIDE|role|BursaryCommittee
+FUNDING_DOCS|role|BursaryOfficer
+APPROVE|data|incomeBracket|FinanceManager|low|BursaryOfficer|mid|FinanceManager|high|BursaryCommittee
+PAY|role|BursaryOfficer
+APPEAL|role|AdmissionsOfficer
+
+SERVICES
+service|VERIFY_ID|IdentityVerificationService
+service|PAY|PaymentGateway
+
+EXTRAS
+checkpoint|VERIFY_ID
+checkpoint|PAY
+priority|PAY|2
+audit|DECIDE
+audit|FUNDING_DOCS
+audit|APPROVE

@@ -2,15 +2,10 @@
 #include "WorkItem.h"
 
 RejectAction::RejectAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor, const std::string &reason)
-    : WorkItemAction(instance, itemId, actor), reason(reason) {}
+    : WorkItemAction(instance, itemId, actor, "reject"), reason(reason) {}
 
 bool RejectAction::doExecute(WorkItem &item)
 {
-  // Only the assignee may reject the item
-  if (item.getAssignee() != actor)
-  {
-    return false;
-  }
   return item.reject(reason);
 }
 
