@@ -1,8 +1,9 @@
 /**
  * @file MonitoringService.h
  * @brief Concrete Observer class providing real-time operational telemetry and metrics.
- * @details Implements the WorkflowEventListener interface as part of the Observer pattern (Section 3.8).
- * @version 1.0
+ * @details Implements the WorkflowEventListener interface as part of the Observer pattern.
+ * @author Enock Nyamweya
+ * @version 2.0
  */
 
 #ifndef MONITORING_SERVICE_H

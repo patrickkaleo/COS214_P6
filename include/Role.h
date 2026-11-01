@@ -5,7 +5,7 @@
  * @file Role.h
  * @brief Value object representing an organizational qualification or role.
  * @author Enock Nyamweya
- * @version 1.0
+ * @version 2.0
  */
 
 #include <string>

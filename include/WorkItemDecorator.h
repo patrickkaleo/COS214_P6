@@ -1,43 +1,117 @@
+/**
+ * @file WorkItemDecorator.h
+ * @brief Abstract Decorator for WorkItem (Structural pattern).
+ * @details Owns an inner WorkItem and forwards every operation to it.
+ *          Concrete decorators add behaviour before or after the forward.
+ * @version 1.0
+ */
+
 #ifndef WORKITEMDECORATOR_H
 #define WORKITEMDECORATOR_H
 
-class WorkItemDecorator : WorkItem {
+#include "WorkItem.h"
+#include <string>
 
+class Participant;
+class WorkflowEventListener;
+class WorkflowEvent;
+
+/**
+ * @class WorkItemDecorator
+ * @brief Abstract decorator. Adopts the id/name of the wrapped item so the
+ *        rest of the engine still sees the original identity.
+ *
+ * Decorators can be stacked (e.g. PriorityDecorator → AuditDecorator → Task)
+ */
+class WorkItemDecorator : public WorkItem {
 public:
-	WorkItem* inner;
+    /**
+     * @brief Constructs a decorator around the given WorkItem.
+     * @param inner WorkItem being decorated (ownership is transferred).
+     *              The decorator adopts inner's id and name.
+     */
+    explicit WorkItemDecorator(WorkItem* inner);
 
-	virtual bool makeAvailable() = 0;
+    /**
+     * @brief Destructor. Deletes the owned inner WorkItem.
+     */
+    ~WorkItemDecorator() override;
 
-	bool complete(string outcome);
+    // forward lifecycle
 
-	bool assign(Participant* participant);
+    /** @brief Forward makeAvailable to the inner item. */
+    bool makeAvailable() override;
 
-	bool start();
+    /** @brief Forward assign to the inner item. */
+    bool assign(Participant* participant) override;
 
-	bool escalate();
+    /** @brief Forward start to the inner item. */
+    bool start() override;
 
-	bool reject(string reason);
+    /** @brief Forward complete to the inner item. */
+    bool complete(const std::string& outcome) override;
 
-	bool cancel();
+    /** @brief Forward reject to the inner item. */
+    bool reject(const std::string& reason) override;
 
-	bool isFinished();
+    /** @brief Forward cancel to the inner item. */
+    bool cancel() override;
 
-	string getId();
+    /** @brief Forward escalate to the inner item. */
+    bool escalate() override;
 
-	string getName();
+    // The inner item is the single source of lifecycle state and runtime wiring.
+    void changeState(WorkItemState* next, EventType event) override;
+    void setState(WorkItemState* state) override;
+    WorkItemState* getState() const override;
+    void setAssignee(Participant* participant) override;
+    Participant* getAssignee() const override;
+    void setOutcome(const std::string& outcome) override;
+    std::string getOutcome() const override;
+    void incrementEscalation() override;
+    int getEscalationLevel() const override;
+    void setEscalationLevel(int level) override;
+    bool isFinished() const override;
+    std::string getStateName() const override;
+    std::string getInstanceId() const override;
+    void setInstanceId(const std::string& id) override;
+    SubProcess* getParent() const override;
+    void setParent(SubProcess* parent) override;
+    WorkflowMediator* getMediator() const override;
+    void setMediator(WorkflowMediator* mediator) override;
+    void attach(WorkflowEventListener* listener) override;
+    void detach(WorkflowEventListener* listener) override;
+    void notify(const WorkflowEvent& event) override;
+    int childCount() const override;
+    WorkItem* getChild(int index) const override;
+    void setRoutingContext(const InstanceData* data, const ParticipantDirectory* directory) override;
+    void onFinished() override;
 
-	string getOutcome();
+    /**
+     * @brief Forward onAvailable to the inner item.
+     *        Concrete decorators add behaviour then call this.
+     */
+    void onAvailable() override;
 
-	void attach(WorkflowEventListener* listener);
+    /**
+     * @brief Pure virtual clone – each concrete decorator decides how to copy.
+     * @return Newly allocated decorator wrapping a clone of the inner item.
+     */
+    WorkItem* clone() const override = 0;
 
-	void detach(WorkflowEventListener* listener);
+    /**
+     * @return Pointer to the wrapped WorkItem (owned by this decorator).
+     */
+    WorkItem* getInner() const;
 
-	void notify(const WorkflowEvent& event);
-
-	WorkItem* clone();
+    /**
+     * @brief Give up ownership of the wrapped item without deleting it.
+     * @return The inner item, or nullptr when this decorator holds nothing.
+     */
+    WorkItem* releaseInner();
 
 protected:
-	void onAvailable();
+    WorkItem* inner_;   /**< Owned wrapped item. */
 };
 
-#endif
+#endif // WORKITEMDECORATOR_H

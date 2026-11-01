@@ -5,7 +5,7 @@
  * @file Participant.h
  * @brief Domain entity representing an organizational worker or service actor.
  * @author Enock Nyamweya
- * @version 1.0
+ * @version 2.0
  */
 
 #include <string>

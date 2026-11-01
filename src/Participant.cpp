@@ -2,7 +2,7 @@
  * @file Participant.cpp
  * @brief Implementation of the Participant domain entity.
  * @author Enock Nyamweya
- * @version 1.0
+ * @version 2.0
  */
 
 #include "Participant.h"

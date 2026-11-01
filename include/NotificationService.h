@@ -1,8 +1,9 @@
 /**
  * @file NotificationService.h
  * @brief Concrete Observer class responsible for delivering real-time alerts upon workflow events.
- * @details Implements the WorkflowEventListener interface as part of the Observer pattern (Section 3.8).
- * @version 1.0
+ * @details Implements the WorkflowEventListener interface as part of the Observer pattern.
+ * @author Enock Nyamweya
+ * @version 2.0
  */
 
 #ifndef NOTIFICATION_SERVICE_H

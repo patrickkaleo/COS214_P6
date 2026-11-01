@@ -1,0 +1,59 @@
+# Insurance claim.
+#
+# Lodge the claim, then verify the policyholder. Rejecting that identity check
+# rejects the claim: assessment is cancelled.
+# Complete the assessment with "accept" to capture settlement details and open
+# approval. Complete it with "decline" to notify the claimant and cancel approval.
+# Approval follows a chain on the claim amount: the ClaimsAssessor approves up to
+# 20000, the ClaimsManager up to 100000, and the ClaimsCommittee the rest.
+# Complete approval with "approved" to pay. Reject approval to notify the decline
+# and cancel payment. Any other approval outcome cancels both payment and the notice.
+# A missed deadline moves approval one level up the chain.
+#
+# Roles are the participant role strings. VERIFY_POLICY calls
+# IdentityVerificationService. SETTLE calls PaymentGateway.
+
+DEFINITION
+INS_CLAIM|Insurance Claim|1
+
+WORKITEMS
+process|CLAIM|-|Insurance Claim
+process|LODGEMENT|CLAIM|Claim Lodgement
+task|LODGE|LODGEMENT|Lodge Claim
+task|VERIFY_POLICY|LODGEMENT|Verify Policyholder
+process|ASSESSMENT|CLAIM|Claim Assessment
+task|ASSESS_CLAIM|ASSESSMENT|Assess Claim
+task|COLLECT|ASSESSMENT|Capture Settlement Details
+task|APPROVE_CLAIM|ASSESSMENT|Approve Settlement
+task|SETTLE|ASSESSMENT|Pay Settlement
+task|DECLINE_NOTICE|ASSESSMENT|Notify Decline
+
+DEPENDENCIES
+LODGE|VERIFY_POLICY|*
+LODGEMENT|ASSESSMENT|*
+ASSESS_CLAIM|COLLECT|accept
+ASSESS_CLAIM|DECLINE_NOTICE|decline
+COLLECT|APPROVE_CLAIM|*
+APPROVE_CLAIM|SETTLE|approved
+APPROVE_CLAIM|DECLINE_NOTICE|rejected
+
+ROUTING
+LODGE|role|ClaimsClerk
+VERIFY_POLICY|role|ClaimsClerk
+ASSESS_CLAIM|role|ClaimsAssessor
+COLLECT|role|ClaimsClerk
+APPROVE_CLAIM|approval|amount|ClaimsAssessor|20000|ClaimsManager|100000|ClaimsCommittee
+SETTLE|role|ClaimsClerk
+DECLINE_NOTICE|role|ClaimsClerk
+
+SERVICES
+service|VERIFY_POLICY|IdentityVerificationService
+service|SETTLE|PaymentGateway
+
+EXTRAS
+checkpoint|VERIFY_POLICY
+checkpoint|SETTLE
+priority|SETTLE|2
+audit|ASSESS_CLAIM
+audit|APPROVE_CLAIM
+deadline|APPROVE_CLAIM|72

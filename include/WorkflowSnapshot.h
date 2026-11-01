@@ -1,18 +1,36 @@
 #ifndef WORKFLOWSNAPSHOT_H
 #define WORKFLOWSNAPSHOT_H
 
-class WorkflowSnapshot {
+#include <map>
+#include <string>
+#include <set>
+#include <ctime>
+#include "InstanceData.h"
+
+class WorkflowInstance;
+
+class WorkflowSnapshot
+{
+	friend class WorkflowInstance;
 
 private:
-	string label;
-	vector<string> savedPayload;
+	std::string label;
 	InstanceData data;
-	map<string, string> outcome;
-	map<string, string> assignees;
-	map<string, string> itemStates;
+	std::map<std::string, std::string> outcomes;
+	std::map<std::string, std::string> assignees;
+	std::map<std::string, std::string> itemStates;
+	std::map<std::string, int> escalationLevels;
+	std::set<std::string> openedBranches;
+	std::set<std::string> decidedItems;
+	std::map<std::string, std::time_t> deadlines;
+	std::map<std::string, std::string> deadlineOwners;
 
 public:
-	string getLabel();
+	WorkflowSnapshot(const std::map<std::string, std::string> &itemStates,
+									 const std::map<std::string, std::string> &assignees,
+									 const std::map<std::string, std::string> &outcomes,
+									 const InstanceData &data,
+									 const std::string &label);
+	std::string getLabel() const;
 };
-
 #endif

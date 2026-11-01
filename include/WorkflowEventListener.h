@@ -1,8 +1,9 @@
 /**
  * @file WorkflowEventListener.h
  * @brief Abstract Observer base class interface for workflow event subscribers.
- * @details Conforms to the GoF Observer pattern (Observer role) as specified in Section 3.8.
- * @version 1.0
+ * @details Conforms to the GoF Observer pattern (Observer role).
+ * @author Enock Nyamweya
+ * @version 2.0
  */
 
 #ifndef WORKFLOW_EVENT_LISTENER_H

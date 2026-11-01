@@ -5,8 +5,10 @@
  * @file RoutingStrategy.h
  * @brief Abstract Strategy interface for task assignment in the TIVIDY engine.
  * @author Enock Nyamweya
- * @version 1.0
+ * @version 2.0
  */
+
+#include <memory>
 
 // Forward declarations to decouple strategy interface from concrete context and directory classes
 class Task;
@@ -22,6 +24,10 @@ class Participant;
  * system, tasks must be allocated to human participants or automated services dynamically.
  * Instead of hardcoding assignment rules inside the Task class, Task delegates assignment
  * to a RoutingStrategy implementation.
+ *
+ * Employs modern C++11 smart pointers:
+ * - `select()` returns `std::shared_ptr<Participant>` for safe, flyweight reference sharing.
+ * - `clone()` returns `std::unique_ptr<RoutingStrategy>` enforcing clear ownership semantics.
  *
  * @see RoleBasedRouting
  * @see DataRuleRouting
@@ -40,7 +46,7 @@ public:
      * @param task The task requesting routing and assignment.
      * @param data The runtime instance payload containing form/process attributes.
      * @param directory The organization directory containing active participants and roles.
-     * @return Participant* Pointer to the chosen participant, or nullptr if no eligible candidate was found.
+     * @return Participant* Pointer to the chosen participant, or nullptr if no candidate found.
      */
     virtual Participant* select(const Task& task,
                                 const InstanceData& data,
@@ -52,7 +58,7 @@ public:
      * Enables workflow definitions and task templates to be cloned when new workflow
      * instances are spawned.
      *
-     * @return RoutingStrategy* A newly allocated clone of this routing strategy.
+     * @return RoutingStrategy* Newly allocated clone of this routing strategy (caller owns).
      */
     virtual RoutingStrategy* clone() const = 0;
 };

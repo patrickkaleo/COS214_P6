@@ -1,7 +1,8 @@
 /**
  * @file NotificationService.cpp
  * @brief Implementation of the NotificationService concrete Observer class.
- * @version 1.0
+ * @author Enock Nyamweya
+ * @version 2.0
  */
 
 #include "NotificationService.h"

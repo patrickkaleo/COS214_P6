@@ -1,0 +1,29 @@
+services:
+  tividy:
+    image: tividy
+    pull_policy: build
+    build:
+      context: .
+      dockerfile: Dockerfile
+    stdin_open: true
+    tty: true
+    working_dir: /app
+    volumes:
+      - .:/export
+    command: ["sh", "-c", "cp -f /app/tividy /app/tividy_tests /export/ && exec ./tividy"]
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+
+  tests:
+    image: tividy
+    pull_policy: build
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["./tividy_tests"]
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined

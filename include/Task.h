@@ -1,82 +1,139 @@
+/**
+ * @file Task.h
+ * @brief Leaf of the Composite pattern â€“ atomic work item.
+ * @details Holds routing strategy, assignee, service itemName, checkpoint flag and
+ *          escalation level.
+ * @version 1.0
+ */
+
 #ifndef TASK_H
 #define TASK_H
 
-/**
- * @file Task.h
- * @brief Leaf of the Composite pattern: one atomic unit of work.
- * @author Tebogo Mokgwatsane, Angelo Anthony
- * @version 1.1
- */
-
-#include <memory>
-#include <string>
 #include "WorkItem.h"
+#include "InstanceData.h"
+#include "ParticipantDirectory.h"
 
+#include <string>
+
+// Forward declarations
 class RoutingStrategy;
+class ServiceRegistry;
+class Participant;
 
 /**
  * @class Task
- * @brief Concrete leaf WorkItem that is routed to a participant and worked on.
- *
- * When the task becomes Available it asks its RoutingStrategy for a participant and
- * assigns itself. If the strategy finds nobody, the task escalates instead. With
- * ApprovalRouting the strategy is a Chain of Responsibility, and the task's
- * escalation level decides which approver in the chain is asked.
- *
- * Assignee and escalation level are inherited from WorkItem.
+ * @brief Concrete leaf WorkItem. Represents a single unit of work that can be
+ *        routed, assigned, started and completed. Atomic work item (Composite leaf).
  */
 class Task : public WorkItem {
-private:
-    std::unique_ptr<RoutingStrategy> routing;  ///< How a participant is chosen (owned, may be null).
-    std::string serviceName;                   ///< ServiceRegistry key of an external system, or empty.
-    bool checkpoint;                           ///< Take a snapshot before the external call.
-    const InstanceData* data;                  ///< Owning instance's data (not owned).
-    const ParticipantDirectory* directory;     ///< Participants to route to (not owned).
-
 public:
     /**
-     * @brief Creates a task with no routing; it waits in Available to be claimed manually.
-     * @param id Unique item identifier.
-     * @param name Human-readable name.
+     * @brief Constructs a Task with the given identity.
+     * @param id   Unique identifier.
+     * @param itemName Human-readable name.
      */
-    Task(const std::string& id, const std::string& name);
-
-    /// Deep copy: the routing strategy is cloned; the routing context is not copied.
-    Task(const Task& other);
-
-    /// Defined in Task.cpp, where RoutingStrategy is complete for unique_ptr.
-    ~Task() override;
-
-    /// @return Newly allocated deep copy (Prototype).
-    Task* clone() const override;
+    Task(const std::string& id, const std::string& itemName);
 
     /**
-     * @brief Asks the routing strategy for a participant and assigns the task.
-     *
-     * Called automatically when the task becomes Available. Call it again after
-     * escalate() so the next approval level is asked.
-     *
-     * @return true if the task was assigned or escalated; false if it has no routing,
-     *         no routing context, or its state refused the transition.
+     * @brief Destructor. Deletes the owned RoutingStrategy.
+     */
+    ~Task() override;
+
+    /**
+     * @brief Hook: ask the routing strategy for a participant, then assign.
+     *        Called by AvailableState after makeAvailable succeeds.
+     */
+    void onAvailable() override;
+
+    /**
+     * @brief Deep-copy this task (including a clone of its routing strategy).
+     * @return Newly allocated Task*; caller owns it.
+     */
+    WorkItem* clone() const override;
+
+    // Task-specific API
+
+    /**
+     * @brief Install a routing strategy (takes ownership).
+     * @param strategy Strategy to use when this task becomes available.
+     */
+    void setRouting(RoutingStrategy* strategy);
+
+    /**
+     * @return The current routing strategy (owned by this Task).
+     */
+    RoutingStrategy* getRouting() const;
+
+    /**
+     * @brief Name of the external service this task may invoke (via ServiceRegistry).
+     * @param s Service key string.
+     */
+    void setServiceName(const std::string& s);
+
+    /** @return Configured service itemName, or empty if none. */
+    std::string getServiceName() const;
+
+    /**
+     * @brief Mark whether a Memento snapshot must be taken before performWork.
+     * @param c true = checkpoint.
+     */
+    void setCheckpoint(bool c);
+
+    /** @return true if this task is a checkpoint. */
+    bool isCheckpoint() const;
+
+    /**
+     * @brief Set the context used by this task's routing strategy.
+     * @param data Instance data available during routing (not owned).
+     * @param directory Directory used to look up participants (not owned).
+     */
+    void setRoutingContext(const InstanceData* data, const ParticipantDirectory* directory) override;
+    void setRoutingContext(InstanceData* data, ParticipantDirectory* directory);
+
+    /**
+     * @brief Route the task to an assignee based on current data and directory.
+     * @return true if successfully assigned or escalated.
      */
     bool route();
 
-    /// @param strategy New routing strategy (ownership is taken).
-    void setRouting(RoutingStrategy* strategy);
-    RoutingStrategy* getRouting() const;
+    /**
+     * @brief Inject service registry for performWork (not owned).
+     */
+    void setServiceRegistry(ServiceRegistry* registry);
 
-    void setServiceName(const std::string& name);
-    std::string getServiceName() const;
+    /**
+     * @brief Execute the actual work of the task (may call an ExternalService).
+     * @param context Runtime context carrying instance data, services, etc.
+     */
+    virtual void performWork(InstanceData& context);
 
-    void setCheckpoint(bool isCheckpoint);
-    bool isCheckpoint() const;
+    /**
+     * @brief Complete through the configured service using the instance payload.
+     * @return true when completed, rejected, or escalated after a failed service;
+     *         false when the lifecycle does not permit execution. Failed calls
+     *         retain no service outputs. The command owns the pre-call snapshot.
+     */
+    bool executeService(InstanceData& context, const std::string& requestedOutcome,
+                        WorkItem* transitionTarget = nullptr);
 
-    void setRoutingContext(const InstanceData* instanceData,
-                           const ParticipantDirectory* participants) override;
+    /// Failure details live in InstanceData, so snapshot restore also restores them.
+    bool serviceFailed() const;
+    std::string lastServiceError() const;
 
-protected:
-    /// Routes the task as soon as it becomes Available.
-    void onAvailable() override;
+    /// Optional task deadline; zero falls back to the selected approval handler.
+    void setDeadlineHours(int hours);
+
+    /// Configured deadline or that of the approval handler selected by the chain.
+    int getDeadlineHours() const;
+
+private:
+    RoutingStrategy* routing_;             /**< Owned. */
+    std::string serviceName_;              /**< Key into ServiceRegistry. */
+    bool checkpoint_;                      /**< Take Memento before external call. */
+    int deadlineHours_;                    /**< Explicit configured duration, 0 = routing default. */
+    const InstanceData* instanceData_;     /**< Not owned. */
+    const ParticipantDirectory* directory_;/**< Not owned. */
+    ServiceRegistry* services_;            /**< Not owned. */
 };
 
 #endif // TASK_H

@@ -1,0 +1,55 @@
+# Manufacturing production order.
+#
+# Capture the order, confirm the specification, then assign a line from the
+# product. Electronics goes to the ElectronicsLine, Food to the FoodLine, and
+# anything else to the GeneralLine.
+# Complete inspection with "pass" to pack the batch and cancel rework. Complete
+# it with "fail" to send the batch to rework and cancel packing. The order closes
+# only after that branch has finished.
+# Rejecting capture or the specification rejects the order: manufacturing and
+# closure are cancelled. Rejecting inspection does the same, because neither
+# pass nor fail was recorded.
+#
+# Roles are the participant role strings.
+
+DEFINITION
+PROD_ORDER|Production Order|1
+
+WORKITEMS
+process|ORDER|-|Production Order
+process|PLAN|ORDER|Order Planning
+task|LOG_ORDER|PLAN|Capture Order
+task|CONFIRM_SPEC|PLAN|Confirm Specification
+process|BUILD|ORDER|Manufacturing
+task|ASSIGN_LINE|BUILD|Assign Production Line
+task|PRODUCE|BUILD|Assemble Product
+task|INSPECT|BUILD|Inspect Quality
+task|PACK|BUILD|Pack Passed Batch
+task|REWORK|BUILD|Rework Failed Batch
+process|FINISH|ORDER|Order Closure
+task|CLOSE_ORDER|FINISH|Close Order
+
+DEPENDENCIES
+LOG_ORDER|CONFIRM_SPEC|*
+PLAN|BUILD|*
+ASSIGN_LINE|PRODUCE|*
+PRODUCE|INSPECT|*
+INSPECT|PACK|pass
+INSPECT|REWORK|fail
+BUILD|FINISH|*
+
+ROUTING
+LOG_ORDER|role|Planner
+CONFIRM_SPEC|role|Planner
+ASSIGN_LINE|data|productLine|GeneralLine|Electronics|ElectronicsLine|Food|FoodLine
+PRODUCE|role|Operator
+INSPECT|role|QualityInspector
+PACK|role|WarehouseHand
+REWORK|role|Operator
+CLOSE_ORDER|role|Planner
+
+EXTRAS
+priority|INSPECT|2
+audit|INSPECT
+audit|CLOSE_ORDER
+deadline|INSPECT|8

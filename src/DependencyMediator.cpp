@@ -56,7 +56,8 @@ void DependencyMediator::itemChanged(WorkItem& item) {
     if (branchOpen && item.getStateName() == "Rejected" && !hasSatisfiedOutgoingRule(item)) {
         // Nothing in the definition recovers from this rejection, so the branch fails.
         // Rejecting the parent cancels its remaining children (SubProcess::onFinished).
-        parent->reject(item.getName() + " rejected: " + item.getOutcome());
+        WorkItem* parentItem = findItem(parent->getId());
+        (parentItem ? parentItem : parent)->reject(item.getName() + " rejected: " + item.getOutcome());
     }
 
     for (const DependencyRule& rule : rules) {
@@ -80,6 +81,12 @@ WorkItem* DependencyMediator::findItem(const std::string& id) const {
 
 const std::vector<DependencyRule>& DependencyMediator::getRules() const {
     return rules;
+}
+
+void DependencyMediator::restoreBookkeeping(const std::set<std::string>& opened,
+                                            const std::set<std::string>& decisions) {
+    openedBranches = opened;
+    decided = decisions;
 }
 
 DependencyMediator::RuleStatus DependencyMediator::statusOf(const DependencyRule& rule) const {
@@ -154,6 +161,7 @@ bool DependencyMediator::hasSatisfiedOutgoingRule(const WorkItem& item) const {
 
 void DependencyMediator::completeIfDone(SubProcess& subProcess) {
     if (!subProcess.isFinished() && subProcess.allChildrenFinished()) {
-        subProcess.complete(BRANCH_DONE);
+        WorkItem* processItem = findItem(subProcess.getId());
+        (processItem ? processItem : &subProcess)->complete(BRANCH_DONE);
     }
 }

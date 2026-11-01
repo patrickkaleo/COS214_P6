@@ -3,13 +3,14 @@
 
 #include "WorkItemAction.h"
 
-class CompleteAction : WorkItemAction
+class CompleteAction : public WorkItemAction
 {
 
 private:
 	std::string outcome;
 
 protected:
+	std::string snapshotLabel(const WorkItem &item) const override;
 	bool doExecute(WorkItem &item);
 
 public:

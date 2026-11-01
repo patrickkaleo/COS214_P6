@@ -21,7 +21,7 @@ ServiceResult identityResult(bool verified, const std::string& status, const std
     std::map<std::string, std::string> out;
     out["identityVerified"] = verified ? "true" : "false";
     out["identityStatus"] = status;
-    return ServiceResult::ok(msg, out);
+    return ServiceResult::ok(msg, out, verified ? "verified" : "rejected");
 }
 
 } // namespace
@@ -59,7 +59,7 @@ ServiceResult GovernmentIDAdapter::invoke(const ServiceRequest& request) {
 }
 
 std::string GovernmentIDAdapter::name() const {
-    return "DocumentVerificationService";
+    return "IdentityVerificationService";
 }
 
 NationalIdRegistry& GovernmentIDAdapter::getRegistry() {

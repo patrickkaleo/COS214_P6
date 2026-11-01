@@ -72,6 +72,11 @@ public:
     /// @return The rules this mediator works from.
     const std::vector<DependencyRule>& getRules() const;
 
+    const std::set<std::string>& getOpenedBranches() const { return openedBranches; }
+    const std::set<std::string>& getDecidedItems() const { return decided; }
+    void restoreBookkeeping(const std::set<std::string>& opened,
+                            const std::set<std::string>& decisions);
+
 private:
     RuleStatus statusOf(const DependencyRule& rule) const;
     bool hasIncomingRule(const std::string& id) const;

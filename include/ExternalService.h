@@ -22,8 +22,8 @@
  * own API and converts the reply into a ServiceResult.
  *
  * A new integration therefore means writing a new adapter only. Adapters are looked up
- * by name() in the ServiceRegistry, using the service names set by the definition
- * builders (e.g. setService("VERIFY_DOCS", "DocumentVerificationService")).
+ * by name() in the ServiceRegistry, using the service names set in workflow
+ * definitions (e.g. "IdentityVerificationService").
  *
  * @see GovernmentIDAdapter, BankGatewayAdapter, TrackingServiceAdapter, CarrierAdapter
  */

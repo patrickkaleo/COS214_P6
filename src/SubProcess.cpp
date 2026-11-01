@@ -1,96 +1,125 @@
 /**
  * @file SubProcess.cpp
- * @brief Child management, traversal and lifecycle hooks of the composite work item.
- * @author Tebogo Mokgwatsane, Angelo Anthony
- * @version 1.1
+ * @brief Composite of the Composite pattern
+ * @version 1.0
  */
 
 #include "SubProcess.h"
+#include "WorkItem.h"
+#include "WorkflowMediator.h"
 #include "DepthFirstWorkItemIterator.h"
 #include "InProgressState.h"
-#include "WorkflowMediator.h"
+#include "RoutingStrategy.h"
+#include "InstanceData.h"
+#include "ParticipantDirectory.h"
+#include "Participant.h"
+#include "ExternalService.h"
+#include "ServiceRegistry.h"
 
-SubProcess::SubProcess(const std::string& id, const std::string& name)
-    : WorkItem(id, name) {
+#include <string>
+#include <algorithm>
+
+using namespace std;
+
+SubProcess::SubProcess(const string& id, const string& name) : WorkItem(id, name) {}
+
+SubProcess::~SubProcess() {
+    for (auto* c : children_) {
+        delete c;
+    }
+    children_.clear();
 }
 
-SubProcess::SubProcess(const SubProcess& other)
-    : WorkItem(other) {
-    for (const std::unique_ptr<WorkItem>& child : other.children) {
-        add(child->clone());
+void SubProcess::onAvailable() {
+    // A container has nobody to assign or start it, so it goes straight to InProgress.
+    changeState(new InProgressState(), EventType::STARTED);
+
+    // Ask the mediator to open the entry children  
+    if (mediator_) {
+        mediator_->openChildren(*this);
+    } else {
+        // Fallback when no mediator is attached yet
+        for (auto* c : children_) {
+            if (c) {
+                c->makeAvailable();
+            }
+        }
     }
 }
 
-SubProcess::~SubProcess() = default;
+void SubProcess::onFinished() {
+    for (auto* c : children_) {
+        if (c && !c->isFinished()) {
+            c->cancel();
+        }
+    }
+}
 
 SubProcess* SubProcess::clone() const {
-    return new SubProcess(*this);
+    SubProcess* copy = new SubProcess(id_, name_);
+    for (const auto* c : children_) {
+        if (c) {
+            copy->add(c->clone());   // add() sets parent
+        }
+    }
+    return copy;
 }
 
 void SubProcess::add(WorkItem* child) {
-    if (child == nullptr) {
-        return;
-    }
+    if (!child) return;
     child->setParent(this);
-    children.emplace_back(child);
+    children_.push_back(child);
 }
 
-bool SubProcess::remove(const std::string& id) {
-    for (auto it = children.begin(); it != children.end(); ++it) {
-        if ((*it)->getId() == id) {
-            children.erase(it);
+bool SubProcess::replaceChild(WorkItem* current, WorkItem* replacement) {
+    if (!current || !replacement) {
+        return false;
+    }
+    for (auto& child : children_) {
+        if (child == current) {
+            replacement->setParent(this);
+            child = replacement;
             return true;
         }
     }
     return false;
 }
 
-int SubProcess::childCount() const {
-    return static_cast<int>(children.size());
+bool SubProcess::remove(const string& id) {
+    auto it = find_if(children_.begin(), children_.end(), [&id](WorkItem* w) { return w && w->getId() == id; });
+    if (it != children_.end()) {
+        delete *it;
+        children_.erase(it);
+        return true;
+    }
+    return false;
 }
 
 WorkItem* SubProcess::getChild(int index) const {
-    if (index < 0 || index >= childCount()) {
+    if (index < 0 || index >= static_cast<int>(children_.size())) {
         return nullptr;
     }
-    return children[index].get();
+    return children_[static_cast<size_t>(index)];
 }
 
 bool SubProcess::allChildrenFinished() const {
-    for (const std::unique_ptr<WorkItem>& child : children) {
-        if (!child->isFinished()) {
+    if (children_.empty()) return true;
+    for (const auto* c : children_) {
+        if (c && !c->isFinished()) {
             return false;
         }
     }
     return true;
 }
 
-WorkItem* SubProcess::find(const std::string& id) {
-    std::unique_ptr<WorkItemIterator> it = createIterator();
+WorkItemIterator* SubProcess::createIterator() const { return new DepthFirstWorkItemIterator(const_cast<SubProcess*>(this)); }
+
+WorkItem* SubProcess::find(const std::string& id) const {
+    std::unique_ptr<WorkItemIterator> it(createIterator());
     for (it->first(); !it->isDone(); it->next()) {
-        if (it->current()->getId() == id) {
+        if (it->current() && it->current()->getId() == id) {
             return it->current();
         }
     }
     return nullptr;
-}
-
-std::unique_ptr<WorkItemIterator> SubProcess::createIterator() {
-    return std::unique_ptr<WorkItemIterator>(new DepthFirstWorkItemIterator(this));
-}
-
-void SubProcess::onAvailable() {
-    // A container has nobody to assign or start it, so it goes straight to InProgress.
-    changeState(new InProgressState(), EventType::STARTED);
-    if (mediator != nullptr) {
-        mediator->openChildren(*this);
-    }
-}
-
-void SubProcess::onFinished() {
-    for (const std::unique_ptr<WorkItem>& child : children) {
-        if (!child->isFinished()) {
-            child->cancel();
-        }
-    }
 }

@@ -27,6 +27,8 @@ class ApprovalHandler;
 class ApprovalRouting : public RoutingStrategy {
 private:
     ApprovalHandler* chain; ///< Head of the ApprovalHandler chain of responsibility (owned).
+    int selectedDeadlineHours; ///< Deadline selected by the last successful route.
+    int selectedLevel; ///< Absolute position of the handler that accepted the request.
 
 public:
     /**
@@ -75,6 +77,10 @@ public:
      * @return ApprovalHandler* Pointer to the handler.
      */
     ApprovalHandler* getChain() const;
+
+    /// Deadline of the actual selected handler, including skipped authority levels.
+    int getDeadlineHours() const;
+    int getSelectedLevel() const;
 
     /**
      * @brief Sets or updates the handler chain head (takes ownership).

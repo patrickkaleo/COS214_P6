@@ -3,7 +3,7 @@
 
 #include <string>
 
-class WorkFlowSnapshot;
+class WorkflowSnapshot;
 class WorkflowInstance;
 class WorkItem;
 class Participant;
@@ -12,20 +12,26 @@ class WorkItemAction
 {
 
 protected:
-	WorkflowInstance *Instance;
+	WorkflowInstance *instance;
 	std::string itemId;
 	Participant *actor;
-	WorkFlowSnapshot *before;
+	WorkflowSnapshot *before;
+	std::string operation;
 
 	virtual bool doExecute(WorkItem &item) = 0;
+	virtual bool isAuthorized(const WorkItem &item) const;
+	virtual std::string snapshotLabel(const WorkItem &item) const;
 
 public:
-	WorkItemAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor);
+	WorkItemAction(WorkflowInstance *instance, const std::string &itemId, Participant *actor,
+	               const std::string &operation = "");
 	virtual ~WorkItemAction();
 	bool execute();
 	bool undo();
+	WorkflowInstance *getInstance() const { return instance; }
+	std::string getSnapshotLabel() const;
 
-	virtual std::string describe() = 0;
+	virtual std::string describe() const = 0;
 
 	void description();
 };

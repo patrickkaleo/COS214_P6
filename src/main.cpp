@@ -1,1296 +1,1560 @@
 /**
  * @file main.cpp
- * @brief Master doctest test runner for the TIVIDY Generic Workflow Engine.
- *
- * Team Testing Instructions:
- * - This file serves as the unified test driver for all engine subsystems.
- * - Each team member registers their subsystem tests under a dedicated TEST_SUITE:
- *     TEST_SUITE("<Your Name> - <Subsystem Name>") {
- *         TEST_CASE("<Feature or Behavior>") {
- *             CHECK(...);
- *         }
- *     }
- * - Run all tests: make run
- * - Memory leak check: make valgrind
+ * @brief Main interactive Terminal User Interface (TUI) entry point for the TIVIDY Workflow Engine.
+ * @details The TUI drives the engine through TividyWorkflowFacade. Every workflow in definitions/
+ *          is built, and a workflow can be run once a file in scenarios/ names it by id and lists
+ *          its participants and the details they enter, so nothing below knows about any
+ *          particular workflow, and instance data is only ever typed in by a participant.
+ *          Every action stays on offer even when it is illegal: the engine decides, and the TUI
+ *          reports why it refused.
  */
 
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "doctest.h"
-
-#include "EventDispatcher.h"
-#include "NotificationService.h"
-#include "AuditLogger.h"
-#include "MonitoringService.h"
-
-#include "RoutingStrategy.h"
-#include "RoleBasedRouting.h"
-#include "DataRuleRouting.h"
 #include "ApprovalRouting.h"
-#include "ApprovalHandler.h"
-#include "ApprovalRequest.h"
-#include "Participant.h"
-#include "ParticipantDirectory.h"
-#include "InstanceData.h"
-
-#include "WorkItem.h"
-#include "WorkItemState.h"
-#include "Task.h"
-#include "SubProcess.h"
-#include "Iterator.h"
-#include "WorkItemIterator.h"
-#include "DepthFirstWorkItemIterator.h"
-#include "WorkflowMediator.h"
-#include "DependencyMediator.h"
-#include "DependencyRule.h"
-#include "ConcreteApprovalHandler.h"
-#include "ApprovalChainIterator.h"
-#include "ThresholdRule.h"
-#include "AlwaysAcceptRule.h"
-
-#include "ExternalService.h"
-#include "ServiceRegistry.h"
-#include "GovernmentIDAdapter.h"
+#include "AuditLogger.h"
 #include "BankGatewayAdapter.h"
-#include "TrackingServiceAdapter.h"
 #include "CarrierAdapter.h"
+#include "DataRuleRouting.h"
+#include "GovernmentIDAdapter.h"
+#include "MonitoringService.h"
+#include "NotificationService.h"
+#include "Participant.h"
+#include "PriorityDecorator.h"
+#include "RoleBasedRouting.h"
+#include "Task.h"
+#include "TividyWorkflowFacade.h"
+#include "TrackingServiceAdapter.h"
+#include "WorkItem.h"
+#include "WorkItemDecorator.h"
+#include "WorkflowEventListener.h"
+#include "WorkflowInstance.h"
 
-// RoutingStrategy::select() takes a `const Task&`; strategies under test that ignore
-// the task still need a real one (ApprovalRouting reads its escalation level).
-static const Task& getDummyTask() {
-    static const Task dummy("dummy", "Dummy Task");
-    return dummy;
+#include <dirent.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+
+#include <algorithm>
+#include <cstdlib>
+#include <ctime>
+#include <fstream>
+#include <iostream>
+#include <map>
+#include <sstream>
+#include <string>
+#include <vector>
+
+namespace {
+
+const char *const DEFINITIONS_FOLDER = "definitions";
+const char *const SCENARIOS_FOLDER = "scenarios";
+
+// 256-colour palette
+const int GOLD = 220;
+const int SKY = 81;
+const int BLUE = 39;
+const int VIOLET = 141;
+const int PINK = 213;
+const int GREEN = 84;
+const int RED = 203;
+const int ORANGE = 214;
+const int GREY = 245;
+const int WHITE = 255;
+const int NAVY = 17;
+const int BLACK = 16;
+
+/// A participant as listed in a scenario file.
+struct Person {
+    std::string id;       // unique within its scenario
+    std::string name;
+    std::string roles;
+    size_t scenario;      // index into scenarios
+};
+
+/// A detail a participant types in. The scenario names what to ask; the values are never stored in a file.
+struct FieldPrompt {
+    std::string key;
+    std::string label;
+};
+
+/// One runnable workflow: what to tell the user, and what to give the engine.
+struct Scenario {
+    std::string industry;
+    std::string workflowId;
+    std::string roster;      // the engine roster holding this scenario's participants
+    std::string process;     // from the definition
+    std::string about;       // from the definition
+    std::string expected;
+    std::vector<Person> people;
+    std::string starterRole;                                 // empty: any participant may start it
+    std::vector<FieldPrompt> startFields;                    // asked when an instance is started
+    std::map<std::string, std::vector<FieldPrompt>> taskFields; // asked when that task is completed
+    std::map<std::string, std::vector<std::string>> outcomes;
+};
+
+/// A running instance and the scenario it was started from.
+struct InstanceRecord {
+    std::string id;
+    std::string summary;   // who started it and what they entered
+    size_t scenario;
+};
+
+/// One line of an instance's history.
+struct HistoryEntry {
+    std::string instanceId;
+    std::time_t when;
+    std::string itemName;
+    std::string what;
+    std::string detail;
+};
+
+/// One work item as shown in a table, with its position in the tree drawn.
+struct Row {
+    WorkItem *item;
+    std::string branch;
+};
+
+// ---- Terminal -------------------------------------------------------------------------------
+
+bool outputIsTerminal() {
+    static const bool terminal = isatty(STDOUT_FILENO) != 0;
+    return terminal;
 }
 
-TEST_SUITE("Enock Nyamweya - Observer & Singleton Subsystems") {
+bool inputIsTerminal() {
+    static const bool terminal = isatty(STDIN_FILENO) != 0;
+    return terminal;
+}
 
-    TEST_CASE("Singleton: verifies single global dispatcher instance") {
-        EventDispatcher& d1 = EventDispatcher::getInstance();
-        EventDispatcher& d2 = EventDispatcher::getInstance();
-        CHECK(&d1 == &d2);
+bool useColour() {
+    static const bool enabled = outputIsTerminal() && std::getenv("NO_COLOR") == nullptr;
+    return enabled;
+}
+
+size_t screenWidth() {
+    struct winsize size;
+    if (outputIsTerminal() && ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0 && size.ws_col > 0) {
+        return std::min<size_t>(std::max<size_t>(size.ws_col, 84), 120);
     }
+    return 100;
+}
 
-    TEST_CASE("Observer: verifies observer registration and push event dispatching") {
-        EventDispatcher& dispatcher = EventDispatcher::getInstance();
-        dispatcher.clearListeners();
+std::string fg(int colour, const std::string &text) {
+    return useColour() ? "\033[38;5;" + std::to_string(colour) + "m" + text + "\033[0m" : text;
+}
 
-        NotificationService notifier("TestChannel", false);
-        AuditLogger auditor(false);
-        MonitoringService monitor;
+std::string bold(int colour, const std::string &text) {
+    return useColour() ? "\033[1;38;5;" + std::to_string(colour) + "m" + text + "\033[0m" : text;
+}
 
-        dispatcher.attachListener(&notifier);
-        dispatcher.attachListener(&auditor);
-        dispatcher.attachListener(&monitor);
-
-        CHECK(dispatcher.getListenerCount() == 3);
-
-        dispatcher.notifyListeners(WorkflowEvent(
-            EventType::AVAILABLE, "WF-101", "TASK-1", "Registration"
-        ));
-        dispatcher.notifyListeners(WorkflowEvent(
-            EventType::STARTED, "WF-101", "TASK-1", "Registration"
-        ));
-        dispatcher.notifyListeners(WorkflowEvent(
-            EventType::COMPLETED, "WF-101", "TASK-1", "Registration", "Verified"
-        ));
-
-        CHECK(notifier.getNotificationCount() == 3);
-        CHECK(auditor.getEntryCount() == 3);
-        CHECK(monitor.getTotalEvents() == 3);
-        CHECK(monitor.getCountForType(EventType::COMPLETED) == 1);
-
-        dispatcher.clearListeners();
+/// Coloured label. Without colour it falls back to brackets so it still stands out.
+std::string pill(int background, int foreground, const std::string &text) {
+    if (!useColour()) {
+        return "[" + text + "]";
     }
+    return "\033[1;48;5;" + std::to_string(background) + ";38;5;" + std::to_string(foreground) + "m " + text + " \033[0m";
+}
 
-    TEST_CASE("Observer: verifies dynamic listener detaching") {
-        EventDispatcher& dispatcher = EventDispatcher::getInstance();
-        dispatcher.clearListeners();
-
-        NotificationService notifier("Channel", false);
-        AuditLogger auditor(false);
-
-        dispatcher.attachListener(&notifier);
-        dispatcher.attachListener(&auditor);
-        CHECK(dispatcher.getListenerCount() == 2);
-
-        dispatcher.detachListener(&notifier);
-        CHECK(dispatcher.getListenerCount() == 1);
-
-        dispatcher.notifyListeners(WorkflowEvent(
-            EventType::STARTED, "WF-102", "TASK-2", "Review"
-        ));
-
-        CHECK(notifier.getNotificationCount() == 0);
-        CHECK(auditor.getEntryCount() == 1);
-
-        dispatcher.clearListeners();
+/// Columns a string fills on screen, ignoring colour codes and counting UTF-8 characters once.
+size_t visibleWidth(const std::string &text) {
+    size_t width = 0;
+    for (size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == '\033') {
+            while (i < text.size() && text[i] != 'm') ++i;
+            continue;
+        }
+        if ((static_cast<unsigned char>(text[i]) & 0xC0) != 0x80) ++width;
     }
+    return width;
+}
 
-    TEST_CASE("AuditLogger: verifies immutable audit log formatting") {
-        AuditLogger auditor(false);
-        WorkflowEvent ev(EventType::COMPLETED, "WF-103", "TASK-3", "Verification", "Verified");
+std::string pad(const std::string &text, size_t width) {
+    const size_t used = visibleWidth(text);
+    return used >= width ? text : text + std::string(width - used, ' ');
+}
 
-        auditor.onEvent(ev);
-        CHECK(auditor.getEntryCount() == 1);
+/// Shortens plain ASCII text to fit a column.
+std::string fit(const std::string &text, size_t width) {
+    if (text.size() <= width) return text;
+    return width <= 3 ? text.substr(0, width) : text.substr(0, width - 3) + "...";
+}
 
-        const auto& entries = auditor.getAuditTrail();
-        CHECK(entries.size() == 1);
-        CHECK(entries[0].find("COMPLETED") != std::string::npos);
-        CHECK(entries[0].find("WF-103") != std::string::npos);
-        CHECK(entries[0].find("TASK-3") != std::string::npos);
+std::string repeat(const std::string &piece, size_t count) {
+    std::string result;
+    for (size_t i = 0; i < count; ++i) result += piece;
+    return result;
+}
+
+std::vector<std::string> wrap(const std::string &text, size_t width) {
+    std::vector<std::string> lines;
+    std::istringstream words(text);
+    std::string word;
+    std::string line;
+    while (words >> word) {
+        if (!line.empty() && line.size() + 1 + word.size() > width) {
+            lines.push_back(line);
+            line.clear();
+        }
+        line += (line.empty() ? "" : " ") + word;
     }
+    if (!line.empty()) lines.push_back(line);
+    return lines;
+}
 
-    TEST_CASE("MonitoringService: verifies real-time failure rate calculation") {
-        MonitoringService monitor;
+void boxTop(const std::string &title, int colour) {
+    const size_t width = screenWidth();
+    const std::string label = title.empty() ? "" : " " + title + " ";
+    std::cout << fg(colour, "╭─") << bold(colour, label)
+              << fg(colour, repeat("─", width - 3 - visibleWidth(label)) + "╮") << "\n";
+}
 
-        monitor.onEvent(WorkflowEvent(EventType::STARTED, "WF-001", "TASK-1", "Step 1"));
-        CHECK(monitor.getActiveInstanceCount() == 1);
+void boxLine(const std::string &content, int colour) {
+    std::cout << fg(colour, "│") << " " << pad(content, screenWidth() - 4) << " " << fg(colour, "│") << "\n";
+}
 
-        monitor.onEvent(WorkflowEvent(EventType::INSTANCE_COMPLETED, "WF-001", "", "WorkflowInstance", "Success"));
-        CHECK(monitor.getActiveInstanceCount() == 0);
-        CHECK(monitor.getCompletedInstanceCount() == 1);
+/// Splits a definition's description at its line breaks, keeping the empty lines between paragraphs.
+std::vector<std::string> descriptionLines(const std::string &description) {
+    std::vector<std::string> lines;
+    std::istringstream in(description);
+    std::string line;
+    while (std::getline(in, line)) {
+        lines.push_back(line);
+    }
+    return lines;
+}
 
-        monitor.onEvent(WorkflowEvent(EventType::STARTED, "WF-002", "TASK-1", "Step 1"));
-        monitor.onEvent(WorkflowEvent(EventType::FAILED, "WF-002", "TASK-1", "Step 1", "Error"));
-        CHECK(monitor.getTotalEvents() == 4);
-        CHECK(monitor.getFailureRate() == doctest::Approx(25.0));
+void boxBottom(int colour) {
+    std::cout << fg(colour, "╰" + repeat("─", screenWidth() - 2) + "╯") << "\n";
+}
+
+void boxText(const std::string &text, int colour) {
+    for (const std::string &line : wrap(text, screenWidth() - 4)) {
+        boxLine(line, colour);
     }
 }
 
-class MockApprovalHandler : public ApprovalHandler {
+std::string progressBar(int done, int total, size_t cells) {
+    const size_t filled = total == 0 ? 0 : static_cast<size_t>(done) * cells / static_cast<size_t>(total);
+    return bold(GREEN, repeat("█", filled)) + fg(238, repeat("░", cells - filled));
+}
+
+std::string stateIcon(const std::string &state) {
+    if (state == "Completed") return "✓";
+    if (state == "Rejected") return "✗";
+    if (state == "Cancelled") return "-";
+    if (state == "Escalated") return "▲";
+    if (state == "InProgress") return "▶";
+    if (state == "Assigned") return "●";
+    if (state == "Available") return "◆";
+    return "○";
+}
+
+int stateColour(const std::string &state) {
+    if (state == "Completed") return GREEN;
+    if (state == "Rejected") return RED;
+    if (state == "Cancelled") return GREY;
+    if (state == "Escalated") return ORANGE;
+    if (state == "InProgress") return BLUE;
+    if (state == "Assigned") return SKY;
+    if (state == "Available") return GOLD;
+    return 240;
+}
+
+std::string stateCell(const std::string &state, size_t width) {
+    return pad(bold(stateColour(state), stateIcon(state) + " " + state), width);
+}
+
+std::string statusPill(const std::string &status) {
+    if (status == "completed") return pill(GREEN, BLACK, "COMPLETED");
+    if (status == "terminated") return pill(RED, BLACK, "TERMINATED");
+    return pill(BLUE, BLACK, "RUNNING");
+}
+
+int eventColour(EventType type) {
+    switch (type) {
+        case EventType::COMPLETED: return GREEN;
+        case EventType::REJECTED: return RED;
+        case EventType::CANCELLED: return GREY;
+        case EventType::ESCALATED: return ORANGE;
+        case EventType::FAILED: return RED;
+        case EventType::STARTED: return BLUE;
+        case EventType::ASSIGNED: return SKY;
+        case EventType::AVAILABLE: return GOLD;
+        default: return VIOLET;
+    }
+}
+
+std::string clock(std::time_t when) {
+    char text[16] = {0};
+    std::tm *local = std::localtime(&when);
+    if (local != nullptr) {
+        std::strftime(text, sizeof(text), "%H:%M:%S", local);
+    }
+    return text;
+}
+
+// ---- Scenario files -------------------------------------------------------------------------
+
+std::string trimmed(const std::string &text) {
+    const std::string blanks = " \t\r";
+    const size_t first = text.find_first_not_of(blanks);
+    if (first == std::string::npos) {
+        return "";
+    }
+    return text.substr(first, text.find_last_not_of(blanks) - first + 1);
+}
+
+std::vector<std::string> split(const std::string &text, char separator) {
+    std::vector<std::string> parts;
+    std::istringstream in(text);
+    std::string part;
+    while (std::getline(in, part, separator)) {
+        parts.push_back(trimmed(part));
+    }
+    return parts;
+}
+
+/// Reads a scenario file; anything it cannot use is added to problems so that a typo is easy to find.
+bool loadScenario(const std::string &path, Scenario &scenario, std::vector<std::string> &problems) {
+    std::ifstream file(path.c_str());
+    if (!file) {
+        problems.push_back(path + ": cannot be read");
+        return false;
+    }
+
+    std::string line;
+    size_t number = 0;
+    while (std::getline(file, line)) {
+        ++number;
+        line = trimmed(line);
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        const std::vector<std::string> fields = split(line, '|');
+        const std::string &key = fields[0];
+        if (fields.size() == 2 && key == "INDUSTRY") scenario.industry = fields[1];
+        else if (fields.size() == 2 && key == "WORKFLOW") scenario.workflowId = fields[1];
+        else if (fields.size() == 2 && key == "EXPECTED") scenario.expected = fields[1];
+        else if (fields.size() == 2 && key == "STARTED_BY") scenario.starterRole = fields[1];
+        else if (fields.size() == 3 && key == "OUTCOMES") scenario.outcomes[fields[1]] = split(fields[2], ',');
+        else if (fields.size() == 3 && key == "FIELD") scenario.startFields.push_back(FieldPrompt{fields[1], fields[2]});
+        else if (fields.size() == 4 && key == "TASK_FIELD") scenario.taskFields[fields[1]].push_back(FieldPrompt{fields[2], fields[3]});
+        else if (fields.size() == 4 && key == "PARTICIPANT") {
+            Person person;
+            person.id = fields[1];
+            person.name = fields[2];
+            person.roles = fields[3];
+            person.scenario = 0;
+            scenario.people.push_back(person);
+        } else {
+            problems.push_back(path + " line " + std::to_string(number) + " is not understood: " + line);
+        }
+    }
+
+    if (scenario.workflowId.empty()) {
+        problems.push_back(path + ": needs a WORKFLOW|<id> line");
+        return false;
+    }
+    if (scenario.people.empty()) {
+        problems.push_back(path + ": needs at least one PARTICIPANT line");
+        return false;
+    }
+    return true;
+}
+
+bool folderExists(const std::string &folder) {
+    DIR *directory = opendir(folder.c_str());
+    if (directory == nullptr) {
+        return false;
+    }
+    closedir(directory);
+    return true;
+}
+
+/// "scenarios/education.scenario" becomes "education".
+std::string fileStem(const std::string &path) {
+    const size_t slash = path.find_last_of('/');
+    const std::string name = slash == std::string::npos ? path : path.substr(slash + 1);
+    return name.substr(0, name.find_last_of('.'));
+}
+
+/// Paths of the files in a folder with this extension, sorted so menus keep a stable order.
+std::vector<std::string> filesIn(const std::string &folder, const std::string &extension) {
+    std::vector<std::string> paths;
+    DIR *directory = opendir(folder.c_str());
+    if (directory == nullptr) {
+        return paths;
+    }
+    while (const dirent *entry = readdir(directory)) {
+        const std::string name = entry->d_name;
+        if (name.size() > extension.size() && name.compare(name.size() - extension.size(), extension.size(), extension) == 0) {
+            paths.push_back(folder + "/" + name);
+        }
+    }
+    closedir(directory);
+    std::sort(paths.begin(), paths.end());
+    return paths;
+}
+
+// ---- Work items -----------------------------------------------------------------------------
+
+/// The task behind any decorators, or nullptr for a sub-process.
+Task *taskOf(WorkItem *item) {
+    while (WorkItemDecorator *decorator = dynamic_cast<WorkItemDecorator *>(item)) {
+        item = decorator->getInner();
+    }
+    return dynamic_cast<Task *>(item);
+}
+
+/// Priority set by a PriorityDecorator anywhere around the item; 0 if there is none.
+int priorityOf(WorkItem *item) {
+    while (WorkItemDecorator *decorator = dynamic_cast<WorkItemDecorator *>(item)) {
+        if (PriorityDecorator *priority = dynamic_cast<PriorityDecorator *>(decorator)) {
+            return priority->getPriority();
+        }
+        item = decorator->getInner();
+    }
+    return 0;
+}
+
+/// The role the item's routing strategy asks for, worked out from this instance's data.
+std::string requiredRole(Task *task, const InstanceData &data) {
+    if (task == nullptr) {
+        return "";
+    }
+    if (const RoleBasedRouting *role = dynamic_cast<const RoleBasedRouting *>(task->getRouting())) {
+        return role->getRole();
+    }
+    if (const DataRuleRouting *rule = dynamic_cast<const DataRuleRouting *>(task->getRouting())) {
+        const std::map<std::string, std::string> mapping = rule->getMapping();
+        const std::map<std::string, std::string>::const_iterator found = mapping.find(data.get(rule->getField()));
+        return found != mapping.end() ? found->second : rule->getFallbackRole();
+    }
+    return "";
+}
+
+bool isFinal(const std::string &state) {
+    return state == "Completed" || state == "Rejected" || state == "Cancelled";
+}
+
+/// An outcome only means something once work has finished or escalated; a retry may leave an old one behind.
+std::string shownOutcome(WorkItem *item) {
+    const std::string state = item->getStateName();
+    return isFinal(state) || state == "Escalated" ? item->getOutcome() : "";
+}
+
+void collectRows(WorkItem *item, const std::string &indent, bool last, bool root, std::vector<Row> &rows) {
+    Row row;
+    row.item = item;
+    row.branch = root ? "" : indent + (last ? "└─ " : "├─ ");
+    rows.push_back(row);
+
+    const std::string childIndent = root ? "" : indent + (last ? "   " : "│  ");
+    for (int i = 0; i < item->childCount(); ++i) {
+        collectRows(item->getChild(i), childIndent, i == item->childCount() - 1, false, rows);
+    }
+}
+
+// ---- Observers ------------------------------------------------------------------------------
+
+/**
+ * @class EventQueue
+ * @brief Observer that holds events until the TUI can show them after the current action.
+ *
+ * One action can cause several events (a completion opens the next items and routes them),
+ * and the assignee of a routed item is only worth showing once that has all happened.
+ */
+class EventQueue : public WorkflowEventListener {
+public:
+    void onEvent(const WorkflowEvent &event) override { pending.push_back(event); }
+
+    bool empty() const { return pending.empty(); }
+
+    std::vector<WorkflowEvent> take() {
+        std::vector<WorkflowEvent> events;
+        events.swap(pending);
+        return events;
+    }
+
 private:
-    Participant* approver;
-public:
-    explicit MockApprovalHandler(Participant* p)
-        : approver(p) {}
-
-    virtual Participant* handle(ApprovalRequest& req) override {
-        (void)req;
-        return approver;
-    }
-
-    virtual ApprovalHandler* clone() const override {
-        return new MockApprovalHandler(approver);
-    }
+    std::vector<WorkflowEvent> pending;
 };
 
-TEST_SUITE("Enock Nyamweya - Strategy Subsystem") {
+// ---- The interface --------------------------------------------------------------------------
 
-    TEST_CASE("RoleBasedRouting: selects first available participant holding required role") {
-        ParticipantDirectory directory;
-        Participant* alice = new Participant("p1", "Alice Smith", "Triage Nurse");
-        Participant* bob = new Participant("p2", "Bob Jones", "Emergency Doctor");
-        directory.addParticipant(alice);
-        directory.addParticipant(bob);
-
-        RoleBasedRouting strategy("Triage Nurse");
-        InstanceData data;
-
-        Participant* selected = strategy.select(getDummyTask(), data, directory);
-        REQUIRE(selected != nullptr);
-        CHECK(selected->getId() == "p1");
-        CHECK(selected->getName() == "Alice Smith");
-        CHECK(selected->hasRole("Triage Nurse") == true);
-    }
-
-    TEST_CASE("RoleBasedRouting: returns nullptr when no participant holds target role") {
-        ParticipantDirectory directory;
-        directory.addParticipant(new Participant("p1", "Alice Smith", "Triage Nurse"));
-
-        RoleBasedRouting strategy("Chief Surgeon");
-        InstanceData data;
-
-        Participant* selected = strategy.select(getDummyTask(), data, directory);
-        CHECK(selected == nullptr);
-    }
-
-    TEST_CASE("DataRuleRouting: dynamically maps form data to corresponding roles") {
-        ParticipantDirectory directory;
-        directory.addParticipant(new Participant("doc1", "Dr. House", "Emergency Doctor"));
-        directory.addParticipant(new Participant("doc2", "Dr. Watson", "General Practitioner"));
-        directory.addParticipant(new Participant("intern1", "Intern John", "Clinic Intern"));
-
-        std::map<std::string, std::string> mapping = {
-            {"critical", "Emergency Doctor"},
-            {"mild", "General Practitioner"}
-        };
-        DataRuleRouting strategy("severity", mapping, "Clinic Intern");
-
-        InstanceData criticalData;
-        criticalData.set("severity", "critical");
-        Participant* pCritical = strategy.select(getDummyTask(), criticalData, directory);
-        REQUIRE(pCritical != nullptr);
-        CHECK(pCritical->getId() == "doc1");
-        CHECK(pCritical->getName() == "Dr. House");
-
-        InstanceData mildData;
-        mildData.set("severity", "mild");
-        Participant* pMild = strategy.select(getDummyTask(), mildData, directory);
-        REQUIRE(pMild != nullptr);
-        CHECK(pMild->getId() == "doc2");
-        CHECK(pMild->getName() == "Dr. Watson");
-    }
-
-    TEST_CASE("DataRuleRouting: falls back to default role when field is unmapped or missing") {
-        ParticipantDirectory directory;
-        directory.addParticipant(new Participant("intern1", "Intern John", "Clinic Intern"));
-
-        std::map<std::string, std::string> mapping = {
-            {"critical", "Emergency Doctor"}
-        };
-        DataRuleRouting strategy("severity", mapping, "Clinic Intern");
-
-        InstanceData unknownData;
-        unknownData.set("severity", "unknown_value");
-        Participant* pUnknown = strategy.select(getDummyTask(), unknownData, directory);
-        REQUIRE(pUnknown != nullptr);
-        CHECK(pUnknown->getId() == "intern1");
-
-        InstanceData emptyData;
-        Participant* pEmpty = strategy.select(getDummyTask(), emptyData, directory);
-        REQUIRE(pEmpty != nullptr);
-        CHECK(pEmpty->getId() == "intern1");
-    }
-
-    TEST_CASE("ApprovalRouting: delegates to ApprovalHandler Chain of Responsibility") {
-        Participant* dean = new Participant("p_dean", "Prof. X", "Dean");
-        MockApprovalHandler* handler = new MockApprovalHandler(dean);
-
-        ApprovalRouting approvalStrategy(handler);
-        InstanceData data;
-        ParticipantDirectory directory;
-
-        Participant* approver = approvalStrategy.select(getDummyTask(), data, directory);
-        REQUIRE(approver != nullptr);
-        CHECK(approver->getId() == "p_dean");
-        CHECK(approver->getName() == "Prof. X");
-
-        delete dean;
-    }
-
-    TEST_CASE("RoutingStrategy: clone creates independent strategy duplicate") {
-        std::map<std::string, std::string> mapping = {
-            {"high", "Senior Officer"}
-        };
-        DataRuleRouting original("priority", mapping, "Junior Officer");
-
-        RoutingStrategy* cloned = original.clone();
-        REQUIRE(cloned != nullptr);
-
-        DataRuleRouting* clonedDataRule = dynamic_cast<DataRuleRouting*>(cloned);
-        REQUIRE(clonedDataRule != nullptr);
-        CHECK(clonedDataRule->getField() == "priority");
-        CHECK(clonedDataRule->getFallbackRole() == "Junior Officer");
-
-        clonedDataRule->setFallbackRole("Supervisor");
-        CHECK(original.getFallbackRole() == "Junior Officer");
-        CHECK(clonedDataRule->getFallbackRole() == "Supervisor");
-
-        delete cloned;
-    }
-}
-
-// ---------------------------------------------------------------------------
-// State pattern test helpers
-// ---------------------------------------------------------------------------
-
-/// Minimal concrete WorkItem so the lifecycle can be tested before Task/SubProcess land.
-class LifecycleTestItem : public WorkItem {
+/**
+ * @class Tui
+ * @brief Menu loop over the workflow facade.
+ */
+class Tui {
 public:
-    int availableHookCalls;
+    bool initialise();
+    void run();
 
-    LifecycleTestItem(const std::string& id, const std::string& itemName)
-        : WorkItem(id, itemName), availableHookCalls(0) {}
+private:
+    TividyWorkflowFacade facade;
+    EventQueue *events = nullptr;            // owned by the engine
+    AuditLogger *audit = nullptr;            // owned by the engine
+    MonitoringService *monitor = nullptr;    // owned by the engine
+    NotificationService *notifier = nullptr; // owned by the engine
 
-    WorkItem* clone() const override { return new LifecycleTestItem(*this); }
+    std::vector<Scenario> scenarios;
+    std::vector<Person> people;
+    std::vector<InstanceRecord> instances;
+    std::vector<HistoryEntry> history;
+    std::vector<std::string> notices;
+    std::vector<std::string> notReady;     // why a file in definitions/ or scenarios/ cannot run yet
+    size_t current = 0;    // scenario the user chose on the entry screen
+    size_t actor = 0;      // index into people, chosen after the scenario
+    bool inputClosed = false;
+    bool checkingDeadlines = false;   // explains the escalations a deadline check causes
 
-protected:
-    void onAvailable() override { ++availableHookCalls; }
+    // Input
+    bool ask(const std::string &prompt, std::string &answer);
+    int askNumber(const std::string &prompt, int first, int last);
+    void pause();
+
+    // Screens
+    void beginScreen(const std::string &title);
+    void mainMenu();
+    void showIndustry();
+    void startInstanceScreen();
+    void openInstanceScreen();
+    void instanceScreen(const InstanceRecord &record);
+    void itemScreen(const InstanceRecord &record, const std::string &itemId);
+    void myWorkScreen();
+    bool chooseActor();
+    void undoLast();
+    void showInstanceHistory(const std::string &instanceId);
+    void showInstanceData(const std::string &instanceId);
+    void showCommands(const std::string &instanceId);
+    void showAuditTrail();
+    void showMetrics();
+    void checkDeadlines();
+
+    // Helpers
+    std::vector<size_t> printRoster();
+    std::vector<const InstanceRecord *> currentInstances() const;
+    void flushEvents();
+    void perform(const InstanceRecord &record, WorkItem *item, int choice);
+    void noticeOk(const std::string &text);
+    void noticeWarning(const std::string &text);
+    void noticeError(const std::string &text);
+    size_t personIndex(const std::string &id) const;
+    Participant *currentActor() const;
+    std::string actorLabel() const;
+    void taskProgress(const std::string &instanceId, int &done, int &total) const;
 };
 
-/// Records the event types published by work items through the EventDispatcher.
-class EventRecorder : public WorkflowEventListener {
-public:
-    std::vector<WorkflowEvent> events;
-    void onEvent(const WorkflowEvent& e) override { events.push_back(e); }
-};
+bool Tui::initialise() {
+    events = new EventQueue();
+    audit = new AuditLogger(false);
+    monitor = new MonitoringService();
+    notifier = new NotificationService("Console", false);
+    facade.addListener(events);
+    facade.addListener(audit);
+    facade.addListener(monitor);
+    facade.addListener(notifier);
 
-/// Moves a fresh item to InProgress, assigned to @p p.
-static void driveToInProgress(WorkItem& item, Participant* p) {
-    REQUIRE(item.makeAvailable());
-    REQUIRE(item.assign(p));
-    REQUIRE(item.start());
+    // Adapter: each industry's definitions refer to these by name only.
+    facade.addService(new GovernmentIDAdapter());
+    facade.addService(new BankGatewayAdapter());
+    facade.addService(new TrackingServiceAdapter());
+    facade.addService(new CarrierAdapter());
+
+    if (!folderExists(DEFINITIONS_FOLDER) || !folderExists(SCENARIOS_FOLDER)) {
+        std::cerr << "Run tividy from the project root, which holds " << DEFINITIONS_FOLDER << "/ and "
+                  << SCENARIOS_FOLDER << "/.\n";
+        return false;
+    }
+
+    // Every definition is built. A bad file only costs that workflow, not the whole program.
+    // .txt keeps the original workflows; further workflows are .definition files.
+    const char *const definitionExtensions[] = {".txt", ".definition"};
+    for (const char *extension : definitionExtensions) {
+        for (const std::string &path : filesIn(DEFINITIONS_FOLDER, extension)) {
+            if (facade.registerDefinitionFromFile(path).empty()) {
+                // Builder errors already start with the path; others don't.
+                const std::string error = facade.getLastError();
+                notReady.push_back(error.compare(0, path.size(), path) == 0 ? error : path + ": " + error);
+            }
+        }
+    }
+
+    // A scenario makes its workflow runnable, by naming the id in the definition's DEFINITION section.
+    std::vector<std::string> covered;
+    for (const std::string &path : filesIn(SCENARIOS_FOLDER, ".scenario")) {
+        Scenario scenario;
+        if (!loadScenario(path, scenario, notReady)) {
+            continue;
+        }
+        scenario.process = facade.definitionName(scenario.workflowId);
+        scenario.about = facade.definitionDescription(scenario.workflowId);
+        if (scenario.process.empty()) {
+            notReady.push_back(path + ": no definition has the id " + scenario.workflowId);
+            continue;
+        }
+        if (scenario.industry.empty()) {
+            scenario.industry = scenario.process;
+        }
+        // Each scenario owns its participants, so names, ids and roles can repeat across scenarios.
+        scenario.roster = fileStem(path);
+        for (Person &person : scenario.people) {
+            person.scenario = scenarios.size();
+            facade.addParticipant(person.id, person.name, split(person.roles, ','), scenario.roster);
+            if (!facade.getLastError().empty()) {
+                notReady.push_back(path + ": participant " + person.id + " is listed twice");
+                continue;
+            }
+            people.push_back(person);
+        }
+        covered.push_back(scenario.workflowId);
+        scenarios.push_back(scenario);
+    }
+
+    for (const std::string &id : facade.definitionIds()) {
+        if (std::find(covered.begin(), covered.end(), id) == covered.end()) {
+            notReady.push_back("Workflow " + id + " has no scenario yet: add one with WORKFLOW|" + id);
+        }
+    }
+    return true;
 }
 
-TEST_SUITE("Angela Ramaboea - State Subsystem") {
+void Tui::run() {
+    while (!inputClosed) {
+        if (outputIsTerminal()) std::cout << "\033[2J\033[H";
 
-    TEST_CASE("State: a new work item starts in Created and is not finished") {
-        LifecycleTestItem item("T1", "Faculty Review");
-        CHECK(item.getStateName() == "Created");
-        CHECK_FALSE(item.isFinished());
-        CHECK(item.getAssignee() == nullptr);
-    }
+        const int shades[] = {51, 45, 39, 33, 63, 99};
+        const char *const banner[] = {
+            "████████╗██╗██╗   ██╗██╗██████╗ ██╗   ██╗",
+            "╚══██╔══╝██║██║   ██║██║██╔══██╗╚██╗ ██╔╝",
+            "   ██║   ██║██║   ██║██║██║  ██║ ╚████╔╝ ",
+            "   ██║   ██║╚██╗ ██╔╝██║██║  ██║  ╚██╔╝  ",
+            "   ██║   ██║ ╚████╔╝ ██║██████╔╝   ██║   ",
+            "   ╚═╝   ╚═╝  ╚═══╝  ╚═╝╚═════╝    ╚═╝   ",
+        };
+        std::cout << "\n";
+        for (int i = 0; i < 6; ++i) {
+            std::cout << "  " << bold(shades[i], banner[i]) << "\n";
+        }
+        std::cout << "  " << fg(GREY, "One workflow engine. ") << bold(GOLD, std::to_string(scenarios.size()) + " ready to run.") << "\n\n";
 
-    TEST_CASE("State: happy path Created -> Available -> Assigned -> InProgress -> Completed") {
-        Participant officer("P1", "Thandi", "FacultyOfficer");
-        LifecycleTestItem item("T1", "Faculty Review");
+        if (!notices.empty()) {
+            boxTop("What just happened", GOLD);
+            for (const std::string &notice : notices) boxLine(notice, GOLD);
+            boxBottom(GOLD);
+            notices.clear();
+        }
 
-        CHECK(item.makeAvailable());
-        CHECK(item.getStateName() == "Available");
-        CHECK(item.availableHookCalls == 1);
+        if (!notReady.empty()) {
+            boxTop("Not ready", ORANGE);
+            for (const std::string &problem : notReady) {
+                const std::vector<std::string> lines = wrap(problem, screenWidth() - 6);
+                for (size_t i = 0; i < lines.size(); ++i) {
+                    boxLine((i == 0 ? bold(ORANGE, "▲ ") : std::string("  ")) + lines[i], ORANGE);
+                }
+            }
+            boxBottom(ORANGE);
+        }
 
-        CHECK(item.assign(&officer));
-        CHECK(item.getStateName() == "Assigned");
-        CHECK(item.getAssignee() == &officer);
+        boxTop("Where are we going?", BLUE);
+        if (scenarios.empty()) {
+            boxLine(fg(GREY, "Nothing can run yet. Add a workflow to definitions/ and a scenario naming it to scenarios/."), BLUE);
+        }
+        size_t nameWidth = 0;
+        for (const Scenario &scenario : scenarios) nameWidth = std::max(nameWidth, scenario.industry.size());
+        for (size_t i = 0; i < scenarios.size(); ++i) {
+            boxLine(bold(GREEN, pad(" " + std::to_string(i + 1), 4)) + pad(bold(WHITE, scenarios[i].industry), nameWidth + 3) + fg(GREY, scenarios[i].process), BLUE);
+        }
+        boxLine(bold(RED, " 0 ") + " " + bold(WHITE, "Exit"), BLUE);
+        boxBottom(BLUE);
 
-        CHECK(item.start());
-        CHECK(item.getStateName() == "InProgress");
-
-        CHECK(item.complete("approved"));
-        CHECK(item.getStateName() == "Completed");
-        CHECK(item.getOutcome() == "approved");
-        CHECK(item.isFinished());
-    }
-
-    TEST_CASE("State: rejection records the reason and is final") {
-        Participant dean("P2", "Dr Mokoena", "Dean");
-        LifecycleTestItem item("T2", "Admission Decision");
-        driveToInProgress(item, &dean);
-
-        CHECK(item.reject("APS below faculty minimum"));
-        CHECK(item.getStateName() == "Rejected");
-        CHECK(item.getOutcome() == "APS below faculty minimum");
-        CHECK(item.isFinished());
-    }
-
-    TEST_CASE("State: invalid transitions are refused and leave the state unchanged") {
-        Participant clerk("P3", "Sipho", "WarehouseClerk");
-        LifecycleTestItem item("T3", "Log Exception");
-
-        // Created: cannot be assigned, started, completed, rejected or escalated
-        CHECK_FALSE(item.assign(&clerk));
-        CHECK_FALSE(item.start());
-        CHECK_FALSE(item.complete("done"));
-        CHECK_FALSE(item.reject("no"));
-        CHECK_FALSE(item.escalate());
-        CHECK(item.getStateName() == "Created");
-
-        // Available: cannot start or complete before someone is assigned
-        REQUIRE(item.makeAvailable());
-        CHECK_FALSE(item.makeAvailable());
-        CHECK_FALSE(item.start());
-        CHECK_FALSE(item.complete("done"));
-        CHECK(item.getStateName() == "Available");
-
-        // Assigned: cannot complete without starting
-        REQUIRE(item.assign(&clerk));
-        CHECK_FALSE(item.complete("done"));
-        CHECK(item.getStateName() == "Assigned");
-    }
-
-    TEST_CASE("State: assigning a null participant is refused") {
-        LifecycleTestItem item("T4", "Classify Severity");
-        REQUIRE(item.makeAvailable());
-        CHECK_FALSE(item.assign(nullptr));
-        CHECK(item.getStateName() == "Available");
-    }
-
-    TEST_CASE("State: final states refuse every request") {
-        Participant p("P5", "Lerato", "Dispatcher");
-        LifecycleTestItem item("T5", "Reroute Shipment");
-        driveToInProgress(item, &p);
-        REQUIRE(item.complete("rerouted"));
-
-        CHECK_FALSE(item.makeAvailable());
-        CHECK_FALSE(item.assign(&p));
-        CHECK_FALSE(item.start());
-        CHECK_FALSE(item.complete("again"));
-        CHECK_FALSE(item.reject("late"));
-        CHECK_FALSE(item.cancel());
-        CHECK_FALSE(item.escalate());
-        CHECK(item.getStateName() == "Completed");
-        CHECK(item.getOutcome() == "rerouted");
-    }
-
-    TEST_CASE("State: escalation releases the assignee and re-assignment resumes work") {
-        Participant officer("P6", "Naledi", "FinancialAidOfficer");
-        Participant manager("P7", "Mr Botha", "FinancialAidManager");
-        LifecycleTestItem item("T6", "Approve Bursary");
-        driveToInProgress(item, &officer);
-
-        CHECK(item.escalate());
-        CHECK(item.getStateName() == "Escalated");
-        CHECK(item.getAssignee() == nullptr);
-        CHECK(item.getEscalationLevel() == 1);
-
-        // Escalated work must be re-assigned before it can continue
-        CHECK_FALSE(item.start());
-        CHECK_FALSE(item.complete("approved"));
-        CHECK(item.assign(&manager));
-        CHECK(item.getStateName() == "Assigned");
-        CHECK(item.getAssignee() == &manager);
-
-        CHECK(item.start());
-        CHECK(item.complete("approved"));
-        CHECK(item.isFinished());
-    }
-
-    TEST_CASE("State: delegation re-assigns an Assigned item to another participant") {
-        Participant a("P8", "Kabelo", "Registrar");
-        Participant b("P9", "Zanele", "Registrar");
-        LifecycleTestItem item("T7", "Verify Documents");
-        REQUIRE(item.makeAvailable());
-        REQUIRE(item.assign(&a));
-
-        CHECK(item.assign(&b));
-        CHECK(item.getStateName() == "Assigned");
-        CHECK(item.getAssignee() == &b);
-    }
-
-    TEST_CASE("State: cancellation is allowed from every non-final state") {
-        Participant p("P10", "Ayanda", "CustomerService");
-
-        LifecycleTestItem created("C1", "Created item");
-        CHECK(created.cancel());
-        CHECK(created.getStateName() == "Cancelled");
-        CHECK(created.isFinished());
-
-        LifecycleTestItem available("C2", "Available item");
-        REQUIRE(available.makeAvailable());
-        CHECK(available.cancel());
-
-        LifecycleTestItem inProgress("C3", "In-progress item");
-        driveToInProgress(inProgress, &p);
-        CHECK(inProgress.cancel());
-
-        LifecycleTestItem escalated("C4", "Escalated item");
-        REQUIRE(escalated.makeAvailable());
-        REQUIRE(escalated.escalate());
-        CHECK(escalated.cancel());
-        CHECK(escalated.getStateName() == "Cancelled");
-    }
-
-    TEST_CASE("State: each transition publishes the matching event through the dispatcher") {
-        EventDispatcher& dispatcher = EventDispatcher::getInstance();
-        dispatcher.clearListeners();
-        EventRecorder recorder;
-        dispatcher.attachListener(&recorder);
-
-        Participant p("P11", "Musa", "Dean");
-        LifecycleTestItem item("T8", "Admission Decision");
-        item.setInstanceId("UNI-001");
-        driveToInProgress(item, &p);
-        item.complete("approved");
-        item.start(); // refused, must not publish
-
-        REQUIRE(recorder.events.size() == 4);
-        CHECK(recorder.events[0].type == EventType::AVAILABLE);
-        CHECK(recorder.events[1].type == EventType::ASSIGNED);
-        CHECK(recorder.events[2].type == EventType::STARTED);
-        CHECK(recorder.events[3].type == EventType::COMPLETED);
-        CHECK(recorder.events[3].outcome == "approved");
-        CHECK(recorder.events[3].instanceId == "UNI-001");
-        CHECK(recorder.events[3].itemId == "T8");
-
-        dispatcher.clearListeners();
-    }
-
-    TEST_CASE("State: a cloned item has its own independent state") {
-        Participant p("P12", "Palesa", "Registrar");
-        LifecycleTestItem original("T9", "Registration");
-        REQUIRE(original.makeAvailable());
-
-        WorkItem* copy = original.clone();
-        CHECK(copy->getStateName() == "Available");
-
-        REQUIRE(copy->assign(&p));
-        CHECK(copy->getStateName() == "Assigned");
-        CHECK(original.getStateName() == "Available");
-
-        delete copy;
+        const int choice = askNumber("Choose", 0, static_cast<int>(scenarios.size()));
+        if (choice == 0) {
+            std::cout << bold(SKY, "Goodbye.") << "\n";
+            return;
+        }
+        if (choice > 0) {
+            current = static_cast<size_t>(choice - 1);
+            if (chooseActor()) {
+                mainMenu();
+            }
+        }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Adapter pattern tests
-// ---------------------------------------------------------------------------
+void Tui::mainMenu() {
+    while (!inputClosed) {
+        beginScreen(scenarios[current].industry + "  ›  " + scenarios[current].process);
 
-/// Builds a request from key/value pairs, as a task would from its InstanceData.
-static ServiceRequest makeRequest(const std::string& op,
-                                  const std::map<std::string, std::string>& params) {
-    return ServiceRequest(op, params);
-}
+        const std::vector<const InstanceRecord *> mine = currentInstances();
+        int running = 0;
+        for (const InstanceRecord *record : mine) {
+            if (facade.getStatus(record->id) == "running") ++running;
+        }
 
-TEST_SUITE("Angela Ramaboea - Adapter Subsystem") {
+        const struct { int key; int colour; const char *name; const char *hint; } options[] = {
+            {1, VIOLET, "Explain this workflow", "what the process does and who is involved"},
+            {2, GREEN, "Start a workflow instance", "enter the details and run it"},
+            {3, SKY, "Open an instance", ""},
+            {4, GOLD, "My work", "what you can act on right now"},
+            {5, PINK, "Change participant", "choose who you are acting as"},
+            {6, ORANGE, "Undo the last action", "roll back from a snapshot"},
+            {7, BLUE, "Full audit trail", "every event, all workflows"},
+            {8, BLUE, "Monitoring metrics", "live counts from the observers"},
+            {9, ORANGE, "Check deadlines", "jump ahead and see what escalates"},
+        };
 
-    TEST_CASE("Adapter: registry resolves adapters by the names used in workflow definitions") {
-        ServiceRegistry registry;
-        registry.add(new GovernmentIDAdapter());
-        registry.add(new BankGatewayAdapter());
-        registry.add(new TrackingServiceAdapter());
-        registry.add(new CarrierAdapter());
+        boxTop("Main menu", BLUE);
+        boxLine("Acting as " + actorLabel(), BLUE);
+        boxLine("", BLUE);
+        for (const auto &option : options) {
+            std::string hint = option.hint;
+            if (option.key == 3) {
+                hint = std::to_string(mine.size()) + " started, " + std::to_string(running) + " running";
+            }
+            boxLine(bold(option.colour, " " + std::to_string(option.key) + " ") + " " + pad(bold(WHITE, option.name), 28) + fg(GREY, hint), BLUE);
+        }
+        boxLine(bold(RED, " 0 ") + " " + bold(WHITE, "Back to the workflow list"), BLUE);
+        boxBottom(BLUE);
 
-        CHECK(registry.size() == 4);
-        CHECK(registry.has("DocumentVerificationService"));
-        CHECK(registry.has("PaymentGateway"));
-        CHECK(registry.has("TrackingService"));
-        CHECK(registry.has("CarrierAdapter"));
-        CHECK(registry.find("NoSuchService") == nullptr);
-
-        // The engine only ever sees the Target interface
-        ExternalService* svc = registry.find("TrackingService");
-        REQUIRE(svc != nullptr);
-        CHECK(svc->name() == "TrackingService");
-    }
-
-    TEST_CASE("Adapter: registering a service under an existing name replaces it") {
-        ServiceRegistry registry;
-        GovernmentIDAdapter* first = new GovernmentIDAdapter();
-        GovernmentIDAdapter* second = new GovernmentIDAdapter();
-        registry.add(first);
-        registry.add(second);
-        registry.add(nullptr);
-
-        CHECK(registry.size() == 1);
-        CHECK(registry.find("DocumentVerificationService") == second);
-    }
-
-    TEST_CASE("Adapter: GovernmentIDAdapter verifies a matching identity") {
-        GovernmentIDAdapter adapter;
-        ServiceResult r = adapter.invoke(makeRequest("verifyIdentity",
-            {{"idNumber", "0501015800087"}, {"surname", "mokoena"}}));
-
-        CHECK(r.success);
-        CHECK(r.outputs["identityVerified"] == "true");
-        CHECK(r.outputs["identityStatus"] == "VERIFIED");
-    }
-
-    TEST_CASE("Adapter: GovernmentIDAdapter reports negative answers as data, not failures") {
-        GovernmentIDAdapter adapter;
-
-        ServiceResult mismatch = adapter.invoke(makeRequest("verifyIdentity",
-            {{"idNumber", "0501015800087"}, {"surname", "Naidoo"}}));
-        CHECK(mismatch.success);
-        CHECK(mismatch.outputs["identityVerified"] == "false");
-        CHECK(mismatch.outputs["identityStatus"] == "SURNAME_MISMATCH");
-
-        ServiceResult unknown = adapter.invoke(makeRequest("verifyIdentity",
-            {{"idNumber", "9999999999999"}, {"surname", "Smith"}}));
-        CHECK(unknown.outputs["identityStatus"] == "NOT_FOUND");
-
-        ServiceResult deceased = adapter.invoke(makeRequest("verifyIdentity",
-            {{"idNumber", "4808105009083"}, {"surname", "Dlamini"}}));
-        CHECK(deceased.outputs["identityStatus"] == "DECEASED");
-    }
-
-    TEST_CASE("Adapter: GovernmentIDAdapter fails on bad input or registry outage") {
-        GovernmentIDAdapter adapter;
-
-        CHECK_FALSE(adapter.invoke(makeRequest("verifyIdentity", {{"surname", "Mokoena"}})).success);
-        CHECK_FALSE(adapter.invoke(makeRequest("verifyIdentity",
-            {{"idNumber", "12AB"}, {"surname", "Mokoena"}})).success);
-
-        adapter.getRegistry().setOnline(false);
-        ServiceResult down = adapter.invoke(makeRequest("verifyIdentity",
-            {{"idNumber", "0501015800087"}, {"surname", "Mokoena"}}));
-        CHECK_FALSE(down.success);
-        CHECK(down.message == "Identity registry unavailable");
-    }
-
-    TEST_CASE("Adapter: BankGatewayAdapter converts rands to an EFT and returns a reference") {
-        BankGatewayAdapter adapter;
-        ServiceResult r = adapter.invoke(makeRequest("pay",
-            {{"accountNumber", "62012345678"}, {"branchCode", "250655"},
-             {"amount", "45000.50"}, {"reference", "BURSARY-UNI-001"}}));
-
-        CHECK(r.success);
-        CHECK(r.outputs["paymentStatus"] == "PAID");
-        CHECK(r.outputs["paymentReference"].find("EFT") == 0);
-    }
-
-    TEST_CASE("Adapter: BankGatewayAdapter maps bank rejections to failures") {
-        BankGatewayAdapter adapter(new BankPaymentGateway(5000000LL)); // R50 000 limit
-
-        ServiceResult overLimit = adapter.invoke(makeRequest("pay",
-            {{"accountNumber", "62012345678"}, {"branchCode", "250655"}, {"amount", "60000"}}));
-        CHECK_FALSE(overLimit.success);
-        CHECK(overLimit.message == "Amount exceeds the gateway transfer limit");
-
-        ServiceResult badAccount = adapter.invoke(makeRequest("pay",
-            {{"accountNumber", "12"}, {"branchCode", "250655"}, {"amount", "100"}}));
-        CHECK_FALSE(badAccount.success);
-
-        ServiceResult badAmount = adapter.invoke(makeRequest("pay",
-            {{"accountNumber", "62012345678"}, {"branchCode", "250655"}, {"amount", "ten"}}));
-        CHECK_FALSE(badAmount.success);
-
-        adapter.getGateway().setOnline(false);
-        ServiceResult down = adapter.invoke(makeRequest("pay",
-            {{"accountNumber", "62012345678"}, {"branchCode", "250655"}, {"amount", "100"}}));
-        CHECK_FALSE(down.success);
-        CHECK(down.message == "Bank gateway unavailable");
-    }
-
-    TEST_CASE("Adapter: TrackingServiceAdapter parses the courier reply into named data") {
-        TrackingServiceAdapter adapter;
-        ServiceResult r = adapter.invoke(makeRequest("track", {{"waybill", "WB1002"}}));
-
-        CHECK(r.success);
-        CHECK(r.outputs["shipmentStatus"] == "DELAYED");
-        CHECK(r.outputs["lastLocation"] == "Bloemfontein Depot");
-        CHECK(r.outputs["delayHours"] == "9");
-
-        adapter.getApi().registerParcel("WB2000", "IN_TRANSIT", "Polokwane", 61);
-        CHECK(adapter.invoke(makeRequest("track", {{"waybill", "WB2000"}})).outputs["delayHours"] == "2");
-    }
-
-    TEST_CASE("Adapter: TrackingServiceAdapter fails for unknown waybills and outages") {
-        TrackingServiceAdapter adapter;
-        CHECK_FALSE(adapter.invoke(makeRequest("track", {{"waybill", "WB404"}})).success);
-        CHECK_FALSE(adapter.invoke(makeRequest("track", {})).success);
-
-        adapter.getApi().setOnline(false);
-        ServiceResult down = adapter.invoke(makeRequest("track", {{"waybill", "WB1001"}}));
-        CHECK_FALSE(down.success);
-        CHECK(down.message == "Courier tracking service unavailable");
-    }
-
-    TEST_CASE("Adapter: CarrierAdapter maps hub names to codes and returns the confirmation") {
-        CarrierAdapter adapter;
-        ServiceResult r = adapter.invoke(makeRequest("reroute",
-            {{"waybill", "WB1003"}, {"destinationHub", "Cape Town"}}));
-
-        CHECK(r.success);
-        CHECK(r.outputs["newHub"] == "Cape Town");
-        CHECK(r.outputs["rerouteReference"] == "RB21-WB1003-001");
-    }
-
-    TEST_CASE("Adapter: CarrierAdapter fails for unknown hubs, full hubs and outages") {
-        CarrierAdapter adapter;
-        CHECK_FALSE(adapter.invoke(makeRequest("reroute",
-            {{"waybill", "WB1003"}, {"destinationHub", "Atlantis"}})).success);
-
-        adapter.getCarrier().setHubFull(CarrierBookingSystem::HUB_DURBAN, true);
-        ServiceResult full = adapter.invoke(makeRequest("reroute",
-            {{"waybill", "WB1003"}, {"destinationHub", "Durban"}}));
-        CHECK_FALSE(full.success);
-        CHECK(full.message == "No carrier capacity at Durban");
-
-        adapter.getCarrier().setOnline(false);
-        CHECK_FALSE(adapter.invoke(makeRequest("reroute",
-            {{"waybill", "WB1003"}, {"destinationHub", "Johannesburg"}})).success);
-    }
-
-    TEST_CASE("Adapter: service outputs are written into the instance data") {
-        InstanceData data;
-        data.set("waybill", "WB1001");
-
-        TrackingServiceAdapter adapter;
-        ServiceResult r = adapter.invoke(ServiceRequest("track", data.getMap()));
-        REQUIRE(r.success);
-        r.applyTo(data);
-
-        CHECK(data.get("shipmentStatus") == "IN_TRANSIT");
-        CHECK(data.get("lastLocation") == "Durban Hub");
-        CHECK(data.get("waybill") == "WB1001");
+        switch (askNumber("Choose", 0, 9)) {
+            case 1: showIndustry(); break;
+            case 2: startInstanceScreen(); break;
+            case 3: openInstanceScreen(); break;
+            case 4: myWorkScreen(); break;
+            case 5: chooseActor(); break;
+            case 6: undoLast(); break;
+            case 7: showAuditTrail(); break;
+            case 8: showMetrics(); break;
+            case 9: checkDeadlines(); break;
+            case 0: return;
+            default: break;
+        }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Composite, Iterator, Mediator and Chain of Responsibility test helpers
-// ---------------------------------------------------------------------------
+// ---- Input ----------------------------------------------------------------------------------
 
-/// Task routed to the first participant holding @p role.
-static Task* roleTask(const std::string& id, const std::string& name, const std::string& role) {
-    Task* task = new Task(id, name);
-    task->setRouting(new RoleBasedRouting(role));
-    return task;
-}
-
-/// Starts and completes an item that routing has already assigned.
-static bool finishWith(WorkItem* item, const std::string& outcome) {
-    return item != nullptr && item->start() && item->complete(outcome);
-}
-
-/// Ids visited by a work-item iterator, in order.
-static std::vector<std::string> visitOrder(Iterator<WorkItem>& it) {
-    std::vector<std::string> ids;
-    for (it.first(); !it.isDone(); it.next()) {
-        ids.push_back(it.current()->getId());
+bool Tui::ask(const std::string &prompt, std::string &answer) {
+    std::cout << bold(PINK, "❯ ") << bold(WHITE, prompt) << ": " << std::flush;
+    if (!std::getline(std::cin, answer)) {
+        inputClosed = true;
+        answer.clear();
+        std::cout << "\n";
+        return false;
     }
-    return ids;
+    answer = trimmed(answer);
+    return true;
 }
 
-/// Shipment-exception process: report, then handle (reroute or hold), then close.
-static SubProcess* buildShipmentExceptionTree() {
-    SubProcess* root = new SubProcess("SHIP_EX", "Shipment Exception");
-
-    SubProcess* report = new SubProcess("REPORT", "Exception Report");
-    report->add(roleTask("LOG_EXCEPTION", "Log Exception", "WarehouseClerk"));
-    report->add(roleTask("CLASSIFY", "Classify Severity", "ExceptionAnalyst"));
-
-    SubProcess* handle = new SubProcess("HANDLE", "Exception Handling");
-    handle->add(roleTask("ASSESS", "Assess Impact", "LogisticsCoordinator"));
-    handle->add(roleTask("REROUTE", "Reroute Shipment", "Dispatcher"));
-    handle->add(roleTask("HOLD", "Hold Shipment", "WarehouseSupervisor"));
-
-    SubProcess* close = new SubProcess("CLOSE", "Case Closure");
-    close->add(roleTask("NOTIFY_CUSTOMER", "Notify Customer", "CustomerService"));
-    close->add(roleTask("CLOSE_CASE", "Close Case", "LogisticsCoordinator"));
-
-    root->add(report);
-    root->add(handle);
-    root->add(close);
-    return root;
+/// @return The number chosen, or first - 1 if the input was not a number in range.
+int Tui::askNumber(const std::string &prompt, int first, int last) {
+    std::string answer;
+    if (!ask(prompt, answer)) {
+        return first - 1;
+    }
+    char *end = nullptr;
+    const long value = std::strtol(answer.c_str(), &end, 10);
+    if (answer.empty() || *end != '\0' || value < first || value > last) {
+        noticeWarning("Please enter a number from " + std::to_string(first) + " to " + std::to_string(last) + ".");
+        return first - 1;
+    }
+    return static_cast<int>(value);
 }
 
-static std::vector<DependencyRule> shipmentExceptionRules() {
-    std::vector<DependencyRule> rules;
-    rules.push_back(DependencyRule("REPORT", "HANDLE", "*"));
-    rules.push_back(DependencyRule("HANDLE", "CLOSE", "*"));
-    rules.push_back(DependencyRule("LOG_EXCEPTION", "CLASSIFY", "*"));
-    rules.push_back(DependencyRule("ASSESS", "REROUTE", "reroute"));
-    rules.push_back(DependencyRule("ASSESS", "HOLD", "hold"));
-    rules.push_back(DependencyRule("NOTIFY_CUSTOMER", "CLOSE_CASE", "*"));
-    return rules;
+/// Keeps a read-only screen up until the user is done with it; scripted input is never consumed.
+void Tui::pause() {
+    if (!inputIsTerminal() || inputClosed) return;
+    std::string ignored;
+    ask("Press Enter to go back", ignored);
 }
 
-static void addLogisticsStaff(ParticipantDirectory& directory) {
-    directory.addParticipant(new Participant("L1", "Sipho Ndlovu", "WarehouseClerk"));
-    directory.addParticipant(new Participant("L2", "Ayesha Patel", "ExceptionAnalyst"));
-    directory.addParticipant(new Participant("L3", "Johan van Wyk", "LogisticsCoordinator"));
-    directory.addParticipant(new Participant("L4", "Lerato Mokoena", "Dispatcher"));
-    directory.addParticipant(new Participant("L5", "Pieter Botha", "WarehouseSupervisor"));
-    directory.addParticipant(new Participant("L6", "Nomsa Khumalo", "CustomerService"));
+// ---- Screens --------------------------------------------------------------------------------
+
+void Tui::beginScreen(const std::string &title) {
+    if (outputIsTerminal()) std::cout << "\033[2J\033[H";
+
+    const size_t width = screenWidth();
+    const std::string left = "  TIVIDY  ›  " + title;
+    if (useColour()) {
+        std::cout << "\033[1;48;5;" << NAVY << ";38;5;" << WHITE << "m" << pad(left, width) << "\033[0m\n\n";
+    } else {
+        std::cout << left << "\n" << repeat("=", width) << "\n\n";
+    }
+
+    if (!notices.empty()) {
+        boxTop("What just happened", GOLD);
+        for (const std::string &notice : notices) boxLine(notice, GOLD);
+        boxBottom(GOLD);
+        std::cout << "\n";
+        notices.clear();
+    }
 }
 
-/// One running instance: its own copy of the tree, its own mediator and its own data.
-struct TestInstance {
-    std::unique_ptr<SubProcess> root;
-    DependencyMediator mediator;
+void Tui::showIndustry() {
+    const Scenario &scenario = scenarios[current];
+    beginScreen(scenario.industry + "  ›  About");
+
+    const int colour = VIOLET;
+    boxTop(scenario.process, colour);
+    for (const std::string &paragraph : descriptionLines(scenario.about)) {
+        if (paragraph.empty()) boxLine("", colour);
+        else boxText(paragraph, colour);
+    }
+    boxLine("", colour);
+    if (!scenario.expected.empty()) {
+        boxLine(bold(colour, "Expected result"), colour);
+        boxText(scenario.expected, colour);
+        boxLine("", colour);
+    }
+    boxLine(bold(colour, "Participants"), colour);
+    for (const Person &person : scenario.people) {
+        boxLine("  " + pad(bold(WHITE, person.name), 22) + fg(GREY, person.roles), colour);
+    }
+    boxLine("", colour);
+    if (!scenario.starterRole.empty()) {
+        boxLine(bold(colour, "Started by"), colour);
+        boxLine("  " + scenario.starterRole, colour);
+        boxLine("", colour);
+    }
+    if (!scenario.startFields.empty()) boxLine(bold(colour, "Details asked for at the start"), colour);
+    for (const FieldPrompt &field : scenario.startFields) {
+        boxLine("  " + fit(field.label, screenWidth() - 8), colour);
+    }
+    for (const std::pair<const std::string, std::vector<FieldPrompt>> &task : scenario.taskFields) {
+        boxLine(bold(colour, "Details asked for at " + task.first), colour);
+        for (const FieldPrompt &field : task.second) {
+            boxLine("  " + fit(field.label, screenWidth() - 8), colour);
+        }
+    }
+    boxLine("", colour);
+    boxLine(fg(GREY, "Workflow: " + scenario.workflowId + "  (from " + DEFINITIONS_FOLDER + "/)"), colour);
+    boxBottom(colour);
+    std::cout << "\n";
+
+    boxTop("Shared by every workflow, unchanged", BLUE);
+    boxText("TividyWorkflowFacade, WorkflowEngine, WorkflowInstance, WorkflowDefinition, Task, SubProcess, "
+            "WorkItemState and its states, DependencyMediator, RoutingStrategy and its strategies, the "
+            "ApprovalHandler chain, WorkItemAction commands, WorkflowSnapshot, EventDispatcher and its listeners. "
+            "Only the data files and external-service adapters differ.", BLUE);
+    boxBottom(BLUE);
+    pause();
+}
+
+void Tui::startInstanceScreen() {
+    const size_t index = current;
+    const Scenario &scenario = scenarios[index];
+    beginScreen(scenario.industry + "  ›  Start a workflow instance");
+
+    // Starting is work too: only the role the scenario names may do it.
+    if (!scenario.starterRole.empty() && !currentActor()->hasRole(scenario.starterRole)) {
+        noticeError("Starting this workflow needs the role " + scenario.starterRole + ", and you are " + people[actor].roles + ".");
+        return;
+    }
+
+    boxTop("New instance, started by " + people[actor].name, GREEN);
+    boxLine(fg(GREY, "The engine gives it an instance id. Press Enter on an empty line to go back."), GREEN);
+    boxBottom(GREEN);
+
     InstanceData data;
-
-    TestInstance(const SubProcess& definitionRoot,
-                 const std::vector<DependencyRule>& rules,
-                 const ParticipantDirectory& directory)
-        : root(definitionRoot.clone()), mediator(rules) {
-        mediator.registerTree(*root);
-        root->setRoutingContext(&data, &directory);
-    }
-
-    WorkItem* item(const std::string& id) { return mediator.findItem(id); }
-    std::string state(const std::string& id) { return item(id)->getStateName(); }
-};
-
-/// Bursary approval levels: officer up to R20 000, manager up to R100 000, then committee.
-static ApprovalHandler* buildBursaryChain() {
-    ApprovalHandler* officer = new ConcreteApprovalHandler("BursaryOfficer", new ThresholdRule("amount", 20000), 48);
-    officer->setNext(new ConcreteApprovalHandler("FinanceManager", new ThresholdRule("amount", 100000), 72))
-           ->setNext(new ConcreteApprovalHandler("BursaryCommittee", new AlwaysAcceptRule(), 168));
-    return officer;
-}
-
-static void addBursaryApprovers(ParticipantDirectory& directory) {
-    directory.addParticipant(new Participant("B1", "Zanele Dube", "BursaryOfficer"));
-    directory.addParticipant(new Participant("B2", "Michael Smith", "FinanceManager"));
-    directory.addParticipant(new Participant("B3", "Prof. Naidoo", "BursaryCommittee"));
-}
-
-TEST_SUITE("Angelo Anthony - Composite & Iterator Subsystem") {
-
-    TEST_CASE("Iterator: depth-first traversal visits parents before children, left to right") {
-        std::unique_ptr<SubProcess> root(buildShipmentExceptionTree());
-        std::unique_ptr<WorkItemIterator> it = root->createIterator();
-
-        std::vector<std::string> expected = {
-            "SHIP_EX", "REPORT", "LOG_EXCEPTION", "CLASSIFY",
-            "HANDLE", "ASSESS", "REROUTE", "HOLD",
-            "CLOSE", "NOTIFY_CUSTOMER", "CLOSE_CASE"};
-        CHECK(visitOrder(*it) == expected);
-    }
-
-    TEST_CASE("Iterator: first() restarts, and a finished iterator stays finished") {
-        std::unique_ptr<SubProcess> root(buildShipmentExceptionTree());
-        std::unique_ptr<WorkItemIterator> it = root->createIterator();
-
-        while (!it->isDone()) {
-            it->next();
+    std::string summary = "Started by " + people[actor].name;
+    data.set("startedBy", people[actor].name);
+    for (const FieldPrompt &field : scenario.startFields) {
+        std::string value;
+        if (!ask(field.label, value)) {
+            return;
         }
-        CHECK(it->current() == nullptr);
-        it->next(); // harmless once done
-        CHECK(it->isDone());
-
-        it->first();
-        REQUIRE_FALSE(it->isDone());
-        CHECK(it->current()->getId() == "SHIP_EX");
-    }
-
-    TEST_CASE("Iterator: a single task and an empty root are traversed correctly") {
-        Task task("T1", "Capture Application");
-        DepthFirstWorkItemIterator single(&task);
-        CHECK(visitOrder(single) == std::vector<std::string>{"T1"});
-
-        DepthFirstWorkItemIterator empty(nullptr);
-        CHECK(empty.isDone());
-        CHECK(empty.current() == nullptr);
-    }
-
-    TEST_CASE("Composite: find() locates nested items and parents are linked") {
-        std::unique_ptr<SubProcess> root(buildShipmentExceptionTree());
-
-        WorkItem* hold = root->find("HOLD");
-        REQUIRE(hold != nullptr);
-        CHECK(hold->getName() == "Hold Shipment");
-        REQUIRE(hold->getParent() != nullptr);
-        CHECK(hold->getParent()->getId() == "HANDLE");
-        CHECK(hold->getParent()->getParent() == root.get());
-
-        CHECK(root->find("SHIP_EX") == root.get());
-        CHECK(root->find("NOT_THERE") == nullptr);
-        CHECK(hold->childCount() == 0);
-        CHECK(hold->getChild(0) == nullptr);
-    }
-
-    TEST_CASE("Composite: remove() deletes only the named direct child") {
-        SubProcess handle("HANDLE", "Exception Handling");
-        handle.add(new Task("ASSESS", "Assess Impact"));
-        handle.add(new Task("HOLD", "Hold Shipment"));
-        handle.add(nullptr); // ignored
-
-        CHECK(handle.childCount() == 2);
-        CHECK(handle.remove("ASSESS"));
-        CHECK_FALSE(handle.remove("ASSESS"));
-        CHECK(handle.childCount() == 1);
-        CHECK(handle.getChild(0)->getId() == "HOLD");
-        CHECK(handle.getChild(5) == nullptr);
-    }
-
-    TEST_CASE("Composite: clone() deep-copies the tree so instances are isolated") {
-        std::unique_ptr<SubProcess> definition(buildShipmentExceptionTree());
-        std::unique_ptr<SubProcess> copy(definition->clone());
-
-        WorkItem* original = definition->find("ASSESS");
-        WorkItem* copied = copy->find("ASSESS");
-        REQUIRE(copied != nullptr);
-        CHECK(copied != original);
-        CHECK(copied->getParent() == copy->find("HANDLE"));
-
-        Task* copiedTask = static_cast<Task*>(copied);
-        Task* originalTask = static_cast<Task*>(original);
-        REQUIRE(copiedTask->getRouting() != nullptr);
-        CHECK(copiedTask->getRouting() != originalTask->getRouting());
-
-        // Progress in the copy must not leak into the definition.
-        CHECK(copied->makeAvailable());
-        CHECK(copied->getStateName() == "Available");
-        CHECK(original->getStateName() == "Created");
-
-        CHECK(copy->remove("REPORT"));
-        CHECK(definition->find("LOG_EXCEPTION") != nullptr);
-    }
-
-    TEST_CASE("Iterator: approval chain iterator lists every level in order") {
-        std::unique_ptr<ApprovalHandler> chain(buildBursaryChain());
-        std::unique_ptr<Iterator<ApprovalHandler>> it = chain->createIterator();
-
-        std::vector<std::string> levels;
-        for (it->first(); !it->isDone(); it->next()) {
-            levels.push_back(it->current()->describe());
+        if (value.empty()) {
+            noticeWarning("Not started: " + field.label + " was left empty.");
+            return;
         }
-        REQUIRE(levels.size() == 3);
-        CHECK(levels[0] == "BursaryOfficer (amount <= 20000)");
-        CHECK(levels[1] == "FinanceManager (amount <= 100000)");
-        CHECK(levels[2] == "BursaryCommittee (any request)");
+        data.set(field.key, value);
+        summary += ", " + value;
+    }
 
-        ApprovalChainIterator empty(nullptr);
-        CHECK(empty.isDone());
+    const std::string id = facade.startInstance(scenario.workflowId, data, scenario.roster);
+    if (id.empty()) {
+        noticeError("The engine could not start this instance: " + facade.getLastError());
+        return;
+    }
+
+    InstanceRecord record;
+    record.id = id;
+    record.summary = summary;
+    record.scenario = index;
+    instances.push_back(record);
+
+    // The instance's own id belongs with the details entered for it.
+    facade.getInstance(id)->getData().set("instanceId", id);
+
+    HistoryEntry started;
+    started.instanceId = id;
+    started.when = std::time(nullptr);
+    started.what = "CREATED";
+    started.detail = summary;
+    history.push_back(started);
+
+    noticeOk("Started " + id + " by " + people[actor].name);
+    flushEvents();
+    instanceScreen(record);
+}
+
+void Tui::openInstanceScreen() {
+    const std::vector<const InstanceRecord *> mine = currentInstances();
+    beginScreen(scenarios[current].industry + "  ›  Instances");
+    if (mine.empty()) {
+        boxTop("Nothing started yet", GOLD);
+        boxLine("Choose 2 on the main menu to start your first instance.", GOLD);
+        boxBottom(GOLD);
+        pause();
+        return;
+    }
+
+    boxTop("Choose an instance", SKY);
+    for (size_t i = 0; i < mine.size(); ++i) {
+        int done = 0;
+        int total = 0;
+        taskProgress(mine[i]->id, done, total);
+        boxLine(bold(SKY, pad(" " + std::to_string(i + 1), 4)) + pad(bold(WHITE, mine[i]->id), 13) +
+                    progressBar(done, total, 12) + " " + pad(std::to_string(done) + "/" + std::to_string(total), 6) +
+                    pad(statusPill(facade.getStatus(mine[i]->id)), 14) + fg(GREY, fit(mine[i]->summary, screenWidth() - 54)),
+                SKY);
+    }
+    boxLine(bold(RED, pad(" 0", 4)) + bold(WHITE, "Back"), SKY);
+    boxBottom(SKY);
+
+    const int choice = askNumber("Choose", 0, static_cast<int>(mine.size()));
+    if (choice > 0) {
+        const InstanceRecord record = *mine[static_cast<size_t>(choice - 1)];
+        instanceScreen(record);
     }
 }
 
-TEST_SUITE("Angelo Anthony - Mediator Subsystem") {
-
-    TEST_CASE("Mediator: registerTree links every item to the mediator") {
-        std::unique_ptr<SubProcess> root(buildShipmentExceptionTree());
-        DependencyMediator mediator(shipmentExceptionRules());
-        mediator.registerTree(*root);
-
-        std::unique_ptr<WorkItemIterator> it = root->createIterator();
-        int count = 0;
-        for (it->first(); !it->isDone(); it->next()) {
-            CHECK(it->current()->getMediator() == &mediator);
-            CHECK(mediator.findItem(it->current()->getId()) == it->current());
-            ++count;
-        }
-        CHECK(count == 11);
-        CHECK(mediator.findItem("UNKNOWN") == nullptr);
-    }
-
-    TEST_CASE("Mediator: starting the root opens only entry items, and routing assigns them") {
-        ParticipantDirectory directory;
-        addLogisticsStaff(directory);
-        std::unique_ptr<SubProcess> definition(buildShipmentExceptionTree());
-        TestInstance inst(*definition, shipmentExceptionRules(), directory);
-
-        REQUIRE(inst.root->makeAvailable());
-        CHECK(inst.state("SHIP_EX") == "InProgress");
-        CHECK(inst.state("REPORT") == "InProgress");
-        CHECK(inst.state("LOG_EXCEPTION") == "Assigned");
-        CHECK(inst.item("LOG_EXCEPTION")->getAssignee()->getName() == "Sipho Ndlovu");
-        CHECK(inst.state("CLASSIFY") == "Created");   // waits for LOG_EXCEPTION
-        CHECK(inst.state("HANDLE") == "Created");     // waits for REPORT
-        CHECK(inst.state("CLOSE") == "Created");
-    }
-
-    TEST_CASE("Mediator: completion path runs the reroute branch and skips hold") {
-        ParticipantDirectory directory;
-        addLogisticsStaff(directory);
-        std::unique_ptr<SubProcess> definition(buildShipmentExceptionTree());
-        TestInstance inst(*definition, shipmentExceptionRules(), directory);
-        REQUIRE(inst.root->makeAvailable());
-
-        REQUIRE(finishWith(inst.item("LOG_EXCEPTION"), "logged"));
-        CHECK(inst.state("CLASSIFY") == "Assigned");
-
-        REQUIRE(finishWith(inst.item("CLASSIFY"), "high"));
-        CHECK(inst.state("REPORT") == "Completed");
-        CHECK(inst.state("HANDLE") == "InProgress");
-        CHECK(inst.state("ASSESS") == "Assigned");
-        CHECK(inst.state("REROUTE") == "Created");
-
-        REQUIRE(finishWith(inst.item("ASSESS"), "reroute"));
-        CHECK(inst.state("REROUTE") == "Assigned");
-        CHECK(inst.item("REROUTE")->getAssignee()->getName() == "Lerato Mokoena");
-        CHECK(inst.state("HOLD") == "Cancelled");     // branch not taken
-        CHECK(inst.state("HANDLE") == "InProgress");
-
-        REQUIRE(finishWith(inst.item("REROUTE"), "rerouted"));
-        CHECK(inst.state("HANDLE") == "Completed");
-        CHECK(inst.state("NOTIFY_CUSTOMER") == "Assigned");
-
-        REQUIRE(finishWith(inst.item("NOTIFY_CUSTOMER"), "sent"));
-        REQUIRE(finishWith(inst.item("CLOSE_CASE"), "closed"));
-        CHECK(inst.state("CLOSE") == "Completed");
-        CHECK(inst.state("SHIP_EX") == "Completed");
-    }
-
-    TEST_CASE("Mediator: the other outcome opens hold and skips reroute") {
-        ParticipantDirectory directory;
-        addLogisticsStaff(directory);
-        std::unique_ptr<SubProcess> definition(buildShipmentExceptionTree());
-        TestInstance inst(*definition, shipmentExceptionRules(), directory);
-        REQUIRE(inst.root->makeAvailable());
-        REQUIRE(finishWith(inst.item("LOG_EXCEPTION"), "logged"));
-        REQUIRE(finishWith(inst.item("CLASSIFY"), "low"));
-
-        REQUIRE(finishWith(inst.item("ASSESS"), "hold"));
-        CHECK(inst.state("HOLD") == "Assigned");
-        CHECK(inst.item("HOLD")->getAssignee()->getName() == "Pieter Botha");
-        CHECK(inst.state("REROUTE") == "Cancelled");
-    }
-
-    TEST_CASE("Mediator: parallel entry items join before the next item opens") {
-        ParticipantDirectory directory;
-        addBursaryApprovers(directory);
-        directory.addParticipant(new Participant("U1", "Kabelo Moloi", "AdmissionsOfficer"));
-        directory.addParticipant(new Participant("U2", "Dr. Pillay", "FacultyReviewer"));
-
-        SubProcess definition("REVIEW", "Application Review");
-        definition.add(roleTask("VERIFY_DOCS", "Verify Documents", "AdmissionsOfficer"));
-        definition.add(roleTask("ACADEMIC", "Academic Review", "FacultyReviewer"));
-        definition.add(roleTask("DECIDE", "Final Decision", "BursaryCommittee"));
-        std::vector<DependencyRule> rules = {
-            DependencyRule("VERIFY_DOCS", "DECIDE", "*"),
-            DependencyRule("ACADEMIC", "DECIDE", "*")};
-        TestInstance inst(definition, rules, directory);
-
-        REQUIRE(inst.root->makeAvailable());
-        CHECK(inst.state("VERIFY_DOCS") == "Assigned");  // both entry items run in parallel
-        CHECK(inst.state("ACADEMIC") == "Assigned");
-        CHECK(inst.state("DECIDE") == "Created");
-
-        REQUIRE(finishWith(inst.item("ACADEMIC"), "meets-requirements"));
-        CHECK(inst.state("DECIDE") == "Created");        // still waiting on VERIFY_DOCS
-
-        REQUIRE(finishWith(inst.item("VERIFY_DOCS"), "verified"));
-        CHECK(inst.state("DECIDE") == "Assigned");
-        CHECK(inst.state("REVIEW") == "InProgress");
-    }
-
-    TEST_CASE("Mediator: a join after an either/or branch opens once the taken branch finishes") {
-        ParticipantDirectory directory;
-        addLogisticsStaff(directory);
-
-        SubProcess definition("HANDLE", "Exception Handling");
-        definition.add(roleTask("ASSESS", "Assess Impact", "LogisticsCoordinator"));
-        definition.add(roleTask("REROUTE", "Reroute Shipment", "Dispatcher"));
-        definition.add(roleTask("HOLD", "Hold Shipment", "WarehouseSupervisor"));
-        definition.add(roleTask("NOTIFY_CUSTOMER", "Notify Customer", "CustomerService"));
-        std::vector<DependencyRule> rules = {
-            DependencyRule("ASSESS", "REROUTE", "reroute"),
-            DependencyRule("ASSESS", "HOLD", "hold"),
-            DependencyRule("REROUTE", "NOTIFY_CUSTOMER", "*"),
-            DependencyRule("HOLD", "NOTIFY_CUSTOMER", "*")};
-        TestInstance inst(definition, rules, directory);
-
-        REQUIRE(inst.root->makeAvailable());
-        REQUIRE(finishWith(inst.item("ASSESS"), "hold"));
-        CHECK(inst.state("REROUTE") == "Cancelled");
-        CHECK(inst.state("NOTIFY_CUSTOMER") == "Created"); // HOLD still running
-
-        REQUIRE(finishWith(inst.item("HOLD"), "held"));
-        CHECK(inst.state("NOTIFY_CUSTOMER") == "Assigned");
-    }
-
-    TEST_CASE("Mediator: an unhandled rejection fails the branch and cancels the rest") {
-        ParticipantDirectory directory;
-        addLogisticsStaff(directory);
-        std::unique_ptr<SubProcess> definition(buildShipmentExceptionTree());
-        TestInstance inst(*definition, shipmentExceptionRules(), directory);
-        REQUIRE(inst.root->makeAvailable());
-
-        WorkItem* log = inst.item("LOG_EXCEPTION");
-        REQUIRE(log->start());
-        REQUIRE(log->reject("waybill not found"));
-
-        CHECK(inst.state("CLASSIFY") == "Cancelled");
-        CHECK(inst.state("REPORT") == "Rejected");
-        CHECK(inst.item("REPORT")->getOutcome() == "Log Exception rejected: waybill not found");
-        CHECK(inst.state("SHIP_EX") == "Rejected");
-        CHECK(inst.state("HANDLE") == "Cancelled");
-        CHECK(inst.state("ASSESS") == "Cancelled");
-        CHECK(inst.state("CLOSE") == "Cancelled");
-    }
-
-    TEST_CASE("Mediator: a 'rejected' rule recovers from rejection and skips the normal path") {
-        ParticipantDirectory directory;
-        addBursaryApprovers(directory);
-        directory.addParticipant(new Participant("U1", "Kabelo Moloi", "AdmissionsOfficer"));
-
-        SubProcess definition("FUNDING", "Bursary Funding");
-        definition.add(roleTask("APPROVE", "Approve Bursary", "FinanceManager"));
-        definition.add(roleTask("PAY", "Pay Bursary", "BursaryOfficer"));
-        definition.add(roleTask("APPEAL", "Notify Appeal Options", "AdmissionsOfficer"));
-        std::vector<DependencyRule> rules = {
-            DependencyRule("APPROVE", "PAY", "approved"),
-            DependencyRule("APPROVE", "APPEAL", "rejected")};
-        TestInstance inst(definition, rules, directory);
-
-        REQUIRE(inst.root->makeAvailable());
-        WorkItem* approve = inst.item("APPROVE");
-        REQUIRE(approve->start());
-        REQUIRE(approve->reject("income above threshold"));
-
-        CHECK(inst.state("APPEAL") == "Assigned");
-        CHECK(inst.state("PAY") == "Cancelled");
-        CHECK(inst.state("FUNDING") == "InProgress");  // the branch is not failed
-
-        REQUIRE(finishWith(inst.item("APPEAL"), "sent"));
-        CHECK(inst.state("FUNDING") == "Completed");
-    }
-
-    TEST_CASE("Mediator: invalid actions are refused and do not move work forward") {
-        ParticipantDirectory directory;
-        addLogisticsStaff(directory);
-        std::unique_ptr<SubProcess> definition(buildShipmentExceptionTree());
-        TestInstance inst(*definition, shipmentExceptionRules(), directory);
-        REQUIRE(inst.root->makeAvailable());
-
-        // CLASSIFY has not been opened yet, so it cannot be completed.
-        CHECK_FALSE(inst.item("CLASSIFY")->complete("high"));
-        // LOG_EXCEPTION is assigned but not started.
-        CHECK_FALSE(inst.item("LOG_EXCEPTION")->complete("logged"));
-        CHECK(inst.state("CLASSIFY") == "Created");
-        CHECK(inst.state("HANDLE") == "Created");
-        // Starting an already running sub-process again is refused.
-        CHECK_FALSE(inst.root->makeAvailable());
-    }
-
-    TEST_CASE("Mediator: two instances of one definition progress independently") {
-        ParticipantDirectory directory;
-        addLogisticsStaff(directory);
-        std::unique_ptr<SubProcess> definition(buildShipmentExceptionTree());
-        TestInstance first(*definition, shipmentExceptionRules(), directory);
-        TestInstance second(*definition, shipmentExceptionRules(), directory);
-
-        REQUIRE(first.root->makeAvailable());
-        REQUIRE(finishWith(first.item("LOG_EXCEPTION"), "logged"));
-        REQUIRE(first.item("CLASSIFY")->start());
-        REQUIRE(first.item("CLASSIFY")->reject("duplicate report"));
-
-        CHECK(first.state("SHIP_EX") == "Rejected");
-        CHECK(second.state("SHIP_EX") == "Created");
-        CHECK(second.state("LOG_EXCEPTION") == "Created");
-        CHECK(definition->find("SHIP_EX")->getStateName() == "Created");
-
-        REQUIRE(second.root->makeAvailable());
-        CHECK(second.state("LOG_EXCEPTION") == "Assigned");
-    }
-
-    TEST_CASE("Mediator: an empty sub-process completes as soon as it starts") {
-        SubProcess definition("ROOT", "Root");
-        definition.add(new SubProcess("EMPTY", "Nothing To Do"));
-        ParticipantDirectory directory;
-        TestInstance inst(definition, {}, directory);
-
-        REQUIRE(inst.root->makeAvailable());
-        CHECK(inst.state("EMPTY") == "Completed");
-        CHECK(inst.state("ROOT") == "Completed");
+void Tui::taskProgress(const std::string &instanceId, int &done, int &total) const {
+    std::vector<Row> rows;
+    collectRows(facade.getInstance(instanceId)->getRoot(), "", true, true, rows);
+    done = 0;
+    total = 0;
+    for (const Row &row : rows) {
+        if (taskOf(row.item) == nullptr) continue;
+        ++total;
+        if (isFinal(row.item->getStateName())) ++done;
     }
 }
 
-TEST_SUITE("Angelo Anthony - Chain of Responsibility Subsystem") {
+void Tui::instanceScreen(const InstanceRecord &record) {
+    const Scenario &scenario = scenarios[record.scenario];
 
-    TEST_CASE("CoR: each request goes to the lowest level with enough authority") {
-        ParticipantDirectory directory;
-        addBursaryApprovers(directory);
-        std::unique_ptr<ApprovalHandler> chain(buildBursaryChain());
+    while (!inputClosed) {
+        std::vector<Row> rows;
+        WorkflowInstance *instance = facade.getInstance(record.id);
+        collectRows(instance->getRoot(), "", true, true, rows);
 
-        InstanceData small, medium, large;
-        small.set("amount", "15000");
-        medium.set("amount", "65000");
-        large.set("amount", "250000");
+        int done = 0;
+        int total = 0;
+        taskProgress(record.id, done, total);
 
-        ApprovalRequest r1(nullptr, &small, 0, &directory);
-        ApprovalRequest r2(nullptr, &medium, 0, &directory);
-        ApprovalRequest r3(nullptr, &large, 0, &directory);
-        CHECK(chain->handle(r1)->getName() == "Zanele Dube");
-        CHECK(chain->handle(r2)->getName() == "Michael Smith");
-        CHECK(chain->handle(r3)->getName() == "Prof. Naidoo");
+        beginScreen(record.id + "  ›  " + scenario.industry);
+
+        boxTop(scenario.process, BLUE);
+        boxLine(fg(GREY, fit(record.summary, screenWidth() - 4)), BLUE);
+        boxLine(statusPill(instance->status()) + "   " + progressBar(done, total, 24) + " " + bold(WHITE, std::to_string(done) + "/" + std::to_string(total)) + fg(GREY, " tasks finished"), BLUE);
+        boxLine("Acting as " + actorLabel(), BLUE);
+        boxLine("", BLUE);
+
+        const size_t outcomeWidth = screenWidth() - 4 - 2 - 4 - 38 - 14 - 21;
+        boxLine(bold(GREY, "  " + pad("#", 4) + pad("Work item", 38) + pad("State", 14) + pad("Assignee", 21) + "Outcome"), BLUE);
+        for (size_t i = 0; i < rows.size(); ++i) {
+            WorkItem *item = rows[i].item;
+            const bool composite = taskOf(item) == nullptr;
+            const bool mine = !composite && !facade.availableActions(record.id, item->getId(), currentActor()).empty();
+            const int priority = priorityOf(item);
+
+            std::string name = fg(240, rows[i].branch);
+            name += composite ? bold(VIOLET, item->getName()) : (mine ? bold(WHITE, item->getName()) : item->getName());
+            if (priority > 0) name += " " + bold(GOLD, "★" + std::to_string(priority));
+
+            const std::string assignee = item->getAssignee() ? fit(item->getAssignee()->getName(), 20) : "";
+            boxLine((mine ? bold(PINK, "▸ ") : "  ") + bold(SKY, pad(std::to_string(i + 1), 4)) + pad(name, 38) +
+                        stateCell(item->getStateName(), 14) + pad(assignee.empty() ? fg(240, "-") : assignee, 21) +
+                        fg(GREY, fit(shownOutcome(item), outcomeWidth)),
+                    BLUE);
+        }
+        boxLine("", BLUE);
+        boxLine(bold(PINK, "▸") + fg(GREY, " you can act on this now    ") + bold(GOLD, "★") + fg(GREY, " priority    ") + bold(VIOLET, "purple") + fg(GREY, " stages contain tasks"), BLUE);
+        boxBottom(BLUE);
+
+        std::cout << fg(GREY, "  Number") << " open a work item  " << bold(SKY, "h") << " history  " << bold(SKY, "d") << " data  " << bold(SKY, "c") << " commands  "
+                  << bold(SKY, "p") << " change participant  " << bold(SKY, "u") << " undo  " << bold(SKY, "b") << " back\n";
+
+        std::string answer;
+        if (!ask("Choose", answer)) {
+            return;
+        }
+
+        if (answer == "b" || answer == "0") return;
+        if (answer == "h") { showInstanceHistory(record.id); continue; }
+        if (answer == "d") { showInstanceData(record.id); continue; }
+        if (answer == "c") { showCommands(record.id); continue; }
+        if (answer == "p") { chooseActor(); continue; }
+        if (answer == "u") { undoLast(); continue; }
+
+        char *end = nullptr;
+        const long number = std::strtol(answer.c_str(), &end, 10);
+        if (answer.empty() || *end != '\0' || number < 1 || number > static_cast<long>(rows.size())) {
+            noticeWarning("That is not one of the options.");
+            continue;
+        }
+        itemScreen(record, rows[static_cast<size_t>(number - 1)].item->getId());
+    }
+}
+
+void Tui::itemScreen(const InstanceRecord &record, const std::string &itemId) {
+    WorkflowInstance *instance = facade.getInstance(record.id);
+    WorkItem *item = instance->findItem(itemId);
+    if (item == nullptr) {
+        return;
+    }
+    Task *task = taskOf(item);
+
+    beginScreen(record.id + "  ›  " + item->getName());
+
+    const int colour = stateColour(item->getStateName());
+    boxTop(item->getName() + " (" + item->getId() + ")", colour);
+    boxLine(pad(bold(GREY, "State"), 12) + stateCell(item->getStateName(), 14), colour);
+    boxLine(pad(bold(GREY, "Assignee"), 12) + (item->getAssignee() ? item->getAssignee()->getName() : std::string("-")), colour);
+    if (!shownOutcome(item).empty()) {
+        boxLine(pad(bold(GREY, "Outcome"), 12) + fit(shownOutcome(item), screenWidth() - 18), colour);
+    }
+    if (priorityOf(item) > 0) {
+        boxLine(pad(bold(GREY, "Priority"), 12) + bold(GOLD, "★ " + std::to_string(priorityOf(item))), colour);
+    }
+    if (task != nullptr && task->getDeadlineHours() > 0) {
+        boxLine(pad(bold(GREY, "Deadline"), 12) + std::to_string(task->getDeadlineHours()) + " hours", colour);
+    }
+    const std::string role = requiredRole(task, instance->getData());
+    if (!role.empty()) {
+        boxLine(pad(bold(GREY, "Role"), 12) + bold(PINK, role), colour);
+    }
+    const ApprovalRouting *approval = task != nullptr ? dynamic_cast<const ApprovalRouting *>(task->getRouting()) : nullptr;
+    if (approval != nullptr) {
+        const std::vector<std::string> levels = approval->describeChain();
+        for (size_t i = 0; i < levels.size(); ++i) {
+            const bool here = static_cast<int>(i) == item->getEscalationLevel();
+            boxLine(pad(i == 0 ? bold(GREY, "Approval") : std::string(), 12) + (here ? bold(PINK, "▸ " + levels[i]) : fg(GREY, "  " + levels[i])), colour);
+        }
+    } else if (item->getEscalationLevel() > 0) {
+        boxLine(pad(bold(GREY, "Escalated"), 12) + bold(ORANGE, std::to_string(item->getEscalationLevel()) + " time(s)"), colour);
+    }
+    if (task != nullptr && !task->getServiceName().empty()) {
+        boxLine(pad(bold(GREY, "Service"), 12) + task->getServiceName() + fg(GREY, "  (called when you complete this)"), colour);
+    }
+    boxBottom(colour);
+    std::cout << "\n";
+
+    const std::vector<std::string> allowed = facade.availableActions(record.id, itemId, currentActor());
+    const struct { const char *key; const char *name; } actions[] = {
+        {"claim", "Claim"}, {"start", "Start work"}, {"complete", "Complete"},
+        {"reject", "Reject"}, {"delegate", "Delegate to someone else"}, {"cancel", "Cancel"},
+    };
+
+    boxTop("Actions", PINK);
+    boxLine("Acting as " + actorLabel(), PINK);
+    boxLine("", PINK);
+    int number = 1;
+    for (const auto &action : actions) {
+        const bool can = std::find(allowed.begin(), allowed.end(), action.key) != allowed.end();
+        const std::string key = " " + std::to_string(number++) + " ";
+        boxLine((can ? bold(GREEN, key) + " " + pad(bold(WHITE, action.name), 28) + bold(GREEN, "✓ allowed")
+                     : fg(240, key) + " " + pad(fg(GREY, action.name), 28) + fg(240, "the engine will refuse this")),
+                PINK);
+    }
+    const bool canSwitch = item->getAssignee() != nullptr && item->getAssignee()->getId() != people[actor].id;
+    if (canSwitch) {
+        boxLine(bold(PINK, " 7 ") + " " + bold(WHITE, "Act as the assignee") + fg(GREY, " (" + item->getAssignee()->getName() + ")"), PINK);
+    }
+    boxLine(bold(RED, " 0 ") + " " + bold(WHITE, "Back"), PINK);
+    boxBottom(PINK);
+
+    const int choice = askNumber("Choose", 0, canSwitch ? 7 : 6);
+    if (choice <= 0) {
+        return;
+    }
+    if (choice == 7) {
+        actor = personIndex(item->getAssignee()->getId());
+        itemScreen(record, itemId);
+        return;
+    }
+    perform(record, item, choice);
+}
+
+void Tui::perform(const InstanceRecord &record, WorkItem *item, int choice) {
+    Participant *who = currentActor();
+    const std::string id = item->getId();
+    const std::string by = " by " + people[actor].name;
+    const std::string needed = requiredRole(taskOf(item), facade.getInstance(record.id)->getData());
+    bool accepted = false;
+    std::string description;
+    std::string hint;
+
+    switch (choice) {
+        case 1:
+            accepted = facade.claim(record.id, id, who);
+            description = "Claimed " + item->getName() + by;
+            break;
+        case 2:
+            accepted = facade.start(record.id, id, who);
+            description = "Started " + item->getName() + by;
+            break;
+        case 3: {
+            std::string outcome;
+            const Scenario &scenario = scenarios[record.scenario];
+            const std::vector<std::string> allowed = facade.availableActions(record.id, id, who);
+            const std::map<std::string, std::vector<FieldPrompt>>::const_iterator asked = scenario.taskFields.find(id);
+            // Ask only when the engine will accept the completion, so a refusal changes no data.
+            if (asked != scenario.taskFields.end() && std::find(allowed.begin(), allowed.end(), "complete") != allowed.end()) {
+                InstanceData &data = facade.getInstance(record.id)->getData();
+                for (const FieldPrompt &field : asked->second) {
+                    std::string value;
+                    const std::string current = data.get(field.key);
+                    if (!ask(field.label + (current.empty() ? "" : " [" + current + "]"), value)) return;
+                    if (value.empty()) value = current;
+                    if (value.empty()) {
+                        noticeWarning("Not completed: " + field.label + " was left empty.");
+                        return;
+                    }
+                    data.set(field.key, value);
+                }
+            }
+            const std::map<std::string, std::vector<std::string>>::const_iterator choices = scenario.outcomes.find(id);
+            if (choices == scenario.outcomes.end()) {
+                if (!ask("Outcome [done]", outcome)) return;
+                if (outcome.empty()) outcome = "done";
+            } else {
+                for (size_t i = 0; i < choices->second.size(); ++i) {
+                    std::cout << "  " << bold(GREEN, " " + std::to_string(i + 1) + " ") << " " << bold(WHITE, choices->second[i]) << "\n";
+                }
+                const int picked = askNumber("Outcome", 1, static_cast<int>(choices->second.size()));
+                if (picked < 1) return;
+                outcome = choices->second[static_cast<size_t>(picked - 1)];
+            }
+            accepted = facade.complete(record.id, id, who, outcome);
+            break;
+        }
+        case 4: {
+            std::string reason;
+            if (!ask("Reason for rejecting", reason)) return;
+            if (reason.empty()) {
+                noticeWarning("A rejection needs a reason.");
+                return;
+            }
+            accepted = facade.reject(record.id, id, who, reason);
+            description = "Rejected " + item->getName() + " (" + reason + ")" + by;
+            break;
+        }
+        case 5: {
+            const std::vector<size_t> roster = printRoster();
+            const int picked = askNumber("Delegate to", 1, static_cast<int>(roster.size()));
+            if (picked < 1) return;
+            const Person &target = people[roster[static_cast<size_t>(picked - 1)]];
+            accepted = facade.delegate(record.id, id, who, facade.findParticipant(target.id, scenarios[current].roster));
+            description = "Delegated " + item->getName() + " to " + target.name + by;
+            if (!accepted && target.id == people[actor].id) {
+                hint = "You cannot delegate work to yourself.";
+            } else if (!accepted && !facade.findParticipant(target.id, scenarios[current].roster)->hasRole(needed) && !needed.empty()) {
+                hint = "This work needs the role " + needed + ", and " + target.name + " holds " + target.roles + ".";
+            }
+            break;
+        }
+        case 6:
+            accepted = facade.cancel(record.id, id, who);
+            description = "Cancelled " + item->getName() + by;
+            break;
+        default:
+            return;
     }
 
-    TEST_CASE("CoR: a missing or non-numeric amount is passed up to unlimited authority") {
-        ParticipantDirectory directory;
-        addBursaryApprovers(directory);
-        std::unique_ptr<ApprovalHandler> chain(buildBursaryChain());
-
-        InstanceData missing, garbage;
-        garbage.set("amount", "R15k");
-        ApprovalRequest r1(nullptr, &missing, 0, &directory);
-        ApprovalRequest r2(nullptr, &garbage, 0, &directory);
-        CHECK(chain->handle(r1)->getName() == "Prof. Naidoo");
-        CHECK(chain->handle(r2)->getName() == "Prof. Naidoo");
+    if (!accepted) {
+        noticeError("Refused by the engine: " + facade.getLastError());
+        const std::string assignee = item->getAssignee() ? "assigned to " + item->getAssignee()->getName() : "not assigned to anyone";
+        notices.push_back(fg(GREY, "  " + item->getName() + " is " + item->getStateName() + " and " + assignee + "."));
+        if (hint.empty() && !needed.empty() && !who->hasRole(needed)) {
+            hint = "This work needs the role " + needed + ", and you are " + people[actor].roles + ".";
+        }
+        if (!hint.empty()) {
+            notices.push_back(fg(GREY, "  " + hint));
+        }
+        return;
     }
 
-    TEST_CASE("CoR: a level with nobody in its role passes the request on") {
-        ParticipantDirectory directory;
-        directory.addParticipant(new Participant("B2", "Michael Smith", "FinanceManager"));
-        std::unique_ptr<ApprovalHandler> chain(buildBursaryChain());
+    // A completion may have called an external service; show what it said.
+    const Task *task = taskOf(item);
+    const std::map<std::string, std::string> &data = facade.getInstance(record.id)->getData().getMap();
+    const std::map<std::string, std::string>::const_iterator reply = data.find("service." + id + ".message");
+    const bool serviceFailed = choice == 3 && item->getStateName() == "Escalated";
+    if (serviceFailed) {
+        noticeWarning(item->getName() + " could not finish, so it escalated.");
+    } else if (choice == 3 && item->getStateName() == "Rejected") {
+        noticeWarning(item->getName() + " was rejected by the service's answer.");
+    } else if (choice == 3) {
+        // A service can decide the outcome, so report what the engine recorded, not what was typed.
+        noticeOk("Completed " + item->getName() + " (" + item->getOutcome() + ")" + by);
+    } else {
+        noticeOk(description);
+    }
+    if (choice == 3 && task != nullptr && !task->getServiceName().empty() && reply != data.end()) {
+        notices.push_back(bold(VIOLET, "⇄ " + task->getServiceName() + ": ") + (serviceFailed ? bold(RED, reply->second) : reply->second));
+    }
+    flushEvents();
+}
 
-        InstanceData data;
-        data.set("amount", "5000");
-        ApprovalRequest request(nullptr, &data, 0, &directory);
-        CHECK(chain->handle(request)->getName() == "Michael Smith");
+void Tui::myWorkScreen() {
+    struct WorkRow {
+        const InstanceRecord *record;
+        WorkItem *item;
+    };
+
+    std::vector<WorkRow> work;
+    for (const InstanceRecord *record : currentInstances()) {
+        std::vector<Row> rows;
+        collectRows(facade.getInstance(record->id)->getRoot(), "", true, true, rows);
+        for (const Row &row : rows) {
+            if (taskOf(row.item) != nullptr && !facade.availableActions(record->id, row.item->getId(), currentActor()).empty()) {
+                WorkRow entry;
+                entry.record = record;
+                entry.item = row.item;
+                work.push_back(entry);
+            }
+        }
     }
 
-    TEST_CASE("CoR: the end of the chain returns nullptr when nobody can approve") {
-        ParticipantDirectory directory;
-        addBursaryApprovers(directory);
-        ConcreteApprovalHandler officer("BursaryOfficer", new ThresholdRule("amount", 20000));
+    // Most urgent first; PriorityDecorator sets the level.
+    std::stable_sort(work.begin(), work.end(), [](const WorkRow &a, const WorkRow &b) { return priorityOf(a.item) > priorityOf(b.item); });
 
-        InstanceData data;
-        data.set("amount", "50000");
-        ApprovalRequest request(nullptr, &data, 0, &directory);
-        CHECK(officer.handle(request) == nullptr);
+    beginScreen("My work");
+    boxTop("Work for " + people[actor].name, GOLD);
+    if (work.empty()) {
+        boxLine("Nothing for you right now. Change participant (5) to work as someone else.", GOLD);
+        boxBottom(GOLD);
+        pause();
+        return;
+    }
+    boxLine(bold(GREY, pad(" #", 4) + pad("Instance", 13) + pad("Work item", 34) + pad("State", 14) + "Assignee"), GOLD);
+    for (size_t i = 0; i < work.size(); ++i) {
+        WorkItem *item = work[i].item;
+        std::string name = item->getName();
+        if (priorityOf(item) > 0) name += " " + bold(GOLD, "★" + std::to_string(priorityOf(item)));
+        boxLine(bold(GOLD, pad(" " + std::to_string(i + 1), 4)) + pad(work[i].record->id, 13) + pad(name, 34) +
+                    stateCell(item->getStateName(), 14) + (item->getAssignee() ? bold(GREEN, "you") : bold(ORANGE, "unclaimed")),
+                GOLD);
+    }
+    boxLine(bold(RED, pad(" 0", 4)) + bold(WHITE, "Back"), GOLD);
+    boxBottom(GOLD);
 
-        ApprovalRequest noDirectory(nullptr, &data, 0, nullptr);
-        CHECK(officer.handle(noDirectory) == nullptr);
+    const int choice = askNumber("Choose", 0, static_cast<int>(work.size()));
+    if (choice > 0) {
+        const WorkRow &row = work[static_cast<size_t>(choice - 1)];
+        itemScreen(*row.record, row.item->getId());
+    }
+}
+
+/// Lists the current scenario's participants. @return Their positions in people, in menu order.
+std::vector<size_t> Tui::printRoster() {
+    std::vector<size_t> roster;
+    boxTop(scenarios[current].industry + " participants", PINK);
+    for (size_t i = 0; i < people.size(); ++i) {
+        if (people[i].scenario != current) continue;
+        roster.push_back(i);
+        boxLine(bold(PINK, pad(" " + std::to_string(roster.size()), 4)) +
+                    pad(bold(WHITE, people[i].name), 22) + fg(GREY, people[i].roles),
+                PINK);
+    }
+    boxLine(bold(RED, pad(" 0", 4)) + bold(WHITE, "Back"), PINK);
+    boxBottom(PINK);
+    return roster;
+}
+
+/// @return true if a participant was chosen; false if the user went back.
+bool Tui::chooseActor() {
+    beginScreen(scenarios[current].industry + "  ›  Who are you?");
+    const std::vector<size_t> roster = printRoster();
+    const int choice = askNumber("Act as", 0, static_cast<int>(roster.size()));
+    if (choice < 1) {
+        return false;
+    }
+    actor = roster[static_cast<size_t>(choice - 1)];
+    noticeOk("Now acting as " + people[actor].name);
+    return true;
+}
+
+void Tui::undoLast() {
+    const std::vector<std::string> actions = facade.actionHistory();
+    if (actions.empty()) {
+        noticeWarning("There is nothing to undo.");
+        return;
     }
 
-    TEST_CASE("CoR: escalating an approval task hands it to the next level") {
-        ParticipantDirectory directory;
-        addBursaryApprovers(directory);
-        InstanceData data;
-        data.set("amount", "12000");
+    // Each entry reads "<instance id>: <what it was>".
+    const std::string entry = actions.back();
+    const size_t colon = entry.find(": ");
+    const std::string instanceId = entry.substr(0, colon);
+    const std::string what = colon == std::string::npos ? entry : entry.substr(colon + 2);
 
-        Task approve("APPROVE", "Approve Bursary");
-        approve.setRouting(new ApprovalRouting(buildBursaryChain()));
-        approve.setRoutingContext(&data, &directory);
-
-        REQUIRE(approve.makeAvailable());
-        CHECK(approve.getStateName() == "Assigned");
-        CHECK(approve.getAssignee()->getName() == "Zanele Dube");
-
-        // Deadline passed at the officer: escalate, then route to the next level.
-        REQUIRE(approve.escalate());
-        CHECK(approve.getEscalationLevel() == 1);
-        CHECK(approve.getAssignee() == nullptr);
-        REQUIRE(approve.route());
-        CHECK(approve.getStateName() == "Assigned");
-        CHECK(approve.getAssignee()->getName() == "Michael Smith");
-
-        REQUIRE(approve.escalate());
-        REQUIRE(approve.route());
-        CHECK(approve.getAssignee()->getName() == "Prof. Naidoo");
-
-        REQUIRE(approve.start());
-        CHECK(approve.complete("approved"));
+    if (!facade.undoLast()) {
+        noticeError("The engine could not undo that action: " + facade.getLastError());
+        return;
     }
 
-    TEST_CASE("CoR: a task nobody can approve escalates automatically when it opens") {
-        ParticipantDirectory directory;
-        addBursaryApprovers(directory);
-        InstanceData data;
-        data.set("amount", "50000");
+    HistoryEntry row;
+    row.instanceId = instanceId;
+    row.when = std::time(nullptr);
+    row.what = "UNDONE";
+    row.detail = what;
+    history.push_back(row);
 
-        Task approve("APPROVE", "Approve Bursary");
-        approve.setRouting(new ApprovalRouting(
-            new ConcreteApprovalHandler("BursaryOfficer", new ThresholdRule("amount", 20000))));
-        approve.setRoutingContext(&data, &directory);
+    noticeOk("Undone in " + instanceId + ": " + what);
+    notices.push_back(fg(GREY, "Restored from a snapshot. External service calls cannot be recalled."));
+}
 
-        REQUIRE(approve.makeAvailable());
-        CHECK(approve.getStateName() == "Escalated");
-        CHECK(approve.getAssignee() == nullptr);
-        CHECK(approve.getEscalationLevel() == 1);
+void Tui::showInstanceHistory(const std::string &instanceId) {
+    beginScreen("History of " + instanceId);
+    boxTop("Everything that happened, oldest first", SKY);
+    for (const HistoryEntry &row : history) {
+        if (row.instanceId != instanceId) continue;
+        const int colour = row.what == "UNDONE" ? PINK : VIOLET;
+        boxLine(fg(GREY, clock(row.when)) + "  " + pad(bold(colour, row.what), 11) + pad(fit(row.itemName, 30), 31) +
+                    fg(GREY, fit(row.detail, screenWidth() - 57)),
+                SKY);
+    }
+    boxBottom(SKY);
+    pause();
+}
+
+void Tui::showInstanceData(const std::string &instanceId) {
+    beginScreen("Data of " + instanceId);
+    const std::map<std::string, std::string> &data = facade.getInstance(instanceId)->getData().getMap();
+
+    boxTop("Instance data", GREEN);
+    for (const auto &entry : data) {
+        if (entry.first.compare(0, 8, "service.") != 0) {
+            boxLine(pad(bold(WHITE, entry.first), 22) + entry.second, GREEN);
+        }
+    }
+    boxBottom(GREEN);
+
+    boxTop("External service replies", VIOLET);
+    bool anyReply = false;
+    for (const auto &entry : data) {
+        if (entry.first.compare(0, 8, "service.") == 0) {
+            boxLine(pad(bold(WHITE, entry.first.substr(8)), 30) + fit(entry.second, screenWidth() - 36), VIOLET);
+            anyReply = true;
+        }
+    }
+    if (!anyReply) boxLine(fg(GREY, "No services have been called yet."), VIOLET);
+    boxBottom(VIOLET);
+    pause();
+}
+
+/// The engine's own record of commands that ran and can still be undone, oldest first.
+void Tui::showCommands(const std::string &instanceId) {
+    beginScreen("Commands of " + instanceId);
+    boxTop("Commands the engine has run, oldest first", SKY);
+    const std::string prefix = instanceId + ": ";
+    int shown = 0;
+    for (const std::string &entry : facade.actionHistory()) {
+        if (entry.compare(0, prefix.size(), prefix) == 0) {
+            boxLine(bold(SKY, pad(std::to_string(++shown), 4)) + fit(entry.substr(prefix.size()), screenWidth() - 10), SKY);
+        }
+    }
+    if (shown == 0) boxLine(fg(GREY, "No commands yet."), SKY);
+    boxLine("", SKY);
+    boxLine(fg(GREY, "Refused actions are not kept. u undoes the newest command across all workflows."), SKY);
+    boxBottom(SKY);
+    pause();
+}
+
+void Tui::showAuditTrail() {
+    beginScreen("Audit trail");
+    if (audit->getEntryCount() == 0) {
+        boxTop("Nothing yet", GOLD);
+        boxLine("Nothing has happened yet.", GOLD);
+        boxBottom(GOLD);
+        pause();
+        return;
+    }
+    for (const std::string &entry : audit->getAuditTrail()) {
+        std::cout << fg(GREY, entry) << "\n";
+    }
+    pause();
+}
+
+void Tui::showMetrics() {
+    beginScreen("Monitoring metrics");
+
+    int running = 0;
+    int completed = 0;
+    int terminated = 0;
+    for (const InstanceRecord &record : instances) {
+        const std::string status = facade.getStatus(record.id);
+        if (status == "completed") ++completed;
+        else if (status == "terminated") ++terminated;
+        else ++running;
     }
 
-    TEST_CASE("CoR: cloned routing carries its own copy of the whole chain") {
-        ParticipantDirectory directory;
-        addBursaryApprovers(directory);
-        InstanceData data;
-        data.set("amount", "65000");
+    boxTop("Instances", SKY);
+    boxLine(bold(BLUE, std::to_string(running) + " running") + "    " + bold(GREEN, std::to_string(completed) + " completed") + "    " + bold(RED, std::to_string(terminated) + " terminated"), SKY);
+    boxBottom(SKY);
 
-        RoutingStrategy* copy = nullptr;
-        {
-            ApprovalRouting original(buildBursaryChain());
-            copy = original.clone();
-            ApprovalRouting* approvalCopy = static_cast<ApprovalRouting*>(copy);
-            CHECK(approvalCopy->getChain() != original.getChain());
-            CHECK(approvalCopy->describeChain() == original.describeChain());
-        } // original and its chain are destroyed here
+    boxTop("Events seen by the observers", VIOLET);
+    const EventType types[] = {EventType::AVAILABLE, EventType::ASSIGNED, EventType::STARTED, EventType::COMPLETED,
+                               EventType::REJECTED, EventType::CANCELLED, EventType::ESCALATED};
+    size_t most = 1;
+    for (EventType type : types) most = std::max(most, monitor->getCountForType(type));
+    for (EventType type : types) {
+        const size_t count = monitor->getCountForType(type);
+        boxLine(pad(bold(eventColour(type), eventTypeToString(type)), 12) + pad(std::to_string(count), 5) + fg(eventColour(type), repeat("█", count * 50 / most)), VIOLET);
+    }
+    boxLine("", VIOLET);
+    std::ostringstream failures;
+    failures.precision(1);
+    failures << std::fixed << monitor->getFailureRate();
+    boxLine(fg(GREY, "Total ") + bold(WHITE, std::to_string(monitor->getTotalEvents())) + fg(GREY, "    Failure rate ") + bold(WHITE, failures.str() + "%") +
+                fg(GREY, "    Notifications ") + bold(WHITE, std::to_string(notifier->getNotificationCount())),
+            VIOLET);
+    boxBottom(VIOLET);
+    pause();
+}
 
-        Participant* approver = copy->select(getDummyTask(), data, directory);
-        REQUIRE(approver != nullptr);
-        CHECK(approver->getName() == "Michael Smith");
-        delete copy;
+void Tui::checkDeadlines() {
+    beginScreen("Check deadlines");
+    boxTop("Jump ahead in time", ORANGE);
+    boxText("Work with a deadline escalates once it passes. Deadlines run in hours, so choose how far ahead to check. Nothing else moves.", ORANGE);
+    boxLine("", ORANGE);
+    const std::time_t now = std::time(nullptr);
+    bool anyDue = false;
+    for (const InstanceRecord &record : instances) {
+        WorkflowInstance *instance = facade.getInstance(record.id);
+        std::vector<Row> rows;
+        collectRows(instance->getRoot(), "", true, true, rows);
+        for (const Row &row : rows) {
+            const std::time_t due = instance->getDeadline(row.item->getId());
+            if (due == 0) continue;
+            // Round up, so the number shown is enough to reach the deadline.
+            const long left = (static_cast<long>(due - now) + 3599) / 3600;
+            boxLine(pad(record.id, 13) + pad(bold(WHITE, row.item->getName()), 30) + bold(ORANGE, "due in " + std::to_string(left) + " hours"), ORANGE);
+            anyDue = true;
+        }
+    }
+    if (!anyDue) boxLine(fg(GREY, "Nothing open has a deadline right now."), ORANGE);
+    boxBottom(ORANGE);
+
+    std::string answer;
+    if (!ask("Hours from now [0]", answer)) {
+        return;
+    }
+    char *end = nullptr;
+    const long hours = answer.empty() ? 0 : std::strtol(answer.c_str(), &end, 10);
+    if (!answer.empty() && (*end != '\0' || hours < 0 || hours > 100000)) {
+        noticeWarning("Please enter a whole number of hours.");
+        return;
     }
 
-    TEST_CASE("CoR: an approval task cloned from a definition still routes through the chain") {
-        ParticipantDirectory directory;
-        addBursaryApprovers(directory);
+    facade.checkDeadlines(std::time(nullptr) + hours * 3600);
 
-        SubProcess definition("FUNDING", "Bursary Funding");
-        Task* approve = new Task("APPROVE", "Approve Bursary");
-        approve->setRouting(new ApprovalRouting(buildBursaryChain()));
-        definition.add(approve);
-
-        TestInstance inst(definition, {}, directory);
-        inst.data.set("amount", "250000");
-        REQUIRE(inst.root->makeAvailable());
-        CHECK(inst.state("APPROVE") == "Assigned");
-        CHECK(inst.item("APPROVE")->getAssignee()->getName() == "Prof. Naidoo");
+    if (events->empty()) {
+        noticeOk("No deadlines have passed " + std::to_string(hours) + " hours from now.");
+        return;
     }
+    checkingDeadlines = true;
+    flushEvents();
+    checkingDeadlines = false;
+}
 
-    TEST_CASE("CoR: setNext returns its argument and replaces the old successor") {
-        ConcreteApprovalHandler head("BursaryOfficer", new ThresholdRule("amount", 20000));
-        ApprovalHandler* manager = new ConcreteApprovalHandler("FinanceManager", new AlwaysAcceptRule());
-        CHECK(head.setNext(manager) == manager);
-        CHECK(head.getNext() == manager);
+// ---- Helpers --------------------------------------------------------------------------------
 
-        ApprovalHandler* committee = new ConcreteApprovalHandler("BursaryCommittee", new AlwaysAcceptRule());
-        head.setNext(committee); // deletes the manager handler
-        CHECK(head.getNext() == committee);
+/// Shows what the last action caused, and keeps it as history.
+void Tui::flushEvents() {
+    for (const WorkflowEvent &event : events->take()) {
+        const bool hasOutcome = event.type == EventType::COMPLETED || event.type == EventType::REJECTED ||
+                                event.type == EventType::CANCELLED || event.type == EventType::ESCALATED;
+        std::string detail = hasOutcome ? event.outcome : "";
 
-        ApprovalRouting routing;
-        CHECK(routing.describeChain().empty());
-        CHECK(routing.select(getDummyTask(), InstanceData(), ParticipantDirectory()) == nullptr);
+        WorkflowInstance *instance = facade.getInstance(event.instanceId);
+        WorkItem *item = instance != nullptr ? instance->findItem(event.itemId) : nullptr;
+        if (event.type == EventType::ASSIGNED && item != nullptr && item->getAssignee() != nullptr) {
+            detail = "-> " + item->getAssignee()->getName();
+        }
+        if (event.type == EventType::ESCALATED && detail.empty()) {
+            const InstanceData *data = instance != nullptr ? &instance->getData() : nullptr;
+            const std::string service = "service." + event.itemId + ".";
+            if (checkingDeadlines) {
+                detail = "deadline passed";
+            } else if (data != nullptr && data->get(service + "success") == "false") {
+                detail = data->get(service + "message");
+            } else {
+                detail = "no one in this scenario holds the role";
+            }
+        }
+
+        HistoryEntry row;
+        row.instanceId = event.instanceId;
+        row.when = event.timestamp;
+        row.itemName = event.itemName;
+        row.what = eventTypeToString(event.type);
+        row.detail = detail;
+        history.push_back(row);
+
+        notices.push_back(pad(bold(eventColour(event.type), row.what), 11) + pad(fit(row.itemName, 32), 33) + fg(GREY, fit(detail, screenWidth() - 50)));
     }
+}
+
+void Tui::noticeOk(const std::string &text) {
+    notices.push_back(bold(GREEN, "✓ ") + fit(text, screenWidth() - 7));
+}
+
+void Tui::noticeWarning(const std::string &text) {
+    notices.push_back(bold(ORANGE, "▲ ") + fit(text, screenWidth() - 7));
+}
+
+void Tui::noticeError(const std::string &text) {
+    // Refusals explain themselves, so they wrap rather than get cut off.
+    const std::vector<std::string> lines = wrap(text, screenWidth() - 7);
+    for (size_t i = 0; i < lines.size(); ++i) {
+        notices.push_back((i == 0 ? bold(RED, "✗ ") : std::string("  ")) + bold(RED, lines[i]));
+    }
+}
+
+size_t Tui::personIndex(const std::string &id) const {
+    for (size_t i = 0; i < people.size(); ++i) {
+        if (people[i].id == id && people[i].scenario == current) {
+            return i;
+        }
+    }
+    return actor;
+}
+
+Participant *Tui::currentActor() const {
+    return facade.findParticipant(people[actor].id, scenarios[people[actor].scenario].roster);
+}
+
+std::vector<const InstanceRecord *> Tui::currentInstances() const {
+    std::vector<const InstanceRecord *> mine;
+    for (const InstanceRecord &record : instances) {
+        if (record.scenario == current) mine.push_back(&record);
+    }
+    return mine;
+}
+
+std::string Tui::actorLabel() const {
+    return bold(PINK, people[actor].name) + fg(GREY, "  " + people[actor].roles);
+}
+
+} // namespace
+
+int main() {
+    Tui tui;
+    if (!tui.initialise()) {
+        return 1;
+    }
+    tui.run();
+    return 0;
 }

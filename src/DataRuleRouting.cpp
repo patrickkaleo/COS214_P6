@@ -2,7 +2,7 @@
  * @file DataRuleRouting.cpp
  * @brief Implementation of data-driven dynamic task routing strategy.
  * @author Enock Nyamweya
- * @version 1.0
+ * @version 2.0
  */
 
 #include "DataRuleRouting.h"
@@ -48,20 +48,16 @@ Participant* DataRuleRouting::select(const Task& task,
     }
 
     // Query participant directory for candidates matching target role
-    std::vector<Participant*> candidates = directory.withRole(targetRole);
+    std::vector<std::shared_ptr<Participant>> candidates = directory.withRole(targetRole);
     if (candidates.empty()) {
         return nullptr;
     }
 
-    return candidates.front();
+    return candidates.front().get();
 }
 
 RoutingStrategy* DataRuleRouting::clone() const {
     return new DataRuleRouting(*this);
-}
-
-void DataRuleRouting::addRule(const std::string& value, const std::string& roleName) {
-    valueToRole[value] = roleName;
 }
 
 std::string DataRuleRouting::getField() const {
@@ -72,14 +68,18 @@ void DataRuleRouting::setField(const std::string& fieldName) {
     field = fieldName;
 }
 
+std::map<std::string, std::string> DataRuleRouting::getMapping() const {
+    return valueToRole;
+}
+
+void DataRuleRouting::addRule(const std::string& value, const std::string& roleName) {
+    valueToRole[value] = roleName;
+}
+
 std::string DataRuleRouting::getFallbackRole() const {
     return fallbackRole;
 }
 
-void DataRuleRouting::setFallbackRole(const std::string& defaultFallbackRole) {
-    fallbackRole = defaultFallbackRole;
-}
-
-const std::map<std::string, std::string>& DataRuleRouting::getRuleMap() const {
-    return valueToRole;
+void DataRuleRouting::setFallbackRole(const std::string& defaultRole) {
+    fallbackRole = defaultRole;
 }

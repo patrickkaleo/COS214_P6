@@ -2,7 +2,7 @@
  * @file RoleBasedRouting.cpp
  * @brief Implementation of role-based task allocation strategy.
  * @author Enock Nyamweya
- * @version 1.0
+ * @version 2.0
  */
 
 #include "RoleBasedRouting.h"
@@ -19,8 +19,8 @@ RoleBasedRouting::RoleBasedRouting(const std::string& roleName)
 }
 
 Participant* RoleBasedRouting::select(const Task& task,
-                                     const InstanceData& data,
-                                     const ParticipantDirectory& directory) {
+                                      const InstanceData& data,
+                                      const ParticipantDirectory& directory) {
     (void)task; // Unused in standard role filtering
     (void)data; // Role routing does not inspect instance payload
 
@@ -29,13 +29,13 @@ Participant* RoleBasedRouting::select(const Task& task,
     }
 
     // Query directory for all candidates qualified with the configured role
-    std::vector<Participant*> candidates = directory.withRole(role);
+    std::vector<std::shared_ptr<Participant>> candidates = directory.withRole(role);
     if (candidates.empty()) {
         return nullptr;
     }
 
     // Allocate work to the first available matching candidate
-    return candidates.front();
+    return candidates.front().get();
 }
 
 RoutingStrategy* RoleBasedRouting::clone() const {
