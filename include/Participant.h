@@ -12,7 +12,8 @@
 #include <vector>
 #include "Role.h"
 
-class Participant {
+class Participant
+{
 private:
     std::string participantID;
     std::string name;
@@ -20,21 +21,51 @@ private:
     int workload;
 
 public:
+    /** @brief Constructs a new Participant instance. */
     Participant();
-    Participant(const std::string& id,
-                const std::string& participantName,
-                const std::string& initialRole = "",
+    /** @brief Constructs a new Participant instance with initial attributes.
+     * @param id The unique identifier for the participant.
+     * @param participantName The name of the participant.
+     * @param initialRole The initial role for the participant.
+     * @param initialWorkload The initial workload for the participant.
+     */
+    Participant(const std::string &id,
+                const std::string &participantName,
+                const std::string &initialRole = "",
                 int initialWorkload = 0);
-
+    /** @brief Returns the unique identifier for the participant.
+     * @return The participant ID.
+     */
     std::string getId() const;
+    /** @brief Returns the name of the participant.
+     * @return The participant name.
+     */
     std::string getName() const;
+    /** @brief Returns the workload for the participant.
+     * @return The workload.
+     */
     int getWorkload() const;
+    /** @brief Sets the workload for the participant.
+     * @param load The new workload.
+     */
     void setWorkload(int load);
-
-    void addRole(const std::string& roleName);
-    void addRole(const Role& role);
-    bool hasRole(const std::string& roleName) const;
-    const std::vector<Role>& getRoles() const;
+    /** @brief Adds a role to the participant.
+     * @param roleName The name of the role to add.
+     */
+    void addRole(const std::string &roleName);
+    /** @brief Adds a role to the participant.
+     * @param role The role to add.
+     */
+    void addRole(const Role &role);
+    /** @brief Checks if the participant has the specified role.
+     * @param roleName The name of the role to check.
+     * @return true if the participant has the role, false otherwise.
+     */
+    bool hasRole(const std::string &roleName) const;
+    /** @brief Returns the roles assigned to the participant.
+     * @return A constant reference to the vector of roles.
+     */
+    const std::vector<Role> &getRoles() const;
 };
 
 #endif // PARTICIPANT_H
