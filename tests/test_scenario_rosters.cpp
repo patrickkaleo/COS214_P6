@@ -1,6 +1,6 @@
 /**
  * @file test_scenario_rosters.cpp
- * @brief Tests that each roster owns its participants, so scenarios cannot affect each other.
+ * @brief Tests that each roster owns its participants, so one context cannot affect another.
  * @author Angela Ramaboea
  */
 
@@ -15,7 +15,7 @@
 
 namespace {
 
-const char* const WORKFLOW = "definitions/shipment_exception.txt";
+const char* const WORKFLOW = "definitions/shipment_exception.definition";
 
 /// Two rosters with the same id and role, but separate people.
 struct Rosters {

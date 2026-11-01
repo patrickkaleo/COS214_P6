@@ -1,4 +1,4 @@
-# Hospital admission. The workflow comes from definitions/hospital_admission.definition.
+# One context for the hospital definition. The workflow comes from definitions/hospital_admission.definition.
 INDUSTRY|Healthcare
 WORKFLOW|HOSP_ADMIT
 STARTED_BY|AdmissionsClerk

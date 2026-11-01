@@ -49,6 +49,9 @@ std::vector<Participant *> TividyWorkflowFacade::participants() const {
   for (const auto &participant : engine.getDirectory().getAll()) result.push_back(participant.get());
   return result;
 }
+std::vector<Participant *> TividyWorkflowFacade::participantsIn(const std::string &roster) const {
+  return engine.participantsIn(roster);
+}
 std::vector<std::string> TividyWorkflowFacade::availableActions(const std::string &instanceId,
                                                               const std::string &itemId,
                                                               Participant *actor) const {

@@ -1,4 +1,4 @@
-# Insurance claim. The workflow comes from definitions/insurance_claim.definition.
+# One context for the insurance definition. The workflow comes from definitions/insurance_claim.definition.
 INDUSTRY|Insurance
 WORKFLOW|INS_CLAIM
 STARTED_BY|ClaimsClerk

@@ -1,4 +1,4 @@
-# Production order. The workflow comes from definitions/production_order.definition.
+# One context for the production definition. The workflow comes from definitions/production_order.definition.
 INDUSTRY|Manufacturing
 WORKFLOW|PROD_ORDER
 STARTED_BY|Planner

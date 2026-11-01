@@ -9,6 +9,8 @@
  */
 
 #include <memory>
+#include <string>
+#include <vector>
 
 // Forward declarations to decouple strategy interface from concrete context and directory classes
 class Task;
@@ -61,6 +63,12 @@ public:
      * @return RoutingStrategy* Newly allocated clone of this routing strategy (caller owns).
      */
     virtual RoutingStrategy* clone() const = 0;
+
+    /// Role this strategy would use for the given instance data. Empty when it does not name one role.
+    virtual std::string roleFor(const InstanceData& data) const { (void)data; return ""; }
+
+    /// Approval levels, in order. Empty unless this strategy is an approval chain.
+    virtual std::vector<std::string> describeChain() const { return std::vector<std::string>(); }
 };
 
 #endif // ROUTINGSTRATEGY_H

@@ -17,6 +17,7 @@ protected:
 	Participant *actor;
 	WorkflowSnapshot *before;
 	std::string operation;
+	std::string keptLabel;
 
 	virtual bool doExecute(WorkItem &item) = 0;
 	virtual bool isAuthorized(const WorkItem &item) const;
@@ -28,6 +29,8 @@ public:
 	virtual ~WorkItemAction();
 	bool execute();
 	bool undo();
+	/// Hands the pre-action snapshot to the caller. The action no longer deletes it.
+	WorkflowSnapshot *releaseSnapshot();
 	WorkflowInstance *getInstance() const { return instance; }
 	std::string getSnapshotLabel() const;
 

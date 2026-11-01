@@ -188,6 +188,7 @@ public:
 	std::vector<std::string> actionHistory() const;
 	Participant *findParticipant(const std::string &id, const std::string &roster = "") const;
 	std::vector<Participant *> participants() const;
+	std::vector<Participant *> participantsIn(const std::string &roster) const;
 	std::vector<std::string> availableActions(const std::string &instanceId,
 	                                          const std::string &itemId,
 	                                          Participant *actor) const;

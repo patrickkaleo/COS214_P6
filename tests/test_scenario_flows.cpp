@@ -103,7 +103,7 @@ InstanceData shipmentData() {
 TEST_SUITE("Prepared workflows through the public facade") {
     TEST_CASE("University successful funding uses routed decorated tasks and simulated services") {
         ScenarioFixture fixture;
-        WorkflowInstance* instance = fixture.launch("definitions/university_bursary.txt", bursaryData());
+        WorkflowInstance* instance = fixture.launch("definitions/university_bursary.definition", bursaryData());
         CHECK(instance->findItem("VERIFY_ID")->getStateName() == "Created");
         fixture.reachFunding(instance);
         fixture.finish(instance, "FUNDING_DOCS");
@@ -122,7 +122,7 @@ TEST_SUITE("Prepared workflows through the public facade") {
 
     TEST_CASE("University funding rejection opens appeal and never payment") {
         ScenarioFixture fixture;
-        WorkflowInstance* instance = fixture.launch("definitions/university_bursary.txt", bursaryData());
+        WorkflowInstance* instance = fixture.launch("definitions/university_bursary.definition", bursaryData());
         fixture.reachFunding(instance);
         SUBCASE("Funding documents are rejected") { fixture.reject(instance, "FUNDING_DOCS"); }
         SUBCASE("Bursary approval is rejected") {
@@ -139,7 +139,7 @@ TEST_SUITE("Prepared workflows through the public facade") {
         ScenarioFixture fixture;
         InstanceData data = bursaryData();
         data.set("idNumber", "9999999999999");
-        WorkflowInstance* instance = fixture.launch("definitions/university_bursary.txt", data);
+        WorkflowInstance* instance = fixture.launch("definitions/university_bursary.definition", data);
         fixture.finish(instance, "CAPTURE");
         WorkItem* item = instance->findItem("VERIFY_ID");
         Participant* actor = item->getAssignee();
@@ -155,7 +155,7 @@ TEST_SUITE("Prepared workflows through the public facade") {
 
     TEST_CASE("Shipment decisions run either hold or reroute and then close") {
         ScenarioFixture fixture;
-        WorkflowInstance* instance = fixture.launch("definitions/shipment_exception.txt", shipmentData());
+        WorkflowInstance* instance = fixture.launch("definitions/shipment_exception.definition", shipmentData());
         fixture.finish(instance, "LOG_EXCEPTION");
         fixture.finish(instance, "CLASSIFY");
         CHECK(instance->getData().get("shipmentStatus") == "DELAYED");
@@ -182,7 +182,7 @@ TEST_SUITE("Prepared workflows through the public facade") {
 
     TEST_CASE("Shipment unrecovered rejection terminates unopened branches") {
         ScenarioFixture fixture;
-        WorkflowInstance* instance = fixture.launch("definitions/shipment_exception.txt", shipmentData());
+        WorkflowInstance* instance = fixture.launch("definitions/shipment_exception.definition", shipmentData());
         fixture.reject(instance, "LOG_EXCEPTION");
         CHECK(fixture.facade.getStatus(instance->getId()) == "terminated");
         CHECK(instance->findItem("CLASSIFY")->getStateName() == "Cancelled");
@@ -192,7 +192,7 @@ TEST_SUITE("Prepared workflows through the public facade") {
 
     TEST_CASE("Two live prepared instances keep independent data state and undo") {
         ScenarioFixture fixture;
-        WorkflowInstance* first = fixture.launch("definitions/shipment_exception.txt", shipmentData());
+        WorkflowInstance* first = fixture.launch("definitions/shipment_exception.definition", shipmentData());
         InstanceData secondData = shipmentData();
         secondData.set("waybill", "WB1003");
         const std::string secondId = fixture.facade.startInstance("SHIP_EX", secondData);

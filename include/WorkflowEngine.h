@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "HistoryLog.h"
 #include "ParticipantDirectory.h"
 #include "ServiceRegistry.h"
 
@@ -34,6 +35,9 @@ private:
 
   // Successfully executed commands for undo
   std::vector<WorkItemAction *> actionHistory;
+
+  // Pre-action snapshots, one stack per instance. Undo restores the newest.
+  HistoryLog history;
 
   // Participant management
   ParticipantDirectory directory;
@@ -85,6 +89,7 @@ public:
 
   // Finds a participant in the named roster, or nullptr
   Participant *findParticipant(const std::string &id, const std::string &roster) const;
+  std::vector<Participant *> participantsIn(const std::string &roster) const;
   const ParticipantDirectory &getDirectory() const;
 
   ServiceRegistry &getServiceRegistry();

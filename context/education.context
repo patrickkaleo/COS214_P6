@@ -1,6 +1,6 @@
-# One industry: who is involved and what they can decide. The workflow, its name and its
-# description come from definitions/. FIELD and TASK_FIELD name the details a participant
-# types in; the values are never stored here.
+# One context for the university definition: who is involved and what they can decide.
+# The workflow, its name and its description come from definitions/. FIELD and TASK_FIELD
+# name the details a participant types in; the values are never stored here.
 INDUSTRY|Education
 WORKFLOW|UNI_BURSARY
 STARTED_BY|AdmissionsOfficer
