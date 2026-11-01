@@ -8,16 +8,23 @@ From the project directory, run `make run`. The interface reads `definitions/` a
 
 It opens by asking which workflow you want, then who you are from its participants. The main menu then covers only that workflow; `0` goes back to choose another, and exits from there. Menu option 5 changes participant, and a work item's menu offers **Act as the assignee**. Actions marked as allowed are the ones the engine will accept. The others stay selectable so that you can see the engine refuse them and why. In a table, `▸` marks work you can act on now. Colour turns off when output is not a terminal or `NO_COLOR` is set.
 
+A participant starts each instance and types in its details, because nothing about a run is stored in a file. The scenario says who may start it and what to ask. Completing some tasks asks for more, such as the bursary amount at Verify Funding Documents. The engine generates the instance id. These values match the test data behind the external services.
+
 | To see | Enter or do |
 |---|---|
-| Education, completion | Accept the sample data, complete each task, and choose `approved` for the decision and the bursary |
-| Identity rejection | Surname `Wrong`: completing Verify Identity rejects the application and ends the instance |
+| Education, completion | As Lerato Khumalo, start with surname `Mokoena` and ID `0501015800087`. Complete each task, and choose `approved` for the decision and the bursary |
+| Who can start | Start as anyone but an Admissions Officer: it is refused |
+| Identity rejection | A surname that doesn't match the ID: completing Verify Identity rejects the application and ends the instance |
 | Appeal branch | Reject Verify Funding Documents: approval and payment are cancelled and the appeal opens |
-| Data routing | Income bracket `low`, `mid` or `high` routes Approve Bursary to a different role |
-| Payment failure | Amount `200000` is over the bank limit: completing Pay Bursary escalates it |
-| Logistics, completion | Accept the sample data and choose `reroute` or `hold` at Assess Impact |
-| Service failure | Waybill `WB9999` or hub `Polokwane`: the call fails and the task escalates until someone qualified claims it |
-| Deadline | With Approve Bursary or Assess Impact open, main menu option 9 with `49` hours escalates it |
+| Data routing | Degree `Engineering` sends Academic Review to the Engineering Reviewer; any other degree goes to the Faculty Reviewer |
+| Approval chain | At Verify Funding Documents, amount `15000` goes to the Bursary Officer, `60000` to the Finance Manager and `200000` to the Committee |
+| Delegation | Open a task assigned to you, choose Delegate, and pick someone with the same role, such as Naledi Dube for Lerato Khumalo. Anyone else is refused |
+| Roles | Open a task as someone without its role and try to claim it, or open its details to see the role it needs |
+| Payment failure | Amount `200000` is over the bank limit: completing Pay Bursary escalates it. Claim it to retry |
+| Logistics, completion | As Bongani Dube, start with waybill `WB1002`. Choose `reroute` or `hold` at Assess Impact, and enter hub `Cape Town` at Reroute Shipment |
+| Service failure | ID `123`, waybill `WB9999` or hub `Polokwane`: the call fails and the task escalates. Someone qualified claims it, starts it, and corrects the value when completing it |
+| Deadline | With Approve Bursary open, main menu option 9 lists what is due and when. Entering that many hours moves it up the approval chain, and the Committee keeps it at the top. Assess Impact escalates until someone with the role claims it |
+| Commands | `c` on an instance screen lists the commands the engine has run for it |
 | Independence | Start two instances of one workflow and advance only one |
 | Undo | `u` on an instance screen restores the snapshot taken before the last action. It cannot recall an external call such as a payment |
 
@@ -52,13 +59,19 @@ No code changes or rebuild are needed. When the interface starts, it builds ever
    WORKFLOW|MY_WORKFLOW
    INDUSTRY|Retail
    EXPECTED|What should happen when it finishes.
+   STARTED_BY|Clerk
    PARTICIPANT|p1|Sam Clerk|Clerk
    PARTICIPANT|p2|Alex Boss|Manager
-   INPUT|orderNumber|Order number|A100
+   FIELD|orderNumber|Order number
    OUTCOMES|SECOND|approved,declined
    ```
 
-   `INDUSTRY`, `EXPECTED`, `INPUT` and `OUTCOMES` are optional. `INPUT` is key, prompt and default value. `OUTCOMES` is the choices offered when completing that task; without it you type an outcome. A participant may hold several comma-separated roles.
+   `INDUSTRY`, `EXPECTED`, `STARTED_BY`, `FIELD`, `TASK_FIELD` and `OUTCOMES` are optional:
+
+   - `STARTED_BY` is the role allowed to start an instance. Without it, any participant can.
+   - `FIELD|key|prompt` is a detail typed in when an instance starts, and `TASK_FIELD|itemId|key|prompt` is one typed in when that task is completed. The file only names what to ask; values are never stored.
+   - `OUTCOMES` is the choices offered when completing that task. Without it, you type an outcome.
+   - A participant may hold several comma-separated roles.
 
 Each scenario owns its participants: work is only routed to, and only accepted from, people in that scenario's file. The same names, ids and roles can appear in any number of scenarios, and two people are simply different participants. A workflow that calls a new external system also needs an adapter registered in `Tui::initialise`; until then, that task escalates when it runs.
 
@@ -134,6 +147,7 @@ fromId|toId|outcome
 ROUTING
 itemId|role|roleName
 itemId|data|field|fallbackRole|value|role|value|role
+itemId|approval|field|role|limit|role|limit|finalRole
 
 SERVICES
 service|itemId|serviceName
@@ -142,6 +156,7 @@ EXTRAS
 checkpoint|itemId
 priority|itemId|level
 audit|itemId
+deadline|itemId|hours
 ```
 
 ```mermaid
@@ -161,7 +176,7 @@ A process whose parent id is `-` is the root. `priority` sets the task escalatio
 include/          public headers
 src/              engine sources
 definitions/      workflow files
-scenarios/        industry files: participants and input data for a workflow
+scenarios/        industry files: participants, details to ask for and outcome choices
 tests/            doctest suites and tests/builder.txt
 makefile          tividy and tividy_tests
 Dockerfile        Ubuntu image used by docker compose

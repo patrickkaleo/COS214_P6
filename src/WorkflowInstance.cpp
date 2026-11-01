@@ -76,6 +76,9 @@ void WorkflowInstance::wireRuntime(ServiceRegistry *services) {
         item->setInstanceId(Id);
         if (Task *task = dynamic_cast<Task *>(coreOf(item))) {
             task->setServiceRegistry(services);
+            // The builder stores priority in this level. A new instance has had no escalations,
+            // and an approval chain must start from its first level.
+            task->setEscalationLevel(0);
         }
     }
     mediator->registerTree(*rootProcess);
@@ -283,6 +286,15 @@ void WorkflowInstance::checkDeadlines(std::time_t now) {
         if (!task || item->isFinished()) continue;
         deadlines.erase(entry.first);
         deadlineOwners.erase(entry.first);
+        // An approval chain stops at its top: nobody above can take it, so the holder keeps it.
+        if (dynamic_cast<ApprovalRouting *>(task->getRouting())) {
+            const int level = item->getEscalationLevel();
+            std::unique_ptr<RoutingStrategy> probe(task->getRouting()->clone());
+            item->setEscalationLevel(level + 1);
+            const bool higherAuthority = probe->select(*task, data, *participants) != nullptr;
+            item->setEscalationLevel(level);
+            if (!higherAuthority) continue;
+        }
         if (item->escalate() && dynamic_cast<ApprovalRouting *>(task->getRouting())) task->route();
     }
     refreshDeadlines(now);

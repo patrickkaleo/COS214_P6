@@ -8,7 +8,8 @@ DelegateAction::DelegateAction(WorkflowInstance *instance, const std::string &it
 
 bool DelegateAction::doExecute(WorkItem &item)
 {
-  if (to == nullptr || !instance->canAssign(item, to))
+  // Delegating to yourself would change nothing but still look like a handover
+  if (to == nullptr || to == actor || !instance->canAssign(item, to))
   {
     return false;
   }

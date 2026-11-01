@@ -14,9 +14,11 @@
 # and cancel payment. Any other APPROVE outcome cancels both PAY and APPEAL.
 #
 # Roles are the participant role strings. Services are ExternalService::name().
-# incomeBracket is read from instance data. A missing or unknown value uses
-# FinanceManager. low, mid and high select BursaryOfficer, FinanceManager and
-# BursaryCommittee.
+# degree is read from instance data: Engineering sends the academic review to the
+# EngineeringReviewer, and anything else to the FacultyReviewer.
+# APPROVE follows a chain of authority on the bursary amount: the BursaryOfficer
+# approves up to 50000, the FinanceManager up to 150000, the BursaryCommittee the
+# rest. A missed deadline moves it one level up the chain.
 
 DEFINITION
 UNI_BURSARY|University and Bursary Application|1
@@ -51,10 +53,10 @@ ROUTING
 CAPTURE|role|AdmissionsOfficer
 VERIFY_ID|role|AdmissionsOfficer
 VERIFY_DOCS|role|AdmissionsOfficer
-ACADEMIC|role|FacultyReviewer
+ACADEMIC|data|degree|FacultyReviewer|Engineering|EngineeringReviewer
 DECIDE|role|BursaryCommittee
 FUNDING_DOCS|role|BursaryOfficer
-APPROVE|data|incomeBracket|FinanceManager|low|BursaryOfficer|mid|FinanceManager|high|BursaryCommittee
+APPROVE|approval|amount|BursaryOfficer|50000|FinanceManager|150000|BursaryCommittee
 PAY|role|BursaryOfficer
 APPEAL|role|AdmissionsOfficer
 

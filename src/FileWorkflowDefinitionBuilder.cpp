@@ -1,4 +1,5 @@
 #include "FileWorkflowDefinitionBuilder.h"
+#include <cstdlib>
 #include <set>
 #include <stdexcept>
 
@@ -22,6 +23,28 @@ string trimDescription(const string &text) {
     const size_t start = text.find_first_not_of("\n");
     if (start == string::npos) return "";
     return text.substr(start, text.find_last_not_of("\n") - start + 1);
+}
+/// Builds item|approval|field|role|limit|role|limit|...|finalRole. Each role approves up to its
+/// limit and the final role accepts whatever is left.
+ApprovalHandler *approvalChainFrom(const vector<string> &fields) {
+    std::unique_ptr<ApprovalHandler> head;
+    ApprovalHandler *last = nullptr;
+    for (size_t i = 3; i < fields.size(); i += 2) {
+        ApprovalRule *rule = nullptr;
+        if (i + 1 < fields.size()) {
+            char *end = nullptr;
+            const double limit = strtod(fields[i + 1].c_str(), &end);
+            if (*end != '\0') throw invalid_argument("approval limit must be a number: " + fields[i + 1]);
+            rule = new ThresholdRule(fields[2], limit);
+        } else {
+            rule = new AlwaysAcceptRule();
+        }
+        ApprovalHandler *handler = new ConcreteApprovalHandler(fields[i], rule);
+        if (last) last->setNext(handler);
+        else head.reset(handler);
+        last = handler;
+    }
+    return head.release();
 }
 bool completeFields(const vector<string> &fields, size_t count) {
     if (fields.size() != count) return false;
@@ -188,8 +211,10 @@ void FileWorkflowDefinitionBuilder::buildRouting() {
                         throw invalid_argument("duplicate data-routing value: " + fields[pair]);
                 }
                 setRouting(fields[0], new DataRuleRouting(fields[2], rules, fields[3]));
+            } else if (fields[1] == "approval" && fields.size() >= 4 && fields.size() % 2 == 0) {
+                setRouting(fields[0], new ApprovalRouting(approvalChainFrom(fields)));
             } else {
-                throw invalid_argument("expected item|role|roleName or item|data|field|fallback|value|role pairs");
+                throw invalid_argument("expected item|role|roleName, item|data|field|fallback|value|role pairs, or item|approval|field|role|limit|...|finalRole");
             }
         } catch (const invalid_argument &error) { invalidRecord("ROUTING", i, error.what()); }
     }

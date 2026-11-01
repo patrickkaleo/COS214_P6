@@ -1,6 +1,9 @@
-# One industry for the TUI. The workflow, its name and its description come from definitions/.
+# One industry: who is involved and what they can decide. The workflow, its name and its
+# description come from definitions/. FIELD and TASK_FIELD name the details a participant
+# types in; the values are never stored here.
 INDUSTRY|Logistics
 WORKFLOW|SHIP_EX
+STARTED_BY|WarehouseClerk
 EXPECTED|A closed case with the shipment rerouted or held and the customer told. An unknown waybill or an unserved hub makes the external call fail and the task escalates.
 PARTICIPANT|log-clerk|Bongani Dube|WarehouseClerk
 PARTICIPANT|log-analyst|Kagiso Molefe|ExceptionAnalyst
@@ -8,6 +11,10 @@ PARTICIPANT|log-coordinator|Fatima Patel|LogisticsCoordinator
 PARTICIPANT|log-dispatch|Pieter Venter|Dispatcher
 PARTICIPANT|log-supervisor|Grace Mokoena|WarehouseSupervisor
 PARTICIPANT|log-service|Zanele Nkosi|CustomerService
-INPUT|waybill|Waybill (WB1001 in transit, WB1002 delayed, WB1003 damaged; others fail)|WB1002
-INPUT|destinationHub|New hub (Johannesburg, Durban, Cape Town or Gqeberha; others fail)|Cape Town
+PARTICIPANT|log-admin|Lindiwe Ngcobo|WorkflowAdmin
+PARTICIPANT|log-clerk2|Mandla Sithole|WarehouseClerk
+PARTICIPANT|log-dispatch2|Riaan Smit|Dispatcher
 OUTCOMES|ASSESS|reroute,hold
+FIELD|waybill|Waybill number
+TASK_FIELD|CLASSIFY|waybill|Waybill number
+TASK_FIELD|REROUTE|destinationHub|New hub

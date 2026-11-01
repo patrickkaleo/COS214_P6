@@ -1,8 +1,12 @@
 #ifndef FILEWORKFLOWDEFINITIONBUILDER_H
 #define FILEWORKFLOWDEFINITIONBUILDER_H
 
+#include "AlwaysAcceptRule.h"
+#include "ApprovalRouting.h"
+#include "ConcreteApprovalHandler.h"
 #include "DataRuleRouting.h"
 #include "RoleBasedRouting.h"
+#include "ThresholdRule.h"
 
 #include <fstream>
 #include <map>
@@ -32,6 +36,7 @@
  * ROUTING
  * CAPTURE|role|Admissions Officer
  * CLASSIFY|data|severity|Exception Analyst|low|Warehouse Clerk|high|Exception Analyst
+ * AWARD|approval|amount|Bursary Officer|50000|Finance Manager|150000|Bursary Committee
  *
  * SERVICES
  * service|VERIFY_DOCS|Document Verification Service
