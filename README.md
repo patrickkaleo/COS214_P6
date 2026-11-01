@@ -1,6 +1,27 @@
 # TIVIDY
 
-TIVIDY is a generic workflow engine. A workflow is a text definition: a tree of processes and tasks, dependency rules, routing, services, and optional priority or audit wrappers. The engine keeps those definitions and runs separate instances from them. Callers use `TividyWorkflowFacade`. `./tividy` only prints a short line and exits.
+TIVIDY is a generic workflow engine. A workflow is a text definition: a tree of processes and tasks, dependency rules, routing, services, and optional priority or audit wrappers. The engine keeps those definitions and runs separate instances from them. Callers use `TividyWorkflowFacade`, and `./tividy` is an interactive terminal interface (a TUI) that runs both industries through it.
+
+## Running the interface
+
+From the project directory, run `make run`. The interface reads `definitions/`, so it has to start here.
+
+You always act as one participant: menu option 5 changes who, and a work item's menu offers **Act as the assignee**. Actions marked as allowed are the ones the engine will accept. The others stay selectable so that you can see the engine refuse them and why. In a table, `▸` marks work you can act on now. Colour turns off when output is not a terminal or `NO_COLOR` is set.
+
+| To see | Enter or do |
+|---|---|
+| Education, completion | Accept the sample data, complete each task, and choose `approved` for the decision and the bursary |
+| Identity rejection | Surname `Wrong`: completing Verify Identity rejects the application and ends the instance |
+| Appeal branch | Reject Verify Funding Documents: approval and payment are cancelled and the appeal opens |
+| Data routing | Income bracket `low`, `mid` or `high` routes Approve Bursary to a different role |
+| Payment failure | Amount `200000` is over the bank limit: completing Pay Bursary escalates it |
+| Logistics, completion | Accept the sample data and choose `reroute` or `hold` at Assess Impact |
+| Service failure | Waybill `WB9999` or hub `Polokwane`: the call fails and the task escalates until someone qualified claims it |
+| Deadline | With Approve Bursary or Assess Impact open, main menu option 9 with `49` hours escalates it |
+| Independence | Start two instances of one workflow and advance only one |
+| Undo | `u` on an instance screen restores the snapshot taken before the last action. It cannot recall an external call such as a payment |
+
+A new industry needs a definition file, a `.scenario` file (see `definitions/`), and its path added to `SCENARIO_FILES` in `src/main.cpp`.
 
 ## How a workflow runs
 
@@ -57,8 +78,6 @@ flowchart TD
 11. State changes are published through the `EventDispatcher` singleton. Listeners such as `AuditLogger` record them. The engine owns listeners passed to `addListener`.
 12. A task with a service name calls the `ExternalService` registered under that name. Adapters wrap the identity registry, the bank gateway, and the carrier tracking system.
 13. Approval can be a chain of handlers. The task knows the first handler. Each handler approves or passes the request on. Deleting the head deletes the chain.
-
-`checkDeadlines` is forwarded to the engine and does not scan instances yet.
 
 ## Definition file
 
