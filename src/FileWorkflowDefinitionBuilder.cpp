@@ -18,6 +18,11 @@ vector<string> fieldsOf(const string &line) {
         start = end + 1;
     }
 }
+string trimDescription(const string &text) {
+    const size_t start = text.find_first_not_of("\n");
+    if (start == string::npos) return "";
+    return text.substr(start, text.find_last_not_of("\n") - start + 1);
+}
 bool completeFields(const vector<string> &fields, size_t count) {
     if (fields.size() != count) return false;
     for (size_t i = 0; i < fields.size(); ++i)
@@ -42,6 +47,7 @@ void FileWorkflowDefinitionBuilder::invalidRecord(
 }
 
 void FileWorkflowDefinitionBuilder::readFile() {
+    description.clear();
     definitionLines.clear();
     workItemLines.clear();
     dependencyLines.clear();
@@ -58,6 +64,10 @@ void FileWorkflowDefinitionBuilder::readFile() {
     while (getline(file, line)) {
         ++lineNumber;
         line = trim(line);
+        if (line[0] == '#' && section.empty()) {
+            description += trim(line.substr(1)) + "\n";
+            continue;
+        }
         if (line.empty() || line[0] == '#') continue;
         if (line == "DEFINITION" || line == "WORKITEMS" || line == "DEPENDENCIES" ||
             line == "ROUTING" || line == "SERVICES" || line == "EXTRAS") {
@@ -78,6 +88,7 @@ void FileWorkflowDefinitionBuilder::readFile() {
         else if (section == "EXTRAS") extraLines.push_back(line);
     }
     if (file.bad()) throw runtime_error("Could not finish reading workflow file: " + filePath);
+    description = trimDescription(description);
     loaded = true;
 }
 
@@ -116,6 +127,7 @@ void FileWorkflowDefinitionBuilder::buildStructure() {
     }
 
     startDefinition(header[0], header[1], version);
+    definition->setDescription(description);
     // Allow declarations in any order without ever attaching to a missing parent.
     vector<bool> built(records.size(), false);
     size_t remaining = records.size();

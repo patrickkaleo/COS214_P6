@@ -21,6 +21,7 @@ class WorkflowDefinition
 private:
 	string id;
 	string name;
+	string description;
 	int version;
 	WorkItem *root;
 	vector<DependencyRule *> rules;
@@ -66,6 +67,18 @@ public:
 	 * @param name new name
 	 */
 	void setName(string name);
+
+	/**
+	 * @brief return the description of the workflow definition
+	 * @return string description, one paragraph line per newline; empty when none was given
+	 */
+	string getDescription();
+
+	/**
+	 * @brief set the description of the workflow definition
+	 * @param description new description
+	 */
+	void setDescription(string description);
 
 	/**
 	 * @brief return version of the workflowDefinition

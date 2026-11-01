@@ -10,6 +10,7 @@
 #include "ParticipantDirectory.h"
 #include "ServiceRegistry.h"
 
+class Participant;
 class WorkflowDefinition;
 class WorkflowInstance;
 class WorkItemAction;
@@ -37,6 +38,9 @@ private:
   // Participant management
   ParticipantDirectory directory;
 
+  // Named rosters, for callers whose workflows each own their participants
+  std::map<std::string, ParticipantDirectory> rosters;
+
   // External service adapters
   ServiceRegistry services;
 
@@ -59,19 +63,28 @@ public:
       WorkflowDefinition *definition);
 
   // Instance management
+  // An instance routes only to the participants of its roster
   WorkflowInstance *createInstance(
       const std::string &definitionId,
-      const InstanceData &data);
+      const InstanceData &data,
+      const std::string &roster = "");
 
   WorkflowInstance *getInstance(
       const std::string &instanceId) const;
   std::vector<std::string> definitionIds() const;
+  WorkflowDefinition *getDefinition(const std::string &definitionId) const;
   std::vector<std::string> instanceIds() const;
   std::vector<std::string> historyDescriptions() const;
   const std::string &getLastError() const { return lastError; }
 
   // Access to shared subsystems
   ParticipantDirectory &getDirectory();
+
+  // The named roster, created on first use; an empty name is the shared directory
+  ParticipantDirectory &getRoster(const std::string &roster);
+
+  // Finds a participant in the named roster, or nullptr
+  Participant *findParticipant(const std::string &id, const std::string &roster) const;
   const ParticipantDirectory &getDirectory() const;
 
   ServiceRegistry &getServiceRegistry();

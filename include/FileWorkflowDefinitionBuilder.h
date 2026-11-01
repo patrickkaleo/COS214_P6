@@ -14,8 +14,9 @@
  * @class FileWorkflowDefinitionBuilder
  * @brief Concrete builder that reads one sectioned workflow text file.
  *
- * Blank lines and lines starting with # are ignored. A process whose parent id is "-"
- * becomes the root. A run starts from that root.
+ * Lines starting with # above the first section are the definition's description; a bare #
+ * separates lines of it. Blank lines and any later # lines are ignored. A process whose parent
+ * id is "-" becomes the root. A run starts from that root.
  *
  * @code
  * DEFINITION
@@ -93,6 +94,7 @@ private:
 	 */
 	bool loaded;
 
+	string description;
 	vector<string> definitionLines;
 	vector<string> workItemLines;
 	vector<string> dependencyLines;

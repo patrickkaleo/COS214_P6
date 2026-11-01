@@ -1,10 +1,11 @@
 /**
  * @file main.cpp
  * @brief Main interactive Terminal User Interface (TUI) entry point for the TIVIDY Workflow Engine.
- * @details The TUI drives the engine through TividyWorkflowFacade. Each industry is supplied as
- *          data (a .scenario file naming a definition, its participants and input fields), so
- *          nothing below knows about any particular industry. Every action stays on offer even
- *          when it is illegal: the engine decides, and the TUI reports why it refused.
+ * @details The TUI drives the engine through TividyWorkflowFacade. Every workflow in definitions/
+ *          is built, and a workflow can be run once a file in scenarios/ names it by id and supplies
+ *          its participants and input fields, so nothing below knows about any particular workflow.
+ *          Every action stays on offer even when it is illegal: the engine decides, and the TUI
+ *          reports why it refused.
  */
 
 #include "AuditLogger.h"
@@ -23,6 +24,7 @@
 #include "WorkflowEventListener.h"
 #include "WorkflowInstance.h"
 
+#include <dirent.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
@@ -38,10 +40,8 @@
 
 namespace {
 
-const char *const SCENARIO_FILES[] = {
-    "definitions/university_bursary.scenario",
-    "definitions/shipment_exception.scenario",
-};
+const char *const DEFINITIONS_FOLDER = "definitions";
+const char *const SCENARIOS_FOLDER = "scenarios";
 
 // 256-colour palette
 const int GOLD = 220;
@@ -59,10 +59,10 @@ const int BLACK = 16;
 
 /// A participant as listed in a scenario file.
 struct Person {
-    std::string id;
+    std::string id;       // unique within its scenario
     std::string name;
     std::string roles;
-    std::string industry;
+    size_t scenario;      // index into scenarios
 };
 
 /// One value the user supplies when starting an instance.
@@ -72,14 +72,14 @@ struct InputField {
     std::string fallback;
 };
 
-/// One industry: what to tell the user, and what to give the engine.
+/// One runnable workflow: what to tell the user, and what to give the engine.
 struct Scenario {
     std::string industry;
-    std::string process;
-    std::string definitionPath;
-    std::string about;
+    std::string workflowId;
+    std::string roster;      // the engine roster holding this scenario's participants
+    std::string process;     // from the definition
+    std::string about;       // from the definition
     std::string expected;
-    std::string definitionId;
     std::vector<Person> people;
     std::vector<InputField> inputs;
     std::map<std::string, std::vector<std::string>> outcomes;
@@ -204,6 +204,17 @@ void boxLine(const std::string &content, int colour) {
     std::cout << fg(colour, "│") << " " << pad(content, screenWidth() - 4) << " " << fg(colour, "│") << "\n";
 }
 
+/// Splits a definition's description at its line breaks, keeping the empty lines between paragraphs.
+std::vector<std::string> descriptionLines(const std::string &description) {
+    std::vector<std::string> lines;
+    std::istringstream in(description);
+    std::string line;
+    while (std::getline(in, line)) {
+        lines.push_back(line);
+    }
+    return lines;
+}
+
 void boxBottom(int colour) {
     std::cout << fg(colour, "╰" + repeat("─", screenWidth() - 2) + "╯") << "\n";
 }
@@ -295,14 +306,18 @@ std::vector<std::string> split(const std::string &text, char separator) {
     return parts;
 }
 
-bool loadScenario(const std::string &path, Scenario &scenario) {
+/// Reads a scenario file; anything it cannot use is added to problems so that a typo is easy to find.
+bool loadScenario(const std::string &path, Scenario &scenario, std::vector<std::string> &problems) {
     std::ifstream file(path.c_str());
     if (!file) {
+        problems.push_back(path + ": cannot be read");
         return false;
     }
 
     std::string line;
+    size_t number = 0;
     while (std::getline(file, line)) {
+        ++number;
         line = trimmed(line);
         if (line.empty() || line[0] == '#') {
             continue;
@@ -310,9 +325,7 @@ bool loadScenario(const std::string &path, Scenario &scenario) {
         const std::vector<std::string> fields = split(line, '|');
         const std::string &key = fields[0];
         if (fields.size() == 2 && key == "INDUSTRY") scenario.industry = fields[1];
-        else if (fields.size() == 2 && key == "PROCESS") scenario.process = fields[1];
-        else if (fields.size() == 2 && key == "DEFINITION") scenario.definitionPath = fields[1];
-        else if (fields.size() == 2 && key == "ABOUT") scenario.about = fields[1];
+        else if (fields.size() == 2 && key == "WORKFLOW") scenario.workflowId = fields[1];
         else if (fields.size() == 2 && key == "EXPECTED") scenario.expected = fields[1];
         else if (fields.size() == 3 && key == "OUTCOMES") scenario.outcomes[fields[1]] = split(fields[2], ',');
         else if (fields.size() == 4 && key == "PARTICIPANT") {
@@ -320,6 +333,7 @@ bool loadScenario(const std::string &path, Scenario &scenario) {
             person.id = fields[1];
             person.name = fields[2];
             person.roles = fields[3];
+            person.scenario = 0;
             scenario.people.push_back(person);
         } else if (fields.size() == 4 && key == "INPUT") {
             InputField input;
@@ -327,13 +341,54 @@ bool loadScenario(const std::string &path, Scenario &scenario) {
             input.label = fields[2];
             input.fallback = fields[3];
             scenario.inputs.push_back(input);
+        } else {
+            problems.push_back(path + " line " + std::to_string(number) + " is not understood: " + line);
         }
     }
 
-    for (Person &person : scenario.people) {
-        person.industry = scenario.industry;
+    if (scenario.workflowId.empty()) {
+        problems.push_back(path + ": needs a WORKFLOW|<id> line");
+        return false;
     }
-    return !scenario.definitionPath.empty();
+    if (scenario.people.empty()) {
+        problems.push_back(path + ": needs at least one PARTICIPANT line");
+        return false;
+    }
+    return true;
+}
+
+bool folderExists(const std::string &folder) {
+    DIR *directory = opendir(folder.c_str());
+    if (directory == nullptr) {
+        return false;
+    }
+    closedir(directory);
+    return true;
+}
+
+/// "scenarios/education.scenario" becomes "education".
+std::string fileStem(const std::string &path) {
+    const size_t slash = path.find_last_of('/');
+    const std::string name = slash == std::string::npos ? path : path.substr(slash + 1);
+    return name.substr(0, name.find_last_of('.'));
+}
+
+/// Paths of the files in a folder with this extension, sorted so menus keep a stable order.
+std::vector<std::string> filesIn(const std::string &folder, const std::string &extension) {
+    std::vector<std::string> paths;
+    DIR *directory = opendir(folder.c_str());
+    if (directory == nullptr) {
+        return paths;
+    }
+    while (const dirent *entry = readdir(directory)) {
+        const std::string name = entry->d_name;
+        if (name.size() > extension.size() && name.compare(name.size() - extension.size(), extension.size(), extension) == 0) {
+            paths.push_back(folder + "/" + name);
+        }
+    }
+    closedir(directory);
+    std::sort(paths.begin(), paths.end());
+    return paths;
 }
 
 // ---- Work items -----------------------------------------------------------------------------
@@ -427,7 +482,9 @@ private:
     std::vector<InstanceRecord> instances;
     std::vector<HistoryEntry> history;
     std::vector<std::string> notices;
-    size_t actor = 0;
+    std::vector<std::string> notReady;     // why a file in definitions/ or scenarios/ cannot run yet
+    size_t current = 0;    // scenario the user chose on the entry screen
+    size_t actor = 0;      // index into people, chosen after the scenario
     bool inputClosed = false;
 
     // Input
@@ -437,13 +494,14 @@ private:
 
     // Screens
     void beginScreen(const std::string &title);
-    void showIndustries();
+    void mainMenu();
+    void showIndustry();
     void startInstanceScreen();
     void openInstanceScreen();
     void instanceScreen(const InstanceRecord &record);
     void itemScreen(const InstanceRecord &record, const std::string &itemId);
     void myWorkScreen();
-    void chooseActor();
+    bool chooseActor();
     void undoLast();
     void showInstanceHistory(const std::string &instanceId);
     void showInstanceData(const std::string &instanceId);
@@ -452,7 +510,8 @@ private:
     void checkDeadlines();
 
     // Helpers
-    void printRoster();
+    std::vector<size_t> printRoster();
+    std::vector<const InstanceRecord *> currentInstances() const;
     void flushEvents();
     void perform(const InstanceRecord &record, WorkItem *item, int choice);
     void noticeOk(const std::string &text);
@@ -480,24 +539,58 @@ bool Tui::initialise() {
     facade.addService(new TrackingServiceAdapter());
     facade.addService(new CarrierAdapter());
 
-    for (const char *path : SCENARIO_FILES) {
+    if (!folderExists(DEFINITIONS_FOLDER) || !folderExists(SCENARIOS_FOLDER)) {
+        std::cerr << "Run tividy from the project root, which holds " << DEFINITIONS_FOLDER << "/ and "
+                  << SCENARIOS_FOLDER << "/.\n";
+        return false;
+    }
+
+    // Every definition is built. A bad file only costs that workflow, not the whole program.
+    for (const std::string &path : filesIn(DEFINITIONS_FOLDER, ".txt")) {
+        if (facade.registerDefinitionFromFile(path).empty()) {
+            // Builder errors already start with the path; others don't.
+            const std::string error = facade.getLastError();
+            notReady.push_back(error.compare(0, path.size(), path) == 0 ? error : path + ": " + error);
+        }
+    }
+
+    // A scenario makes its workflow runnable, by naming the id in the definition's DEFINITION section.
+    std::vector<std::string> covered;
+    for (const std::string &path : filesIn(SCENARIOS_FOLDER, ".scenario")) {
         Scenario scenario;
-        if (!loadScenario(path, scenario)) {
-            std::cerr << "Could not read " << path << " (run tividy from the project root).\n";
-            return false;
+        if (!loadScenario(path, scenario, notReady)) {
+            continue;
         }
-        scenario.definitionId = facade.registerDefinitionFromFile(scenario.definitionPath);
-        if (scenario.definitionId.empty()) {
-            std::cerr << "Could not build " << scenario.definitionPath << ": " << facade.getLastError() << "\n";
-            return false;
+        scenario.process = facade.definitionName(scenario.workflowId);
+        scenario.about = facade.definitionDescription(scenario.workflowId);
+        if (scenario.process.empty()) {
+            notReady.push_back(path + ": no definition has the id " + scenario.workflowId);
+            continue;
         }
-        for (const Person &person : scenario.people) {
-            facade.addParticipant(person.id, person.name, split(person.roles, ','));
+        if (scenario.industry.empty()) {
+            scenario.industry = scenario.process;
+        }
+        // Each scenario owns its participants, so names, ids and roles can repeat across scenarios.
+        scenario.roster = fileStem(path);
+        for (Person &person : scenario.people) {
+            person.scenario = scenarios.size();
+            facade.addParticipant(person.id, person.name, split(person.roles, ','), scenario.roster);
+            if (!facade.getLastError().empty()) {
+                notReady.push_back(path + ": participant " + person.id + " is listed twice");
+                continue;
+            }
             people.push_back(person);
         }
+        covered.push_back(scenario.workflowId);
         scenarios.push_back(scenario);
     }
-    return !people.empty();
+
+    for (const std::string &id : facade.definitionIds()) {
+        if (std::find(covered.begin(), covered.end(), id) == covered.end()) {
+            notReady.push_back("Workflow " + id + " has no scenario yet: add one with WORKFLOW|" + id);
+        }
+    }
+    return true;
 }
 
 void Tui::run() {
@@ -517,8 +610,7 @@ void Tui::run() {
         for (int i = 0; i < 6; ++i) {
             std::cout << "  " << bold(shades[i], banner[i]) << "\n";
         }
-        std::cout << "  " << fg(GREY, "One workflow engine. ") << bold(GOLD, std::to_string(scenarios.size()) + " industries.")
-                  << fg(GREY, " Every step is real.") << "\n\n";
+        std::cout << "  " << fg(GREY, "One workflow engine. ") << bold(GOLD, std::to_string(scenarios.size()) + " ready to run.") << "\n\n";
 
         if (!notices.empty()) {
             boxTop("What just happened", GOLD);
@@ -527,19 +619,61 @@ void Tui::run() {
             notices.clear();
         }
 
+        if (!notReady.empty()) {
+            boxTop("Not ready", ORANGE);
+            for (const std::string &problem : notReady) {
+                const std::vector<std::string> lines = wrap(problem, screenWidth() - 6);
+                for (size_t i = 0; i < lines.size(); ++i) {
+                    boxLine((i == 0 ? bold(ORANGE, "▲ ") : std::string("  ")) + lines[i], ORANGE);
+                }
+            }
+            boxBottom(ORANGE);
+        }
+
+        boxTop("Where are we going?", BLUE);
+        if (scenarios.empty()) {
+            boxLine(fg(GREY, "Nothing can run yet. Add a workflow to definitions/ and a scenario naming it to scenarios/."), BLUE);
+        }
+        size_t nameWidth = 0;
+        for (const Scenario &scenario : scenarios) nameWidth = std::max(nameWidth, scenario.industry.size());
+        for (size_t i = 0; i < scenarios.size(); ++i) {
+            boxLine(bold(GREEN, pad(" " + std::to_string(i + 1), 4)) + pad(bold(WHITE, scenarios[i].industry), nameWidth + 3) + fg(GREY, scenarios[i].process), BLUE);
+        }
+        boxLine(bold(RED, " 0 ") + " " + bold(WHITE, "Exit"), BLUE);
+        boxBottom(BLUE);
+
+        const int choice = askNumber("Choose", 0, static_cast<int>(scenarios.size()));
+        if (choice == 0) {
+            std::cout << bold(SKY, "Goodbye.") << "\n";
+            return;
+        }
+        if (choice > 0) {
+            current = static_cast<size_t>(choice - 1);
+            if (chooseActor()) {
+                mainMenu();
+            }
+        }
+    }
+}
+
+void Tui::mainMenu() {
+    while (!inputClosed) {
+        beginScreen(scenarios[current].industry + "  ›  " + scenarios[current].process);
+
+        const std::vector<const InstanceRecord *> mine = currentInstances();
         int running = 0;
-        for (const InstanceRecord &record : instances) {
-            if (facade.getStatus(record.id) == "running") ++running;
+        for (const InstanceRecord *record : mine) {
+            if (facade.getStatus(record->id) == "running") ++running;
         }
 
         const struct { int key; int colour; const char *name; const char *hint; } options[] = {
-            {1, VIOLET, "Explain the industries", "what each process does and who is involved"},
-            {2, GREEN, "Start a workflow instance", "pick an industry and run it"},
+            {1, VIOLET, "Explain this workflow", "what the process does and who is involved"},
+            {2, GREEN, "Start a workflow instance", "run this workflow from the beginning"},
             {3, SKY, "Open an instance", ""},
-            {4, GOLD, "My work", "what the current participant can act on"},
+            {4, GOLD, "My work", "what you can act on right now"},
             {5, PINK, "Change participant", "choose who you are acting as"},
             {6, ORANGE, "Undo the last action", "roll back from a snapshot"},
-            {7, BLUE, "Full audit trail", "every event, all instances"},
+            {7, BLUE, "Full audit trail", "every event, all workflows"},
             {8, BLUE, "Monitoring metrics", "live counts from the observers"},
             {9, ORANGE, "Check deadlines", "jump ahead and see what escalates"},
         };
@@ -550,15 +684,15 @@ void Tui::run() {
         for (const auto &option : options) {
             std::string hint = option.hint;
             if (option.key == 3) {
-                hint = std::to_string(instances.size()) + " started, " + std::to_string(running) + " running";
+                hint = std::to_string(mine.size()) + " started, " + std::to_string(running) + " running";
             }
             boxLine(bold(option.colour, " " + std::to_string(option.key) + " ") + " " + pad(bold(WHITE, option.name), 28) + fg(GREY, hint), BLUE);
         }
-        boxLine(bold(RED, " 0 ") + " " + bold(WHITE, "Exit"), BLUE);
+        boxLine(bold(RED, " 0 ") + " " + bold(WHITE, "Back to the workflow list"), BLUE);
         boxBottom(BLUE);
 
         switch (askNumber("Choose", 0, 9)) {
-            case 1: showIndustries(); break;
+            case 1: showIndustry(); break;
             case 2: startInstanceScreen(); break;
             case 3: openInstanceScreen(); break;
             case 4: myWorkScreen(); break;
@@ -567,7 +701,7 @@ void Tui::run() {
             case 7: showAuditTrail(); break;
             case 8: showMetrics(); break;
             case 9: checkDeadlines(); break;
-            case 0: std::cout << bold(SKY, "Goodbye.") << "\n"; return;
+            case 0: return;
             default: break;
         }
     }
@@ -631,33 +765,37 @@ void Tui::beginScreen(const std::string &title) {
     }
 }
 
-void Tui::showIndustries() {
-    beginScreen("The industries");
-    const int colours[] = {VIOLET, SKY, GREEN, GOLD};
-    size_t index = 0;
-    for (const Scenario &scenario : scenarios) {
-        const int colour = colours[index++ % 4];
-        boxTop(scenario.industry + ": " + scenario.process, colour);
-        boxText(scenario.about, colour);
-        boxLine("", colour);
+void Tui::showIndustry() {
+    const Scenario &scenario = scenarios[current];
+    beginScreen(scenario.industry + "  ›  About");
+
+    const int colour = VIOLET;
+    boxTop(scenario.process, colour);
+    for (const std::string &paragraph : descriptionLines(scenario.about)) {
+        if (paragraph.empty()) boxLine("", colour);
+        else boxText(paragraph, colour);
+    }
+    boxLine("", colour);
+    if (!scenario.expected.empty()) {
         boxLine(bold(colour, "Expected result"), colour);
         boxText(scenario.expected, colour);
         boxLine("", colour);
-        boxLine(bold(colour, "Participants"), colour);
-        for (const Person &person : scenario.people) {
-            boxLine("  " + pad(bold(WHITE, person.name), 22) + fg(GREY, person.roles), colour);
-        }
-        boxLine("", colour);
-        boxLine(bold(colour, "Input data"), colour);
-        for (const InputField &input : scenario.inputs) {
-            boxLine("  " + pad(bold(WHITE, input.key), 16) + fg(GREY, fit(input.label, screenWidth() - 24)), colour);
-        }
-        boxLine("", colour);
-        boxLine(fg(GREY, "Definition: " + scenario.definitionPath), colour);
-        boxBottom(colour);
-        std::cout << "\n";
     }
-    boxTop("Shared by every industry, unchanged", BLUE);
+    boxLine(bold(colour, "Participants"), colour);
+    for (const Person &person : scenario.people) {
+        boxLine("  " + pad(bold(WHITE, person.name), 22) + fg(GREY, person.roles), colour);
+    }
+    boxLine("", colour);
+    if (!scenario.inputs.empty()) boxLine(bold(colour, "Input data"), colour);
+    for (const InputField &input : scenario.inputs) {
+        boxLine("  " + pad(bold(WHITE, input.key), 16) + fg(GREY, fit(input.label, screenWidth() - 24)), colour);
+    }
+    boxLine("", colour);
+    boxLine(fg(GREY, "Workflow: " + scenario.workflowId + "  (from " + DEFINITIONS_FOLDER + "/)"), colour);
+    boxBottom(colour);
+    std::cout << "\n";
+
+    boxTop("Shared by every workflow, unchanged", BLUE);
     boxText("TividyWorkflowFacade, WorkflowEngine, WorkflowInstance, WorkflowDefinition, Task, SubProcess, "
             "WorkItemState and its states, DependencyMediator, RoutingStrategy and its strategies, the "
             "ApprovalHandler chain, WorkItemAction commands, WorkflowSnapshot, EventDispatcher and its listeners. "
@@ -667,22 +805,13 @@ void Tui::showIndustries() {
 }
 
 void Tui::startInstanceScreen() {
-    beginScreen("Start a workflow instance");
-    boxTop("Choose an industry", GREEN);
-    for (size_t i = 0; i < scenarios.size(); ++i) {
-        boxLine(bold(GREEN, " " + std::to_string(i + 1) + " ") + " " + pad(bold(WHITE, scenarios[i].industry), 14) + fg(GREY, scenarios[i].process), GREEN);
-    }
-    boxLine(bold(RED, " 0 ") + " " + bold(WHITE, "Back"), GREEN);
-    boxBottom(GREEN);
-
-    const int choice = askNumber("Choose", 0, static_cast<int>(scenarios.size()));
-    if (choice <= 0) {
-        return;
-    }
-    const size_t index = static_cast<size_t>(choice - 1);
+    const size_t index = current;
     const Scenario &scenario = scenarios[index];
+    beginScreen(scenario.industry + "  ›  Start a workflow instance");
 
-    std::cout << "\n" << fg(GREY, "Enter the instance data. Press Enter to accept the value in brackets.") << "\n";
+    if (!scenario.inputs.empty()) {
+        std::cout << fg(GREY, "Enter the instance data. Press Enter to accept the value in brackets.") << "\n";
+    }
     InstanceData data;
     for (const InputField &input : scenario.inputs) {
         std::string value;
@@ -693,7 +822,7 @@ void Tui::startInstanceScreen() {
         data.set(input.key, value.empty() ? input.fallback : value);
     }
 
-    const std::string id = facade.startInstance(scenario.definitionId, data);
+    const std::string id = facade.startInstance(scenario.workflowId, data, scenario.roster);
     if (id.empty()) {
         noticeError("The engine could not start this instance: " + facade.getLastError());
         return;
@@ -710,8 +839,9 @@ void Tui::startInstanceScreen() {
 }
 
 void Tui::openInstanceScreen() {
-    beginScreen("Instances");
-    if (instances.empty()) {
+    const std::vector<const InstanceRecord *> mine = currentInstances();
+    beginScreen(scenarios[current].industry + "  ›  Instances");
+    if (mine.empty()) {
         boxTop("Nothing started yet", GOLD);
         boxLine("Choose 2 on the main menu to start your first instance.", GOLD);
         boxBottom(GOLD);
@@ -720,22 +850,22 @@ void Tui::openInstanceScreen() {
     }
 
     boxTop("Choose an instance", SKY);
-    for (size_t i = 0; i < instances.size(); ++i) {
-        const Scenario &scenario = scenarios[instances[i].scenario];
+    for (size_t i = 0; i < mine.size(); ++i) {
         int done = 0;
         int total = 0;
-        taskProgress(instances[i].id, done, total);
-        boxLine(bold(SKY, pad(" " + std::to_string(i + 1), 4)) + pad(bold(WHITE, instances[i].id), 13) + pad(scenario.industry, 11) +
+        taskProgress(mine[i]->id, done, total);
+        boxLine(bold(SKY, pad(" " + std::to_string(i + 1), 4)) + pad(bold(WHITE, mine[i]->id), 13) +
                     progressBar(done, total, 12) + " " + pad(std::to_string(done) + "/" + std::to_string(total), 6) +
-                    statusPill(facade.getStatus(instances[i].id)),
+                    statusPill(facade.getStatus(mine[i]->id)),
                 SKY);
     }
     boxLine(bold(RED, pad(" 0", 4)) + bold(WHITE, "Back"), SKY);
     boxBottom(SKY);
 
-    const int choice = askNumber("Choose", 0, static_cast<int>(instances.size()));
+    const int choice = askNumber("Choose", 0, static_cast<int>(mine.size()));
     if (choice > 0) {
-        instanceScreen(instances[static_cast<size_t>(choice - 1)]);
+        const InstanceRecord record = *mine[static_cast<size_t>(choice - 1)];
+        instanceScreen(record);
     }
 }
 
@@ -931,11 +1061,11 @@ void Tui::perform(const InstanceRecord &record, WorkItem *item, int choice) {
             break;
         }
         case 5: {
-            printRoster();
-            const int picked = askNumber("Delegate to", 1, static_cast<int>(people.size()));
+            const std::vector<size_t> roster = printRoster();
+            const int picked = askNumber("Delegate to", 1, static_cast<int>(roster.size()));
             if (picked < 1) return;
-            const Person &target = people[static_cast<size_t>(picked - 1)];
-            accepted = facade.delegate(record.id, id, who, facade.findParticipant(target.id));
+            const Person &target = people[roster[static_cast<size_t>(picked - 1)]];
+            accepted = facade.delegate(record.id, id, who, facade.findParticipant(target.id, scenarios[current].roster));
             description = "Delegated " + item->getName() + " to " + target.name + by;
             break;
         }
@@ -977,13 +1107,13 @@ void Tui::myWorkScreen() {
     };
 
     std::vector<WorkRow> work;
-    for (const InstanceRecord &record : instances) {
+    for (const InstanceRecord *record : currentInstances()) {
         std::vector<Row> rows;
-        collectRows(facade.getInstance(record.id)->getRoot(), "", true, true, rows);
+        collectRows(facade.getInstance(record->id)->getRoot(), "", true, true, rows);
         for (const Row &row : rows) {
-            if (taskOf(row.item) != nullptr && !facade.availableActions(record.id, row.item->getId(), currentActor()).empty()) {
+            if (taskOf(row.item) != nullptr && !facade.availableActions(record->id, row.item->getId(), currentActor()).empty()) {
                 WorkRow entry;
-                entry.record = &record;
+                entry.record = record;
                 entry.item = row.item;
                 work.push_back(entry);
             }
@@ -1020,25 +1150,33 @@ void Tui::myWorkScreen() {
     }
 }
 
-void Tui::printRoster() {
-    boxTop("Participants", PINK);
+/// Lists the current scenario's participants. @return Their positions in people, in menu order.
+std::vector<size_t> Tui::printRoster() {
+    std::vector<size_t> roster;
+    boxTop(scenarios[current].industry + " participants", PINK);
     for (size_t i = 0; i < people.size(); ++i) {
-        const bool current = i == actor;
-        boxLine(bold(PINK, pad(" " + std::to_string(i + 1), 4)) + pad(fg(GREY, people[i].industry), 12) +
-                    pad(bold(WHITE, people[i].name), 22) + fg(GREY, pad(people[i].roles, 24)) + (current ? bold(GREEN, "← you") : ""),
+        if (people[i].scenario != current) continue;
+        roster.push_back(i);
+        boxLine(bold(PINK, pad(" " + std::to_string(roster.size()), 4)) +
+                    pad(bold(WHITE, people[i].name), 22) + fg(GREY, people[i].roles),
                 PINK);
     }
+    boxLine(bold(RED, pad(" 0", 4)) + bold(WHITE, "Back"), PINK);
     boxBottom(PINK);
+    return roster;
 }
 
-void Tui::chooseActor() {
-    beginScreen("Change participant");
-    printRoster();
-    const int choice = askNumber("Act as", 1, static_cast<int>(people.size()));
-    if (choice >= 1) {
-        actor = static_cast<size_t>(choice - 1);
-        noticeOk("Now acting as " + people[actor].name);
+/// @return true if a participant was chosen; false if the user went back.
+bool Tui::chooseActor() {
+    beginScreen(scenarios[current].industry + "  ›  Who are you?");
+    const std::vector<size_t> roster = printRoster();
+    const int choice = askNumber("Act as", 0, static_cast<int>(roster.size()));
+    if (choice < 1) {
+        return false;
     }
+    actor = roster[static_cast<size_t>(choice - 1)];
+    noticeOk("Now acting as " + people[actor].name);
+    return true;
 }
 
 void Tui::undoLast() {
@@ -1235,7 +1373,7 @@ void Tui::noticeError(const std::string &text) {
 
 size_t Tui::personIndex(const std::string &id) const {
     for (size_t i = 0; i < people.size(); ++i) {
-        if (people[i].id == id) {
+        if (people[i].id == id && people[i].scenario == current) {
             return i;
         }
     }
@@ -1243,11 +1381,19 @@ size_t Tui::personIndex(const std::string &id) const {
 }
 
 Participant *Tui::currentActor() const {
-    return facade.findParticipant(people[actor].id);
+    return facade.findParticipant(people[actor].id, scenarios[people[actor].scenario].roster);
+}
+
+std::vector<const InstanceRecord *> Tui::currentInstances() const {
+    std::vector<const InstanceRecord *> mine;
+    for (const InstanceRecord &record : instances) {
+        if (record.scenario == current) mine.push_back(&record);
+    }
+    return mine;
 }
 
 std::string Tui::actorLabel() const {
-    return bold(PINK, people[actor].name) + fg(GREY, "  " + people[actor].roles + ", " + people[actor].industry);
+    return bold(PINK, people[actor].name) + fg(GREY, "  " + people[actor].roles);
 }
 
 } // namespace

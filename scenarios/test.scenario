@@ -1,0 +1,6 @@
+# One industry for the TUI. The workflow, its name and its description come from definitions/.
+INDUSTRY|Something else
+WORKFLOW|TRIAL
+EXPECTED|A closed case with the shipment rerouted or held and the customer told. An unknown waybill or an unserved hub makes the external call fail and the task escalates.
+PARTICIPANT|log-clerk|Bongani Dube|WarehouseClerk
+PARTICIPANT|log-analyst|Kagiso Molefe|ExceptionAnalyst

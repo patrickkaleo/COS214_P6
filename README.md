@@ -4,9 +4,9 @@ TIVIDY is a generic workflow engine. A workflow is a text definition: a tree of 
 
 ## Running the interface
 
-From the project directory, run `make run`. The interface reads `definitions/`, so it has to start here.
+From the project directory, run `make run`. The interface reads `definitions/` and `scenarios/`, so it has to start here.
 
-You always act as one participant: menu option 5 changes who, and a work item's menu offers **Act as the assignee**. Actions marked as allowed are the ones the engine will accept. The others stay selectable so that you can see the engine refuse them and why. In a table, `▸` marks work you can act on now. Colour turns off when output is not a terminal or `NO_COLOR` is set.
+It opens by asking which workflow you want, then who you are from its participants. The main menu then covers only that workflow; `0` goes back to choose another, and exits from there. Menu option 5 changes participant, and a work item's menu offers **Act as the assignee**. Actions marked as allowed are the ones the engine will accept. The others stay selectable so that you can see the engine refuse them and why. In a table, `▸` marks work you can act on now. Colour turns off when output is not a terminal or `NO_COLOR` is set.
 
 | To see | Enter or do |
 |---|---|
@@ -21,7 +21,46 @@ You always act as one participant: menu option 5 changes who, and a work item's 
 | Independence | Start two instances of one workflow and advance only one |
 | Undo | `u` on an instance screen restores the snapshot taken before the last action. It cannot recall an external call such as a payment |
 
-A new industry needs a definition file, a `.scenario` file (see `definitions/`), and its path added to `SCENARIO_FILES` in `src/main.cpp`.
+## Adding a workflow
+
+No code changes or rebuild are needed. When the interface starts, it builds every `definitions/*.txt` file and reads every `scenarios/*.scenario` file. A workflow appears in the opening list once a scenario names its id. Anything that can't run yet appears in a **Not ready** box with the reason, and the rest carry on working.
+
+1. Add `definitions/my_workflow.txt`. The `#` lines above the first section are its description, and the format is under [Definition file](#definition-file).
+
+   ```
+   # What this workflow does.
+
+   DEFINITION
+   MY_WORKFLOW|My Workflow|1
+
+   WORKITEMS
+   process|ROOT|-|My Workflow
+   task|FIRST|ROOT|First Task
+   task|SECOND|ROOT|Second Task
+
+   DEPENDENCIES
+   FIRST|SECOND|*
+
+   ROUTING
+   FIRST|role|Clerk
+   SECOND|role|Manager
+   ```
+
+2. Add `scenarios/my_workflow.scenario`. `WORKFLOW` must match the id on the definition's `DEFINITION` line, and at least one `PARTICIPANT` is required.
+
+   ```
+   WORKFLOW|MY_WORKFLOW
+   INDUSTRY|Retail
+   EXPECTED|What should happen when it finishes.
+   PARTICIPANT|p1|Sam Clerk|Clerk
+   PARTICIPANT|p2|Alex Boss|Manager
+   INPUT|orderNumber|Order number|A100
+   OUTCOMES|SECOND|approved,declined
+   ```
+
+   `INDUSTRY`, `EXPECTED`, `INPUT` and `OUTCOMES` are optional. `INPUT` is key, prompt and default value. `OUTCOMES` is the choices offered when completing that task; without it you type an outcome. A participant may hold several comma-separated roles.
+
+Each scenario owns its participants: work is only routed to, and only accepted from, people in that scenario's file. The same names, ids and roles can appear in any number of scenarios, and two people are simply different participants. A workflow that calls a new external system also needs an adapter registered in `Tui::initialise`; until then, that task escalates when it runs.
 
 ## How a workflow runs
 
@@ -121,7 +160,8 @@ A process whose parent id is `-` is the root. `priority` sets the task escalatio
 ```
 include/          public headers
 src/              engine sources
-definitions/      sample workflow files
+definitions/      workflow files
+scenarios/        industry files: participants and input data for a workflow
 tests/            doctest suites and tests/builder.txt
 makefile          tividy and tividy_tests
 Dockerfile        Ubuntu image used by docker compose

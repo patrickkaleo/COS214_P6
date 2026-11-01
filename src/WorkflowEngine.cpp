@@ -112,7 +112,8 @@ std::string WorkflowEngine::registerDefinition(
 // Create an independent workflow instance
 WorkflowInstance *WorkflowEngine::createInstance(
     const std::string &definitionId,
-    const InstanceData &data)
+    const InstanceData &data,
+    const std::string &roster)
 {
   lastError.clear();
   auto found = definitions.find(definitionId);
@@ -129,7 +130,7 @@ WorkflowInstance *WorkflowEngine::createInstance(
 
   // Create instance from registered definition
   WorkflowInstance *instance =
-      new WorkflowInstance(id, found->second, data, &directory, &services);
+      new WorkflowInstance(id, found->second, data, &getRoster(roster), &services);
 
   // Engine takes ownership
   instances[id] = instance;
@@ -149,6 +150,11 @@ WorkflowInstance *WorkflowEngine::getInstance(
   }
 
   return found->second;
+}
+
+WorkflowDefinition *WorkflowEngine::getDefinition(const std::string &definitionId) const {
+  auto found = definitions.find(definitionId);
+  return found == definitions.end() ? nullptr : found->second;
 }
 
 std::vector<std::string> WorkflowEngine::definitionIds() const {
@@ -178,6 +184,21 @@ ParticipantDirectory &WorkflowEngine::getDirectory()
 }
 
 const ParticipantDirectory &WorkflowEngine::getDirectory() const { return directory; }
+
+ParticipantDirectory &WorkflowEngine::getRoster(const std::string &roster)
+{
+  return roster.empty() ? directory : rosters[roster];
+}
+
+Participant *WorkflowEngine::findParticipant(const std::string &id, const std::string &roster) const
+{
+  if (roster.empty())
+  {
+    return directory.findById(id).get();
+  }
+  auto found = rosters.find(roster);
+  return found == rosters.end() ? nullptr : found->second.findById(id).get();
+}
 
 // Get external service registry
 ServiceRegistry &WorkflowEngine::getServiceRegistry()

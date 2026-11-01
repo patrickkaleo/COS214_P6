@@ -202,6 +202,16 @@ string WorkflowDefinition::getName()
 	return name;
 }
 
+string WorkflowDefinition::getDescription()
+{
+	return description;
+}
+
+void WorkflowDefinition::setDescription(string description)
+{
+	this->description = description;
+}
+
 void WorkflowDefinition::setName(string name)
 {
 	this->name = name;

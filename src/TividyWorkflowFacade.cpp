@@ -31,10 +31,18 @@ WorkflowInstance *TividyWorkflowFacade::getInstance(const std::string &id) const
   return engine.getInstance(id);
 }
 std::vector<std::string> TividyWorkflowFacade::definitionIds() const { return engine.definitionIds(); }
+std::string TividyWorkflowFacade::definitionName(const std::string &id) const {
+  WorkflowDefinition *definition = engine.getDefinition(id);
+  return definition ? definition->getName() : "";
+}
+std::string TividyWorkflowFacade::definitionDescription(const std::string &id) const {
+  WorkflowDefinition *definition = engine.getDefinition(id);
+  return definition ? definition->getDescription() : "";
+}
 std::vector<std::string> TividyWorkflowFacade::instanceIds() const { return engine.instanceIds(); }
 std::vector<std::string> TividyWorkflowFacade::actionHistory() const { return engine.historyDescriptions(); }
-Participant *TividyWorkflowFacade::findParticipant(const std::string &id) const {
-  return engine.getDirectory().findById(id).get();
+Participant *TividyWorkflowFacade::findParticipant(const std::string &id, const std::string &roster) const {
+  return engine.findParticipant(id, roster);
 }
 std::vector<Participant *> TividyWorkflowFacade::participants() const {
   std::vector<Participant *> result;
@@ -91,10 +99,11 @@ std::string TividyWorkflowFacade::registerDefinitionFromFile(const std::string &
 void TividyWorkflowFacade::addParticipant(
     const std::string &id,
     const std::string &name,
-    const std::vector<std::string> &roles)
+    const std::vector<std::string> &roles,
+    const std::string &roster)
 {
   lastError.clear();
-  if (id.empty() || name.empty() || engine.getDirectory().findById(id)) {
+  if (id.empty() || name.empty() || engine.findParticipant(id, roster)) {
     lastError = "Participant ID and name are required, and the ID must be unique.";
     return;
   }
@@ -108,7 +117,7 @@ void TividyWorkflowFacade::addParticipant(
     participant->addRole(roles[i]);
   }
 
-  engine.getDirectory().addParticipant(participant);
+  engine.getRoster(roster).addParticipant(participant);
 }
 
 // Register an external system adapter.
@@ -137,11 +146,12 @@ void TividyWorkflowFacade::addListener(
 // Create and start a workflow instance.
 std::string TividyWorkflowFacade::startInstance(
     const std::string &defId,
-    const InstanceData &data)
+    const InstanceData &data,
+    const std::string &roster)
 {
   lastError.clear();
   WorkflowInstance *instance =
-      engine.createInstance(defId, data);
+      engine.createInstance(defId, data, roster);
 
   if (instance == nullptr)
   {

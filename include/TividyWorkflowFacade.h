@@ -58,8 +58,11 @@ public:
 	 * @param id The ID of the participant.
 	 * @param name The name of the participant.
 	 * @param roles The roles of the participant.
+	 * @param roster Roster that owns the participant; empty means the shared directory.
+	 *               Ids, names and roles only need to be unique within a roster.
 	 */
-	void addParticipant(const std::string &id, const std::string &name, const std::vector<std::string> &roles);
+	void addParticipant(const std::string &id, const std::string &name, const std::vector<std::string> &roles,
+	                    const std::string &roster = "");
 
 	/**
 	 * @brief Registers an external system adapter.
@@ -80,9 +83,12 @@ public:
 	 *
 	 * @param definitionId The ID of the workflow definition.
 	 * @param data The instance data.
+	 * @param roster Roster whose participants the instance routes to and accepts actions from;
+	 *               empty means the shared directory.
 	 * @return The ID of the started instance.
 	 */
-	std::string startInstance(const std::string &definitionId, const InstanceData &data);
+	std::string startInstance(const std::string &definitionId, const InstanceData &data,
+	                          const std::string &roster = "");
 
 	/**
 	 * @brief Claims a work item.
@@ -174,9 +180,13 @@ public:
 
 	WorkflowInstance *getInstance(const std::string &instanceId) const;
 	std::vector<std::string> definitionIds() const;
+	/// @return The registered definition's name, or empty if the id is unknown.
+	std::string definitionName(const std::string &definitionId) const;
+	/// @return The registered definition's description, or empty if it has none or the id is unknown.
+	std::string definitionDescription(const std::string &definitionId) const;
 	std::vector<std::string> instanceIds() const;
 	std::vector<std::string> actionHistory() const;
-	Participant *findParticipant(const std::string &id) const;
+	Participant *findParticipant(const std::string &id, const std::string &roster = "") const;
 	std::vector<Participant *> participants() const;
 	std::vector<std::string> availableActions(const std::string &instanceId,
 	                                          const std::string &itemId,
