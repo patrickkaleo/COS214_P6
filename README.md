@@ -272,6 +272,6 @@ Docker builds the same targets and runs the tests:
 docker compose run --rm tests
 ```
 
-The `tividy` compose service copies `tividy` and `tividy_tests` onto the host and then runs `./tividy`.
+The `tividy` compose service copies `tividy` and `tividy_tests` onto the host and then runs `./tividy` interactively (`docker compose run --rm tividy`). On pull requests targeting `main`, the GitHub Actions pipeline (`.github/workflows/tag.yml`) automatically runs `docker compose run --rm tests`, runs the Valgrind memory check, extracts the compiled `tividy` binary artifact, and publishes a tagged GitHub Release.
 
 Doxygen output goes to `docs/html/` after `make docs`.

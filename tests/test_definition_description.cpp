@@ -65,6 +65,7 @@ TEST_SUITE("Workflow descriptions from definition files") {
     TEST_CASE("The facade reports the name and description of a registered workflow") {
         TividyWorkflowFacade facade;
         const std::string id = facade.registerDefinitionFromFile("definitions/university_bursary.definition");
+        const std::string id = facade.registerDefinitionFromFile("definitions/university_bursary.definition");
         REQUIRE(id == "UNI_BURSARY");
 
         CHECK(facade.definitionName(id) == "University and Bursary Application");
