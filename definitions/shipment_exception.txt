@@ -55,3 +55,4 @@ checkpoint|REROUTE
 priority|ASSESS|2
 audit|ASSESS
 audit|CLOSE_CASE
+deadline|ASSESS|24

@@ -1,0 +1,21 @@
+# What the TUI needs to present and run this industry. Engine code does not change per industry.
+INDUSTRY|Education
+PROCESS|University and Bursary Application
+DEFINITION|definitions/university_bursary.txt
+ABOUT|An applicant applies to a university and for a bursary. Admissions captures the application and verifies identity against the national registry, staff review documents and academic results, the committee decides, then funding documents are checked, the bursary is approved by a level set by income bracket, and it is paid through the bank.
+EXPECTED|An admitted applicant with a paid bursary. A failed identity check rejects the application, and rejected funding opens an appeal instead of payment.
+PARTICIPANT|edu-admissions|Lerato Khumalo|AdmissionsOfficer
+PARTICIPANT|edu-reviewer|Dr Priya Pillay|FacultyReviewer
+PARTICIPANT|edu-committee|Prof Nomsa Sithole|BursaryCommittee
+PARTICIPANT|edu-bursary|Thandi Mahlangu|BursaryOfficer
+PARTICIPANT|edu-finance|Ayanda Zulu|FinanceManager
+PARTICIPANT|edu-admin|Sipho Ndlovu|WorkflowAdmin
+INPUT|surname|Applicant surname (try Wrong to fail the identity check)|Mokoena
+INPUT|idNumber|SA ID number (0501015800087 is Mokoena, 4808105009083 is deceased)|0501015800087
+INPUT|incomeBracket|Income bracket: low, mid or high (decides who approves)|low
+INPUT|amount|Bursary amount in rands (the bank limit is 100000)|15000.50
+INPUT|accountNumber|Bank account, 9 to 11 digits|62012345678
+INPUT|branchCode|Branch code|250655
+INPUT|reference|Payment reference|BURSARY-2026-001
+OUTCOMES|DECIDE|approved,declined
+OUTCOMES|APPROVE|approved,not approved

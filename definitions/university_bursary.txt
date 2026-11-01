@@ -69,3 +69,4 @@ priority|PAY|2
 audit|DECIDE
 audit|FUNDING_DOCS
 audit|APPROVE
+deadline|APPROVE|48

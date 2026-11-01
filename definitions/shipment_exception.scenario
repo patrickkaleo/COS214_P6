@@ -1,0 +1,15 @@
+# What the TUI needs to present and run this industry. Engine code does not change per industry.
+INDUSTRY|Logistics
+PROCESS|Shipment Exception
+DEFINITION|definitions/shipment_exception.txt
+ABOUT|A delayed or damaged shipment is logged and classified using the courier's tracking system. A coordinator assesses the impact and either reroutes it through the carrier or holds it at the warehouse. The customer is then notified and the case is closed.
+EXPECTED|A closed case with the shipment rerouted or held and the customer told. An unknown waybill or an unserved hub makes the external call fail and the task escalates.
+PARTICIPANT|log-clerk|Bongani Dube|WarehouseClerk
+PARTICIPANT|log-analyst|Kagiso Molefe|ExceptionAnalyst
+PARTICIPANT|log-coordinator|Fatima Patel|LogisticsCoordinator
+PARTICIPANT|log-dispatch|Pieter Venter|Dispatcher
+PARTICIPANT|log-supervisor|Grace Mokoena|WarehouseSupervisor
+PARTICIPANT|log-service|Zanele Nkosi|CustomerService
+INPUT|waybill|Waybill (WB1001 in transit, WB1002 delayed, WB1003 damaged; others fail)|WB1002
+INPUT|destinationHub|New hub (Johannesburg, Durban, Cape Town or Gqeberha; others fail)|Cape Town
+OUTCOMES|ASSESS|reroute,hold
