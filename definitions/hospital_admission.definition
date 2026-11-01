@@ -1,0 +1,57 @@
+# Hospital admission.
+#
+# Register the patient, then verify identity. Rejecting the identity check rejects
+# the admission: nothing recovers, so triage and disposition are cancelled.
+# Acuity is read from instance data. Critical sends the clinician, the admission
+# decision and the ward round to the EmergencyDoctor. Anything else uses the
+# WardDoctor.
+# Complete the admission decision with "admit" to assign a bed and record the
+# ward round. Complete it with "discharge" to give discharge advice instead.
+# Any other outcome cancels both of those branches.
+#
+# Roles are the participant role strings. CHECK_ID calls IdentityVerificationService.
+
+DEFINITION
+HOSP_ADMIT|Hospital Admission|1
+
+WORKITEMS
+process|ADMISSION|-|Hospital Admission
+process|INTAKE|ADMISSION|Patient Intake
+task|REGISTER|INTAKE|Register Patient
+task|CHECK_ID|INTAKE|Verify Patient Identity
+process|TRIAGE|ADMISSION|Triage
+task|ASSESS_ACUITY|TRIAGE|Assess Acuity
+task|ASSIGN_CLINICIAN|TRIAGE|Assign Clinician
+process|DISPOSITION|ADMISSION|Disposition
+task|ADMIT_DECISION|DISPOSITION|Admission Decision
+task|ASSIGN_BED|DISPOSITION|Assign Bed
+task|WARD_ROUND|DISPOSITION|Record Ward Round
+task|DISCHARGE|DISPOSITION|Discharge Advice
+
+DEPENDENCIES
+REGISTER|CHECK_ID|*
+INTAKE|TRIAGE|*
+ASSESS_ACUITY|ASSIGN_CLINICIAN|*
+TRIAGE|DISPOSITION|*
+ADMIT_DECISION|ASSIGN_BED|admit
+ASSIGN_BED|WARD_ROUND|*
+ADMIT_DECISION|DISCHARGE|discharge
+
+ROUTING
+REGISTER|role|AdmissionsClerk
+CHECK_ID|role|AdmissionsClerk
+ASSESS_ACUITY|role|TriageNurse
+ASSIGN_CLINICIAN|data|acuity|WardDoctor|Critical|EmergencyDoctor
+ADMIT_DECISION|data|acuity|WardDoctor|Critical|EmergencyDoctor
+ASSIGN_BED|role|BedManager
+WARD_ROUND|data|acuity|WardDoctor|Critical|EmergencyDoctor
+DISCHARGE|data|acuity|WardDoctor|Critical|EmergencyDoctor
+
+SERVICES
+service|CHECK_ID|IdentityVerificationService
+
+EXTRAS
+checkpoint|CHECK_ID
+priority|ASSESS_ACUITY|2
+audit|ADMIT_DECISION
+deadline|ADMIT_DECISION|4

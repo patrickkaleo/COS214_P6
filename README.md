@@ -1,6 +1,6 @@
 # TIVIDY
 
-TIVIDY is a generic workflow engine. A workflow is a text definition: a tree of processes and tasks, dependency rules, routing, services, and optional priority or audit wrappers. The engine keeps those definitions and runs separate instances from them. Callers use `TividyWorkflowFacade`, and `./tividy` is an interactive terminal interface (a TUI) that runs both industries through it.
+TIVIDY is a generic workflow engine. A workflow is a text definition: a tree of processes and tasks, dependency rules, routing, services, and optional priority or audit wrappers. The engine keeps those definitions and runs separate instances from them. Callers use `TividyWorkflowFacade`. `./tividy` is an interactive terminal interface (a TUI) that runs every industry in `scenarios/` through that same engine.
 
 ## Running the interface
 
@@ -27,12 +27,82 @@ A participant starts each instance and types in its details, because nothing abo
 | Commands | `c` on an instance screen lists the commands the engine has run for it |
 | Independence | Start two instances of one workflow and advance only one |
 | Undo | `u` on an instance screen restores the snapshot taken before the last action. It cannot recall an external call such as a payment |
+| Healthcare, admission | As Amahle Dlamini, surname `Mokoena`, ID `0501015800087`, acuity anything other than `Critical`. Choose `admit` |
+| Healthcare, routing | Acuity `Critical` sends the clinician, the admission decision, and the ward round to Dr Carla Venter |
+| Insurance, payment | As Neo Khumalo, the same surname and ID. Assess with `accept`. Amount `15000`, account `62012345678`, branch `250655`. Approve with `approved` |
+| Insurance, decline | Assess with `decline`: settlement is cancelled and the decline notice opens. Amount `20000` stays with the assessor, `60000` goes to the manager, `200000` to the committee |
+| Manufacturing, pack | As Kabelo Naidoo, product line `Electronics`, then `pass` at Inspect Quality. `Food` uses the food line. Any other line uses the general line |
+| Manufacturing, rework | `fail` at Inspect Quality packs nothing and opens Rework Failed Batch |
+
+## Using definitions and scenarios
+
+A workflow that a person can run is two files. They do different jobs, and only one of them is read by the engine.
+
+The **definition** (`definitions/*.txt` or `definitions/*.definition`) is the workflow. `TividyWorkflowFacade::registerDefinitionFromFile` hands the path to `WorkflowDirector`, which drives `FileWorkflowDefinitionBuilder`. The builder returns a `WorkflowDefinition`. The engine keeps that object as the template. `startInstance` clones it into a `WorkflowInstance` with its own data. Claim, start, complete, reject, delegate, cancel, undo, and deadlines then run on that instance. The engine never opens a scenario file.
+
+The **scenario** (`scenarios/*.scenario`) is read only by the terminal interface. It names which definition to offer, who the people are, which role may start an instance, which questions to ask, and which outcome buttons to show. The interface turns that into facade calls: `addParticipant` for each `PARTICIPANT`, `InstanceData::set` for each answer, then `startInstance`, `claim`, `complete`, and the rest. A program that calls the facade itself does not need a scenario. It registers the participants and fills `InstanceData` in code. The tests do that. See [tests/README.md](tests/README.md).
+
+The two files have to use the same words, or the interface will start and the engine will refuse the work.
+
+| What has to match | In the definition | In the scenario |
+|---|---|---|
+| Workflow id | The id on the `DEFINITION` line | `WORKFLOW` |
+| Role text | Every role in `ROUTING` | `PARTICIPANT` roles, and `STARTED_BY` when it is set |
+| Task id | The id on a `task` line | The task id on `TASK_FIELD` and `OUTCOMES` |
+| Outcome text | The third field of a `DEPENDENCIES` line, other than `*` and `rejected` | A choice in `OUTCOMES` for the task that finishes |
+| Data key | A `data` routing field, an `approval` field, or a name a service reads | The key on `FIELD` or `TASK_FIELD` |
+
+`*` and `rejected` belong only in the definition. `*` matches any successful completion, including a process that finishes with `completed`. `rejected` matches `reject()`, not the reason text and not a word typed at complete. A completion choice such as `admit`, `approved`, `pass`, or `reroute` must be the same string in `OUTCOMES` and in `DEPENDENCIES`.
+
+`STARTED_BY` is checked by the interface before it calls `startInstance`. The engine itself starts an instance for whatever roster it is given. `FIELD` is asked when the instance starts. `TASK_FIELD` is asked when that task is completed, and only when the engine will accept the completion. Neither file stores the answers. The interface writes them into that instance's `InstanceData`, which is what routing and the service adapters read.
+
+These service names are already registered in `Tui::initialise`. The scenario key has to be the name the adapter reads. A different key makes the call fail, and the task escalates.
+
+| `service` name | Keys the adapter reads |
+|---|---|
+| `IdentityVerificationService` | `idNumber`, `surname`. Surname `Mokoena` and ID `0501015800087` verify. A different surname rejects the task. `123` is not 13 digits, so the call fails and the task escalates |
+| `PaymentGateway` | `amount` in rands, `accountNumber` of 9 to 11 digits, `branchCode`. Account `62012345678` and branch `250655` are accepted. Amount `200000` is over the transfer limit and the task escalates |
+| `TrackingService` | `waybill`. `WB1002` is known. `WB9999` is not, and the task escalates |
+| `CarrierAdapter` | `waybill` and `destinationHub`. Hubs it serves are `Johannesburg`, `Durban`, `Cape Town`, and `Gqeberha`. `Polokwane` fails and the task escalates |
+
+A definition that names a service not in that list also needs an adapter registered in `Tui::initialise`. Until then, completing that task escalates it.
+
+The interface offers a workflow when both files are present and the ids match.
+
+| Industry | Definition | Scenario | Id |
+|---|---|---|---|
+| Education | `definitions/university_bursary.txt` | `scenarios/education.scenario` | `UNI_BURSARY` |
+| Logistics | `definitions/shipment_exception.txt` | `scenarios/logistics.scenario` | `SHIP_EX` |
+| Healthcare | `definitions/hospital_admission.definition` | `scenarios/healthcare.scenario` | `HOSP_ADMIT` |
+| Insurance | `definitions/insurance_claim.definition` | `scenarios/insurance.scenario` | `INS_CLAIM` |
+| Manufacturing | `definitions/production_order.definition` | `scenarios/manufacturing.scenario` | `PROD_ORDER` |
+
+`definitions/def1.txt` and `scenarios/test.scenario` are loaded as well. Their id is `TRIAL`.
+
+From the project directory, `./tividy` or `make run` reads both folders. Choose the industry, then a participant whose role is `STARTED_BY`. The questions are that scenario's `FIELD` lines. The buttons at complete are its `OUTCOMES` lines. The tree, the states, and a refusal come from the definition.
+
+Code uses the definition only. The roster string is the same idea as one scenario file: participants in another roster are not offered this instance.
+
+```cpp
+TividyWorkflowFacade facade;
+facade.addService(new GovernmentIDAdapter());
+std::string id = facade.registerDefinitionFromFile("definitions/hospital_admission.definition");
+facade.addParticipant("clerk", "Amahle Dlamini", {"AdmissionsClerk"}, "healthcare");
+
+InstanceData data;
+data.set("surname", "Mokoena");
+data.set("idNumber", "0501015800087");
+data.set("acuity", "Critical");
+facade.startInstance(id, data, "healthcare");
+```
+
+Pass that same roster to later `claim`, `complete`, and `findParticipant` calls. The definition id in `startInstance` is the id on the `DEFINITION` line, which is what `registerDefinitionFromFile` returns.
 
 ## Adding a workflow
 
-No code changes or rebuild are needed. When the interface starts, it builds every `definitions/*.txt` file and reads every `scenarios/*.scenario` file. A workflow appears in the opening list once a scenario names its id. Anything that can't run yet appears in a **Not ready** box with the reason, and the rest carry on working.
+No code changes or rebuild are needed. When the interface starts, it builds every `definitions/*.txt` and `definitions/*.definition` file and reads every `scenarios/*.scenario` file. A workflow appears in the opening list once a scenario names its id. Anything that can't run yet appears in a **Not ready** box with the reason, and the rest carry on working.
 
-1. Add `definitions/my_workflow.txt`. The `#` lines above the first section are its description, and the format is under [Definition file](#definition-file).
+1. Add `definitions/my_workflow.definition`. The `#` lines above the first section are its description, and the format is under [Definition file](#definition-file).
 
    ```
    # What this workflow does.
@@ -168,15 +238,15 @@ flowchart LR
 
 A process whose parent id is `-` is the root. `priority` sets the task escalation level and wraps the tree node in a `PriorityDecorator`. `audit` wraps that node in an `AuditDecorator`. The definition owns the logger, because the decorator does not. Wrapping replaces the node in its parent, and the decorator owns the previous node. Checkpoint and service lines are applied to the task, so a checkpoint for an item is listed before that item is wrapped.
 
-`definitions/university_bursary.txt` and `definitions/shipment_exception.txt` are full examples. `tests/builder.txt` is the fixture for the builder tests.
+`definitions/university_bursary.txt` and `definitions/shipment_exception.txt` are full examples, and so are `definitions/hospital_admission.definition`, `definitions/insurance_claim.definition`, and `definitions/production_order.definition`. `tests/builder.txt` is the fixture for the builder tests. The section [Using definitions and scenarios](#using-definitions-and-scenarios) is how those files are paired with `scenarios/*.scenario` and handed to the engine.
 
 ## Layout
 
 ```
 include/          public headers
 src/              engine sources
-definitions/      workflow files
-scenarios/        industry files: participants, details to ask for and outcome choices
+definitions/      workflow files the engine runs (`.txt` and `.definition`)
+scenarios/        interface files: participants, details to ask for, and outcome choices (`.scenario`)
 tests/            doctest suites and tests/builder.txt
 makefile          tividy and tividy_tests
 Dockerfile        Ubuntu image used by docker compose

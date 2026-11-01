@@ -567,11 +567,15 @@ bool Tui::initialise() {
     }
 
     // Every definition is built. A bad file only costs that workflow, not the whole program.
-    for (const std::string &path : filesIn(DEFINITIONS_FOLDER, ".txt")) {
-        if (facade.registerDefinitionFromFile(path).empty()) {
-            // Builder errors already start with the path; others don't.
-            const std::string error = facade.getLastError();
-            notReady.push_back(error.compare(0, path.size(), path) == 0 ? error : path + ": " + error);
+    // .txt keeps the original workflows; further workflows are .definition files.
+    const char *const definitionExtensions[] = {".txt", ".definition"};
+    for (const char *extension : definitionExtensions) {
+        for (const std::string &path : filesIn(DEFINITIONS_FOLDER, extension)) {
+            if (facade.registerDefinitionFromFile(path).empty()) {
+                // Builder errors already start with the path; others don't.
+                const std::string error = facade.getLastError();
+                notReady.push_back(error.compare(0, path.size(), path) == 0 ? error : path + ": " + error);
+            }
         }
     }
 
