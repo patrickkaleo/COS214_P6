@@ -2,7 +2,7 @@
  * @file main.cpp
  * @brief Main interactive Terminal User Interface (TUI) entry point for the TIVIDY Workflow Engine.
  * @details The TUI drives the engine through TividyWorkflowFacade. Every workflow in definitions/
- *          is built, and a workflow can be run once a file in scenarios/ names it by id and lists
+ *          is built, and a workflow can be run once a file in context/ names it by id and lists
  *          its participants and the details they enter, so nothing below knows about any
  *          particular workflow, and instance data is only ever typed in by a participant.
  *          Every action stays on offer even when it is illegal: the engine decides, and the TUI
@@ -45,7 +45,7 @@
 namespace {
 
 const char *const DEFINITIONS_FOLDER = "definitions";
-const char *const SCENARIOS_FOLDER = "scenarios";
+const char *const CONTEXT_FOLDER = "context";
 
 // 256-colour palette
 const int GOLD = 220;
@@ -61,15 +61,15 @@ const int WHITE = 255;
 const int NAVY = 17;
 const int BLACK = 16;
 
-/// A participant as listed in a scenario file.
+/// A participant as listed in a context file.
 struct Person {
-    std::string id;       // unique within its scenario
+    std::string id;       // unique within its context
     std::string name;
     std::string roles;
     size_t scenario;      // index into scenarios
 };
 
-/// A detail a participant types in. The scenario names what to ask; the values are never stored in a file.
+/// A detail a participant types in. The context names what to ask; the values are never stored in a file.
 struct FieldPrompt {
     std::string key;
     std::string label;
@@ -79,7 +79,7 @@ struct FieldPrompt {
 struct Scenario {
     std::string industry;
     std::string workflowId;
-    std::string roster;      // the engine roster holding this scenario's participants
+    std::string roster;      // the engine roster holding this context's participants
     std::string process;     // from the definition
     std::string about;       // from the definition
     std::string expected;
@@ -90,7 +90,7 @@ struct Scenario {
     std::map<std::string, std::vector<std::string>> outcomes;
 };
 
-/// A running instance and the scenario it was started from.
+/// A running instance and the context it was started from.
 struct InstanceRecord {
     std::string id;
     std::string summary;   // who started it and what they entered
@@ -312,7 +312,7 @@ std::vector<std::string> split(const std::string &text, char separator) {
     return parts;
 }
 
-/// Reads a scenario file; anything it cannot use is added to problems so that a typo is easy to find.
+/// Reads a context file; anything it cannot use is added to problems so that a typo is easy to find.
 bool loadScenario(const std::string &path, Scenario &scenario, std::vector<std::string> &problems) {
     std::ifstream file(path.c_str());
     if (!file) {
@@ -369,7 +369,7 @@ bool folderExists(const std::string &folder) {
     return true;
 }
 
-/// "scenarios/education.scenario" becomes "education".
+/// "context/education.context" becomes "education".
 std::string fileStem(const std::string &path) {
     const size_t slash = path.find_last_of('/');
     const std::string name = slash == std::string::npos ? path : path.substr(slash + 1);
@@ -501,9 +501,9 @@ private:
     std::vector<InstanceRecord> instances;
     std::vector<HistoryEntry> history;
     std::vector<std::string> notices;
-    std::vector<std::string> notReady;     // why a file in definitions/ or scenarios/ cannot run yet
-    size_t current = 0;    // scenario the user chose on the entry screen
-    size_t actor = 0;      // index into people, chosen after the scenario
+    std::vector<std::string> notReady;     // why a file in definitions/ or context/ cannot run yet
+    size_t current = 0;    // context the user chose on the entry screen
+    size_t actor = 0;      // index into people, chosen after the context
     bool inputClosed = false;
     bool checkingDeadlines = false;   // explains the escalations a deadline check causes
 
@@ -560,9 +560,9 @@ bool Tui::initialise() {
     facade.addService(new TrackingServiceAdapter());
     facade.addService(new CarrierAdapter());
 
-    if (!folderExists(DEFINITIONS_FOLDER) || !folderExists(SCENARIOS_FOLDER)) {
+    if (!folderExists(DEFINITIONS_FOLDER) || !folderExists(CONTEXT_FOLDER)) {
         std::cerr << "Run tividy from the project root, which holds " << DEFINITIONS_FOLDER << "/ and "
-                  << SCENARIOS_FOLDER << "/.\n";
+                  << CONTEXT_FOLDER << "/.\n";
         return false;
     }
 
@@ -579,9 +579,9 @@ bool Tui::initialise() {
         }
     }
 
-    // A scenario makes its workflow runnable, by naming the id in the definition's DEFINITION section.
+    // A context makes its workflow runnable, by naming the id in the definition's DEFINITION section.
     std::vector<std::string> covered;
-    for (const std::string &path : filesIn(SCENARIOS_FOLDER, ".scenario")) {
+    for (const std::string &path : filesIn(CONTEXT_FOLDER, ".context")) {
         Scenario scenario;
         if (!loadScenario(path, scenario, notReady)) {
             continue;
@@ -595,7 +595,7 @@ bool Tui::initialise() {
         if (scenario.industry.empty()) {
             scenario.industry = scenario.process;
         }
-        // Each scenario owns its participants, so names, ids and roles can repeat across scenarios.
+        // Each context owns its participants, so names, ids and roles can repeat across contexts.
         scenario.roster = fileStem(path);
         for (Person &person : scenario.people) {
             person.scenario = scenarios.size();
@@ -612,7 +612,7 @@ bool Tui::initialise() {
 
     for (const std::string &id : facade.definitionIds()) {
         if (std::find(covered.begin(), covered.end(), id) == covered.end()) {
-            notReady.push_back("Workflow " + id + " has no scenario yet: add one with WORKFLOW|" + id);
+            notReady.push_back("Workflow " + id + " has no context yet: add one with WORKFLOW|" + id);
         }
     }
     return true;
@@ -657,7 +657,7 @@ void Tui::run() {
 
         boxTop("Where are we going?", BLUE);
         if (scenarios.empty()) {
-            boxLine(fg(GREY, "Nothing can run yet. Add a workflow to definitions/ and a scenario naming it to scenarios/."), BLUE);
+            boxLine(fg(GREY, "Nothing can run yet. Add a workflow to definitions/ and a context naming it to context/."), BLUE);
         }
         size_t nameWidth = 0;
         for (const Scenario &scenario : scenarios) nameWidth = std::max(nameWidth, scenario.industry.size());
@@ -845,7 +845,7 @@ void Tui::startInstanceScreen() {
     const Scenario &scenario = scenarios[index];
     beginScreen(scenario.industry + "  ›  Start a workflow instance");
 
-    // Starting is work too: only the role the scenario names may do it.
+    // Starting is work too: only the role the context names may do it.
     if (!scenario.starterRole.empty() && !currentActor()->hasRole(scenario.starterRole)) {
         noticeError("Starting this workflow needs the role " + scenario.starterRole + ", and you are " + people[actor].roles + ".");
         return;
@@ -1257,7 +1257,7 @@ void Tui::myWorkScreen() {
     }
 }
 
-/// Lists the current scenario's participants. @return Their positions in people, in menu order.
+/// Lists the current context's participants. @return Their positions in people, in menu order.
 std::vector<size_t> Tui::printRoster() {
     std::vector<size_t> roster;
     boxTop(scenarios[current].industry + " participants", PINK);
@@ -1491,7 +1491,7 @@ void Tui::flushEvents() {
             } else if (data != nullptr && data->get(service + "success") == "false") {
                 detail = data->get(service + "message");
             } else {
-                detail = "no one in this scenario holds the role";
+                detail = "no one in this context holds the role";
             }
         }
 
