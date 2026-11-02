@@ -99,11 +99,25 @@ jobs:
         with:
           name: tividy
 
+      - name: Choose the next tag
+        id: tag
+        if: steps.approval.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          last=$(gh api --paginate "/repos/${{ github.repository }}/tags" --jq '.[].name' \
+            | sed -n 's/^v\([0-9][0-9]*\)$/\1/p' \
+            | sort -n | tail -1)
+          next=$(( ${last:-0} + 1 ))
+          echo "Next release is v${next}."
+          echo "name=v${next}" >> "$GITHUB_OUTPUT"
+
       - name: Publish GitHub release
         if: steps.approval.outputs.release == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_number }}
+          tag_name: ${{ steps.tag.outputs.name }}
           target_commitish: ${{ github.sha }}
           files: tividy
           fail_on_unmatched_files: true
