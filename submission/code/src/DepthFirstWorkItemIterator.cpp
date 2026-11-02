@@ -29,7 +29,10 @@ void DepthFirstWorkItemIterator::next() {
 
     // Push children right to left so the leftmost child is visited next.
     for (int i = visited->childCount() - 1; i >= 0; --i) {
-        pending.push(visited->getChild(i));
+        WorkItem* child = visited->getChild(i);
+        if (child != nullptr) {
+            pending.push(child);
+        }
     }
 }
 
