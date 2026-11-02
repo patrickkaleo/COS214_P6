@@ -92,7 +92,7 @@ public:
      * @brief Lists every approval level in order, using the chain's iterator.
      * @return One description per handler, e.g. "BursaryOfficer (amount <= 20000)".
      */
-    std::vector<std::string> describeChain() const;
+    std::vector<std::string> describeChain() const override;
 };
 
 #endif // APPROVALROUTING_H

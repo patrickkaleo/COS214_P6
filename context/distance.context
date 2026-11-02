@@ -1,0 +1,24 @@
+# A second context for the same university definition. The process is UNI_BURSARY.
+# These people are a different roster, so they never see an Education instance.
+INDUSTRY|Distance learning
+WORKFLOW|UNI_BURSARY
+STARTED_BY|AdmissionsOfficer
+EXPECTED|The same bursary process, run by the distance-learning office. Engineering still goes to the engineering reviewer, and an amount over the limit still escalates.
+PARTICIPANT|dist-admissions|Karabo Molefe|AdmissionsOfficer
+PARTICIPANT|dist-reviewer|Dr Anele Khumalo|FacultyReviewer
+PARTICIPANT|dist-committee|Prof Lindiwe Nkosi|BursaryCommittee
+PARTICIPANT|dist-bursary|Tshepo Maseko|BursaryOfficer
+PARTICIPANT|dist-finance|Palesa Dlamini|FinanceManager
+PARTICIPANT|dist-admin|Mandla Pretorius|WorkflowAdmin
+PARTICIPANT|dist-admissions2|Refiloe van Wyk|AdmissionsOfficer
+PARTICIPANT|dist-engineering|Dr Yusuf Patel|EngineeringReviewer
+OUTCOMES|DECIDE|approved,declined
+OUTCOMES|APPROVE|approved,not approved
+FIELD|surname|Applicant surname
+FIELD|idNumber|Applicant ID number, 13 digits
+FIELD|degree|Degree applied for (Engineering goes to the engineering reviewer)
+TASK_FIELD|VERIFY_ID|surname|Applicant surname
+TASK_FIELD|VERIFY_ID|idNumber|Applicant ID number, 13 digits
+TASK_FIELD|FUNDING_DOCS|amount|Bursary amount in rands
+TASK_FIELD|FUNDING_DOCS|accountNumber|Bank account, 9 to 11 digits
+TASK_FIELD|FUNDING_DOCS|branchCode|Branch code

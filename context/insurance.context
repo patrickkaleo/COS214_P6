@@ -1,0 +1,20 @@
+# One context for the insurance definition. The workflow comes from definitions/insurance_claim.definition.
+INDUSTRY|Insurance
+WORKFLOW|INS_CLAIM
+STARTED_BY|ClaimsClerk
+EXPECTED|A paid settlement, or a decline notice when assessment or approval refuses the claim. Amount 20000 stays with the assessor, 60000 goes to the manager and 200000 to the committee. Amount 200000 is over the bank limit and the payment escalates.
+PARTICIPANT|ins-clerk|Neo Khumalo|ClaimsClerk
+PARTICIPANT|ins-clerk2|Sibusiso Dube|ClaimsClerk
+PARTICIPANT|ins-assessor|Johan Pretorius|ClaimsAssessor
+PARTICIPANT|ins-assessor2|Refilwe Motaung|ClaimsAssessor
+PARTICIPANT|ins-manager|Fatima Ismail|ClaimsManager
+PARTICIPANT|ins-committee|Naledi Tau|ClaimsCommittee
+OUTCOMES|ASSESS_CLAIM|accept,decline
+OUTCOMES|APPROVE_CLAIM|approved,not approved
+FIELD|surname|Policyholder surname
+FIELD|idNumber|Policyholder ID number, 13 digits
+TASK_FIELD|VERIFY_POLICY|surname|Policyholder surname
+TASK_FIELD|VERIFY_POLICY|idNumber|Policyholder ID number, 13 digits
+TASK_FIELD|COLLECT|amount|Claim amount in rands
+TASK_FIELD|COLLECT|accountNumber|Bank account, 9 to 11 digits
+TASK_FIELD|COLLECT|branchCode|Branch code

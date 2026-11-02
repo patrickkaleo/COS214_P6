@@ -1,25 +1,14 @@
 # TIVIDY
 
-TIVIDY is a generic workflow engine. A workflow is a text definition: a tree of processes and tasks, dependency rules, routing, services, and optional priority or audit wrappers. The engine keeps those definitions and runs separate instances from them. Callers use `TividyWorkflowFacade`. `./tividy` is an interactive terminal interface (a TUI) that runs every industry in `scenarios/` through that same engine.
+TIVIDY is a generic workflow engine. A workflow is a text definition: a tree of processes and tasks, dependency rules, routing, services, and optional priority or audit wrappers. The engine keeps those definitions and runs separate instances from them. Callers use `TividyWorkflowFacade`. `./tividy` is an interactive terminal interface (a TUI). Each file in `context/` is one way to run a definition: its people, who may start, the questions, and the outcome buttons.
 
 ## Running the interface
 
-From the project directory, run `make run` (or `docker compose run --rm tividy` to build and run interactively inside Docker, and `docker compose run --rm tests` to run the test suite). The interface reads `definitions/` and `scenarios/`, so it has to start here.
+From the project directory, run `make run`. The interface reads `definitions/` and `context/`, so it has to start here.
 
 It opens by asking which workflow you want, then who you are from its participants. The main menu then covers only that workflow; `0` goes back to choose another, and exits from there. Menu option 5 changes participant, and a work item's menu offers **Act as the assignee**. Actions marked as allowed are the ones the engine will accept. The others stay selectable so that you can see the engine refuse them and why. In a table, `▸` marks work you can act on now. Colour turns off when output is not a terminal or `NO_COLOR` is set.
 
-| TUI Key / Option | Where | What it does |
-|---|---|---|
-| `▸` | Work-item table | Marks a task or process you can act on right now |
-| **Act as the assignee** | Inside a work item's menu | Switches your active participant directly to that item's assignee |
-| **Allowed** vs other actions | Inside a work item's menu | Allowed actions succeed; disallowed actions stay selectable so you can see the engine refuse them and why |
-| `u` | Instance screen | Restores the `WorkflowSnapshot` taken before the last action (cannot recall an external service call such as a bank payment) |
-| `c` | Instance screen | Lists the `WorkItemAction` command history executed on that instance |
-| `5` | Main workflow menu | Switch active participant within the current scenario's roster |
-| `9` | Main workflow menu | View active task deadlines and advance the clock (in hours) to trigger SLA escalations |
-| `0` | Any menu | Go back to choose another workflow, or exit from the opening screen |
-
-A participant starts each instance and types in its details, because nothing about a run is stored in a file. The scenario says who may start it and what to ask. Completing some tasks asks for more, such as the bursary amount at Verify Funding Documents. The engine generates the instance id. These values match the test data behind the external services.
+A participant starts each instance and types in its details, because nothing about a run is stored in a file. The context says who may start it and what to ask. Completing some tasks asks for more, such as the bursary amount at Verify Funding Documents. The engine generates the instance id. These values match the test data behind the external services.
 
 | To see | Enter or do |
 |---|---|
@@ -45,17 +34,17 @@ A participant starts each instance and types in its details, because nothing abo
 | Manufacturing, pack | As Kabelo Naidoo, product line `Electronics`, then `pass` at Inspect Quality. `Food` uses the food line. Any other line uses the general line |
 | Manufacturing, rework | `fail` at Inspect Quality packs nothing and opens Rework Failed Batch |
 
-## Using definitions and scenarios
+## Using definitions and contexts
 
 A workflow that a person can run is two files. They do different jobs, and only one of them is read by the engine.
 
-The **definition** (`definitions/*.txt` or `definitions/*.definition`) is the workflow. `TividyWorkflowFacade::registerDefinitionFromFile` hands the path to `WorkflowDirector`, which drives `FileWorkflowDefinitionBuilder`. The builder returns a `WorkflowDefinition`. The engine keeps that object as the template. `startInstance` clones it into a `WorkflowInstance` with its own data. Claim, start, complete, reject, delegate, cancel, undo, and deadlines then run on that instance. The engine never opens a scenario file.
+The **definition** (`definitions/*.txt` or `definitions/*.definition`) is the workflow. `TividyWorkflowFacade::registerDefinitionFromFile` hands the path to `WorkflowDirector`, which drives `FileWorkflowDefinitionBuilder`. The builder returns a `WorkflowDefinition`. The engine keeps that object as the template. `startInstance` clones it into a `WorkflowInstance` with its own data. Claim, start, complete, reject, delegate, cancel, undo, and deadlines then run on that instance. The engine never opens a context file.
 
-The **scenario** (`scenarios/*.scenario`) is read only by the terminal interface. It names which definition to offer, who the people are, which role may start an instance, which questions to ask, and which outcome buttons to show. The interface turns that into facade calls: `addParticipant` for each `PARTICIPANT`, `InstanceData::set` for each answer, then `startInstance`, `claim`, `complete`, and the rest. A program that calls the facade itself does not need a scenario. It registers the participants and fills `InstanceData` in code. The tests do that. See [tests/README.md](tests/README.md).
+The **context** (`context/*.context`) is read only by the terminal interface. It names which definition to offer, who the people are, which role may start an instance, which questions to ask, and which outcome buttons to show. The opening menu is one row per context file, using that file's `INDUSTRY`, the definition's name, and `STARTED_BY`. Several context files may name the same definition; each row has its own people and its own instances. The interface turns a context into facade calls: `addParticipant` for each `PARTICIPANT`, `InstanceData::set` for each answer, then `startInstance`, `claim`, `complete`, and the rest. A program that calls the facade itself does not need a context. It registers the participants and fills `InstanceData` in code. The tests do that. See [tests/README.md](tests/README.md).
 
 The two files have to use the same words, or the interface will start and the engine will refuse the work.
 
-| What has to match | In the definition | In the scenario |
+| What has to match | In the definition | In the context |
 |---|---|---|
 | Workflow id | The id on the `DEFINITION` line | `WORKFLOW` |
 | Role text | Every role in `ROUTING` | `PARTICIPANT` roles, and `STARTED_BY` when it is set |
@@ -67,7 +56,7 @@ The two files have to use the same words, or the interface will start and the en
 
 `STARTED_BY` is checked by the interface before it calls `startInstance`. The engine itself starts an instance for whatever roster it is given. `FIELD` is asked when the instance starts. `TASK_FIELD` is asked when that task is completed, and only when the engine will accept the completion. Neither file stores the answers. The interface writes them into that instance's `InstanceData`, which is what routing and the service adapters read.
 
-These service names are already registered in `Tui::initialise`. The scenario key has to be the name the adapter reads. A different key makes the call fail, and the task escalates.
+These service names are already registered in `Tui::initialise`. The context key has to be the name the adapter reads. A different key makes the call fail, and the task escalates.
 
 | `service` name | Keys the adapter reads |
 |---|---|
@@ -78,21 +67,20 @@ These service names are already registered in `Tui::initialise`. The scenario ke
 
 A definition that names a service not in that list also needs an adapter registered in `Tui::initialise`. Until then, completing that task escalates it.
 
-The interface offers a workflow when both files are present and the ids match.
+The interface offers a context when its `WORKFLOW` id matches a definition.
 
-| Industry | Definition | Scenario | Id |
+| Context | Definition | File | Id |
 |---|---|---|---|
-| Education | `definitions/university_bursary.definition` | `scenarios/education.scenario` | `UNI_BURSARY` |
-| Logistics | `definitions/shipment_exception.definition` | `scenarios/logistics.scenario` | `SHIP_EX` |
-| Healthcare | `definitions/hospital_admission.definition` | `scenarios/healthcare.scenario` | `HOSP_ADMIT` |
-| Insurance | `definitions/insurance_claim.definition` | `scenarios/insurance.scenario` | `INS_CLAIM` |
-| Manufacturing | `definitions/production_order.definition` | `scenarios/manufacturing.scenario` | `PROD_ORDER` |
+| Education | `definitions/university_bursary.definition` | `context/education.context` | `UNI_BURSARY` |
+| Distance learning | `definitions/university_bursary.definition` | `context/distance.context` | `UNI_BURSARY` |
+| Logistics | `definitions/shipment_exception.definition` | `context/logistics.context` | `SHIP_EX` |
+| Healthcare | `definitions/hospital_admission.definition` | `context/healthcare.context` | `HOSP_ADMIT` |
+| Insurance | `definitions/insurance_claim.definition` | `context/insurance.context` | `INS_CLAIM` |
+| Manufacturing | `definitions/production_order.definition` | `context/manufacturing.context` | `PROD_ORDER` |
 
+From the project directory, `./tividy` or `make run` reads both folders. Choose a context, then a participant whose role is `STARTED_BY`. The questions are that context's `FIELD` lines. The buttons at complete are its `OUTCOMES` lines. The tree, the states, and a refusal come from the definition.
 
-
-From the project directory, `./tividy` or `make run` reads both folders. Choose the industry, then a participant whose role is `STARTED_BY`. The questions are that scenario's `FIELD` lines. The buttons at complete are its `OUTCOMES` lines. The tree, the states, and a refusal come from the definition.
-
-Code uses the definition only. The roster string is the same idea as one scenario file: participants in another roster are not offered this instance.
+Code uses the definition only. The roster string is the file stem of one context: participants in another context are not offered this instance.
 
 ```cpp
 TividyWorkflowFacade facade;
@@ -111,7 +99,7 @@ Pass that same roster to later `claim`, `complete`, and `findParticipant` calls.
 
 ## Adding a workflow
 
-No code changes or rebuild are needed. When the interface starts, it builds every `definitions/*.txt` and `definitions/*.definition` file and reads every `scenarios/*.scenario` file. A workflow appears in the opening list once a scenario names its id. Anything that can't run yet appears in a **Not ready** box with the reason, and the rest carry on working.
+No code changes or rebuild are needed. When the interface starts, it builds every `definitions/*.txt` and `definitions/*.definition` file and reads every `context/*.context` file. Each context appears on the opening list. Anything that can't run yet appears in a **Not ready** box with the reason, and the rest carry on working.
 
 1. Add `definitions/my_workflow.definition`. The `#` lines above the first section are its description, and the format is under [Definition file](#definition-file).
 
@@ -134,7 +122,7 @@ No code changes or rebuild are needed. When the interface starts, it builds ever
    SECOND|role|Manager
    ```
 
-2. Add `scenarios/my_workflow.scenario`. `WORKFLOW` must match the id on the definition's `DEFINITION` line, and at least one `PARTICIPANT` is required.
+2. Add `context/my_workflow.context`. `WORKFLOW` must match the id on the definition's `DEFINITION` line, and at least one `PARTICIPANT` is required. Another context for the same definition is another file in `context/` with the same `WORKFLOW` id.
 
    ```
    WORKFLOW|MY_WORKFLOW
@@ -154,7 +142,7 @@ No code changes or rebuild are needed. When the interface starts, it builds ever
    - `OUTCOMES` is the choices offered when completing that task. Without it, you type an outcome.
    - A participant may hold several comma-separated roles.
 
-Each scenario owns its participants: work is only routed to, and only accepted from, people in that scenario's file. The same names, ids and roles can appear in any number of scenarios, and two people are simply different participants. A workflow that calls a new external system also needs an adapter registered in `Tui::initialise`; until then, that task escalates when it runs.
+Each context owns its participants: work is only routed to, and only accepted from, people in that context's file. The same names, ids and roles can appear in any number of contexts, and two people are simply different participants. A workflow that calls a new external system also needs an adapter registered in `Tui::initialise`; until then, that task escalates when it runs.
 
 ## How a workflow runs
 
@@ -249,7 +237,7 @@ flowchart LR
 
 A process whose parent id is `-` is the root. `priority` sets the task escalation level and wraps the tree node in a `PriorityDecorator`. `audit` wraps that node in an `AuditDecorator`. The definition owns the logger, because the decorator does not. Wrapping replaces the node in its parent, and the decorator owns the previous node. Checkpoint and service lines are applied to the task, so a checkpoint for an item is listed before that item is wrapped.
 
-`definitions/university_bursary.definition`, `definitions/shipment_exception.definition`, `definitions/hospital_admission.definition`, `definitions/insurance_claim.definition`, and `definitions/production_order.definition` are full examples. `tests/builder.txt` is the fixture for the builder tests. The section [Using definitions and scenarios](#using-definitions-and-scenarios) is how those files are paired with `scenarios/*.scenario` and handed to the engine.
+`definitions/university_bursary.definition`, `definitions/shipment_exception.definition`, `definitions/hospital_admission.definition`, `definitions/insurance_claim.definition`, and `definitions/production_order.definition` are full examples. `tests/builder.txt` is the fixture for the builder tests. The section [Using definitions and contexts](#using-definitions-and-contexts) is how those files are paired with `context/*.context` and handed to the engine.
 
 ## Layout
 
@@ -257,7 +245,7 @@ A process whose parent id is `-` is the root. `priority` sets the task escalatio
 include/          public headers
 src/              engine sources
 definitions/      workflow files the engine runs (`.txt` and `.definition`)
-scenarios/        interface files: participants, details to ask for, and outcome choices (`.scenario`)
+context/         one file per way to run a definition: people, questions, and outcome choices (`.context`)
 tests/            doctest suites and tests/builder.txt
 makefile          tividy and tividy_tests
 Dockerfile        Ubuntu image used by docker compose

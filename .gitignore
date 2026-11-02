@@ -86,3 +86,4 @@ docs/latex/
 # Built test and demo binaries
 tividy
 tividy_tests
+*Guide.md

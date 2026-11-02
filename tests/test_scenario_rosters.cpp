@@ -1,6 +1,6 @@
 /**
  * @file test_scenario_rosters.cpp
- * @brief Tests that each roster owns its participants, so scenarios cannot affect each other.
+ * @brief Tests that each roster owns its participants, so one context cannot affect another.
  * @author Angela Ramaboea
  */
 

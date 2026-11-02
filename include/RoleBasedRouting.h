@@ -63,6 +63,8 @@ public:
      */
     virtual RoutingStrategy* clone() const override;
 
+    std::string roleFor(const InstanceData& data) const override;
+
     std::string getRole() const;
     void setRole(const std::string& roleName);
 };

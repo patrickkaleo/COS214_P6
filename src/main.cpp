@@ -2,30 +2,26 @@
  * @file main.cpp
  * @brief Main interactive Terminal User Interface (TUI) entry point for the TIVIDY Workflow Engine.
  * @details The TUI drives the engine through TividyWorkflowFacade. Every workflow in definitions/
- *          is built, and a workflow can be run once a file in scenarios/ names it by id and lists
+ *          is built, and a workflow can be run once a file in context/ names it by id and lists
  *          its participants and the details they enter, so nothing below knows about any
  *          particular workflow, and instance data is only ever typed in by a participant.
  *          Every action stays on offer even when it is illegal: the engine decides, and the TUI
  *          reports why it refused.
  */
 
-#include "ApprovalRouting.h"
 #include "AuditLogger.h"
 #include "BankGatewayAdapter.h"
 #include "CarrierAdapter.h"
-#include "DataRuleRouting.h"
 #include "GovernmentIDAdapter.h"
 #include "MonitoringService.h"
 #include "NotificationService.h"
 #include "Participant.h"
 #include "PriorityDecorator.h"
-#include "RoleBasedRouting.h"
 #include "Task.h"
 #include "TividyWorkflowFacade.h"
 #include "TrackingServiceAdapter.h"
 #include "WorkItem.h"
 #include "WorkItemDecorator.h"
-#include "WorkflowEventListener.h"
 #include "WorkflowInstance.h"
 
 #include <dirent.h>
@@ -45,7 +41,7 @@
 namespace {
 
 const char *const DEFINITIONS_FOLDER = "definitions";
-const char *const SCENARIOS_FOLDER = "scenarios";
+const char *const CONTEXT_FOLDER = "context";
 
 // 256-colour palette
 const int GOLD = 220;
@@ -61,49 +57,38 @@ const int WHITE = 255;
 const int NAVY = 17;
 const int BLACK = 16;
 
-/// A participant as listed in a scenario file.
-struct Person {
-    std::string id;       // unique within its scenario
+/// One PARTICIPANT line, kept only until it has been registered with the engine.
+struct ContextListing {
+    std::string id;
     std::string name;
     std::string roles;
-    size_t scenario;      // index into scenarios
 };
 
-/// A detail a participant types in. The scenario names what to ask; the values are never stored in a file.
+/// A detail a participant types in. The context names what to ask; the values are never stored in a file.
 struct FieldPrompt {
     std::string key;
     std::string label;
 };
 
 /// One runnable workflow: what to tell the user, and what to give the engine.
-struct Scenario {
+struct Context {
     std::string industry;
     std::string workflowId;
-    std::string roster;      // the engine roster holding this scenario's participants
+    std::string roster;      // the engine roster holding this context's participants
     std::string process;     // from the definition
     std::string about;       // from the definition
     std::string expected;
-    std::vector<Person> people;
     std::string starterRole;                                 // empty: any participant may start it
     std::vector<FieldPrompt> startFields;                    // asked when an instance is started
     std::map<std::string, std::vector<FieldPrompt>> taskFields; // asked when that task is completed
     std::map<std::string, std::vector<std::string>> outcomes;
 };
 
-/// A running instance and the scenario it was started from.
+/// A running instance and the context it was started from.
 struct InstanceRecord {
     std::string id;
     std::string summary;   // who started it and what they entered
-    size_t scenario;
-};
-
-/// One line of an instance's history.
-struct HistoryEntry {
-    std::string instanceId;
-    std::time_t when;
-    std::string itemName;
-    std::string what;
-    std::string detail;
+    size_t context;
 };
 
 /// One work item as shown in a table, with its position in the tree drawn.
@@ -291,7 +276,7 @@ std::string clock(std::time_t when) {
     return text;
 }
 
-// ---- Scenario files -------------------------------------------------------------------------
+// ---- Context files -------------------------------------------------------------------------
 
 std::string trimmed(const std::string &text) {
     const std::string blanks = " \t\r";
@@ -312,8 +297,18 @@ std::vector<std::string> split(const std::string &text, char separator) {
     return parts;
 }
 
-/// Reads a scenario file; anything it cannot use is added to problems so that a typo is easy to find.
-bool loadScenario(const std::string &path, Scenario &scenario, std::vector<std::string> &problems) {
+/// Reads a context file; anything it cannot use is added to problems so that a typo is easy to find.
+std::string roleList(const Participant *person) {
+    std::string roles;
+    if (person == nullptr) return roles;
+    for (const Role &role : person->getRoles()) {
+        if (!roles.empty()) roles += ", ";
+        roles += role.getName();
+    }
+    return roles;
+}
+
+bool loadContext(const std::string &path, Context &context, std::vector<ContextListing> &listed, std::vector<std::string> &problems) {
     std::ifstream file(path.c_str());
     if (!file) {
         problems.push_back(path + ": cannot be read");
@@ -330,30 +325,25 @@ bool loadScenario(const std::string &path, Scenario &scenario, std::vector<std::
         }
         const std::vector<std::string> fields = split(line, '|');
         const std::string &key = fields[0];
-        if (fields.size() == 2 && key == "INDUSTRY") scenario.industry = fields[1];
-        else if (fields.size() == 2 && key == "WORKFLOW") scenario.workflowId = fields[1];
-        else if (fields.size() == 2 && key == "EXPECTED") scenario.expected = fields[1];
-        else if (fields.size() == 2 && key == "STARTED_BY") scenario.starterRole = fields[1];
-        else if (fields.size() == 3 && key == "OUTCOMES") scenario.outcomes[fields[1]] = split(fields[2], ',');
-        else if (fields.size() == 3 && key == "FIELD") scenario.startFields.push_back(FieldPrompt{fields[1], fields[2]});
-        else if (fields.size() == 4 && key == "TASK_FIELD") scenario.taskFields[fields[1]].push_back(FieldPrompt{fields[2], fields[3]});
+        if (fields.size() == 2 && key == "INDUSTRY") context.industry = fields[1];
+        else if (fields.size() == 2 && key == "WORKFLOW") context.workflowId = fields[1];
+        else if (fields.size() == 2 && key == "EXPECTED") context.expected = fields[1];
+        else if (fields.size() == 2 && key == "STARTED_BY") context.starterRole = fields[1];
+        else if (fields.size() == 3 && key == "OUTCOMES") context.outcomes[fields[1]] = split(fields[2], ',');
+        else if (fields.size() == 3 && key == "FIELD") context.startFields.push_back(FieldPrompt{fields[1], fields[2]});
+        else if (fields.size() == 4 && key == "TASK_FIELD") context.taskFields[fields[1]].push_back(FieldPrompt{fields[2], fields[3]});
         else if (fields.size() == 4 && key == "PARTICIPANT") {
-            Person person;
-            person.id = fields[1];
-            person.name = fields[2];
-            person.roles = fields[3];
-            person.scenario = 0;
-            scenario.people.push_back(person);
+            listed.push_back(ContextListing{fields[1], fields[2], fields[3]});
         } else {
             problems.push_back(path + " line " + std::to_string(number) + " is not understood: " + line);
         }
     }
 
-    if (scenario.workflowId.empty()) {
+    if (context.workflowId.empty()) {
         problems.push_back(path + ": needs a WORKFLOW|<id> line");
         return false;
     }
-    if (scenario.people.empty()) {
+    if (listed.empty()) {
         problems.push_back(path + ": needs at least one PARTICIPANT line");
         return false;
     }
@@ -369,7 +359,7 @@ bool folderExists(const std::string &folder) {
     return true;
 }
 
-/// "scenarios/education.scenario" becomes "education".
+/// "context/education.context" becomes "education".
 std::string fileStem(const std::string &path) {
     const size_t slash = path.find_last_of('/');
     const std::string name = slash == std::string::npos ? path : path.substr(slash + 1);
@@ -415,20 +405,12 @@ int priorityOf(WorkItem *item) {
     return 0;
 }
 
-/// The role the item's routing strategy asks for, worked out from this instance's data.
+/// The role the item's own routing strategy names for this instance's data.
 std::string requiredRole(Task *task, const InstanceData &data) {
-    if (task == nullptr) {
+    if (task == nullptr || task->getRouting() == nullptr) {
         return "";
     }
-    if (const RoleBasedRouting *role = dynamic_cast<const RoleBasedRouting *>(task->getRouting())) {
-        return role->getRole();
-    }
-    if (const DataRuleRouting *rule = dynamic_cast<const DataRuleRouting *>(task->getRouting())) {
-        const std::map<std::string, std::string> mapping = rule->getMapping();
-        const std::map<std::string, std::string>::const_iterator found = mapping.find(data.get(rule->getField()));
-        return found != mapping.end() ? found->second : rule->getFallbackRole();
-    }
-    return "";
+    return task->getRouting()->roleFor(data);
 }
 
 bool isFinal(const std::string &state) {
@@ -453,31 +435,6 @@ void collectRows(WorkItem *item, const std::string &indent, bool last, bool root
     }
 }
 
-// ---- Observers ------------------------------------------------------------------------------
-
-/**
- * @class EventQueue
- * @brief Observer that holds events until the TUI can show them after the current action.
- *
- * One action can cause several events (a completion opens the next items and routes them),
- * and the assignee of a routed item is only worth showing once that has all happened.
- */
-class EventQueue : public WorkflowEventListener {
-public:
-    void onEvent(const WorkflowEvent &event) override { pending.push_back(event); }
-
-    bool empty() const { return pending.empty(); }
-
-    std::vector<WorkflowEvent> take() {
-        std::vector<WorkflowEvent> events;
-        events.swap(pending);
-        return events;
-    }
-
-private:
-    std::vector<WorkflowEvent> pending;
-};
-
 // ---- The interface --------------------------------------------------------------------------
 
 /**
@@ -491,21 +448,18 @@ public:
 
 private:
     TividyWorkflowFacade facade;
-    EventQueue *events = nullptr;            // owned by the engine
     AuditLogger *audit = nullptr;            // owned by the engine
     MonitoringService *monitor = nullptr;    // owned by the engine
     NotificationService *notifier = nullptr; // owned by the engine
+    size_t shownNotifications = 0;           // how much of the notification log is already on screen
 
-    std::vector<Scenario> scenarios;
-    std::vector<Person> people;
+    std::vector<Context> contexts;
     std::vector<InstanceRecord> instances;
-    std::vector<HistoryEntry> history;
     std::vector<std::string> notices;
-    std::vector<std::string> notReady;     // why a file in definitions/ or scenarios/ cannot run yet
-    size_t current = 0;    // scenario the user chose on the entry screen
-    size_t actor = 0;      // index into people, chosen after the scenario
+    std::vector<std::string> notReady;     // why a file in definitions/ or context/ cannot run yet
+    size_t current = 0;    // context the user chose on the entry screen
+    Participant *actor = nullptr;
     bool inputClosed = false;
-    bool checkingDeadlines = false;   // explains the escalations a deadline check causes
 
     // Input
     bool ask(const std::string &prompt, std::string &answer);
@@ -531,25 +485,22 @@ private:
     void checkDeadlines();
 
     // Helpers
-    std::vector<size_t> printRoster();
+    std::vector<Participant *> printRoster();
     std::vector<const InstanceRecord *> currentInstances() const;
     void flushEvents();
     void perform(const InstanceRecord &record, WorkItem *item, int choice);
     void noticeOk(const std::string &text);
     void noticeWarning(const std::string &text);
     void noticeError(const std::string &text);
-    size_t personIndex(const std::string &id) const;
     Participant *currentActor() const;
     std::string actorLabel() const;
     void taskProgress(const std::string &instanceId, int &done, int &total) const;
 };
 
 bool Tui::initialise() {
-    events = new EventQueue();
     audit = new AuditLogger(false);
     monitor = new MonitoringService();
     notifier = new NotificationService("Console", false);
-    facade.addListener(events);
     facade.addListener(audit);
     facade.addListener(monitor);
     facade.addListener(notifier);
@@ -560,14 +511,14 @@ bool Tui::initialise() {
     facade.addService(new TrackingServiceAdapter());
     facade.addService(new CarrierAdapter());
 
-    if (!folderExists(DEFINITIONS_FOLDER) || !folderExists(SCENARIOS_FOLDER)) {
+    if (!folderExists(DEFINITIONS_FOLDER) || !folderExists(CONTEXT_FOLDER)) {
         std::cerr << "Run tividy from the project root, which holds " << DEFINITIONS_FOLDER << "/ and "
-                  << SCENARIOS_FOLDER << "/.\n";
+                  << CONTEXT_FOLDER << "/.\n";
         return false;
     }
 
     // Every definition is built. A bad file only costs that workflow, not the whole program.
-    // .txt keeps the original workflows; further workflows are .definition files.
+    // Both extensions are definitions. The shipped workflows use .definition.
     const char *const definitionExtensions[] = {".txt", ".definition"};
     for (const char *extension : definitionExtensions) {
         for (const std::string &path : filesIn(DEFINITIONS_FOLDER, extension)) {
@@ -579,40 +530,38 @@ bool Tui::initialise() {
         }
     }
 
-    // A scenario makes its workflow runnable, by naming the id in the definition's DEFINITION section.
+    // A context makes its workflow runnable, by naming the id in the definition's DEFINITION section.
     std::vector<std::string> covered;
-    for (const std::string &path : filesIn(SCENARIOS_FOLDER, ".scenario")) {
-        Scenario scenario;
-        if (!loadScenario(path, scenario, notReady)) {
+    for (const std::string &path : filesIn(CONTEXT_FOLDER, ".context")) {
+        Context context;
+        std::vector<ContextListing> listed;
+        if (!loadContext(path, context, listed, notReady)) {
             continue;
         }
-        scenario.process = facade.definitionName(scenario.workflowId);
-        scenario.about = facade.definitionDescription(scenario.workflowId);
-        if (scenario.process.empty()) {
-            notReady.push_back(path + ": no definition has the id " + scenario.workflowId);
+        context.process = facade.definitionName(context.workflowId);
+        context.about = facade.definitionDescription(context.workflowId);
+        if (context.process.empty()) {
+            notReady.push_back(path + ": no definition has the id " + context.workflowId);
             continue;
         }
-        if (scenario.industry.empty()) {
-            scenario.industry = scenario.process;
+        if (context.industry.empty()) {
+            context.industry = context.process;
         }
-        // Each scenario owns its participants, so names, ids and roles can repeat across scenarios.
-        scenario.roster = fileStem(path);
-        for (Person &person : scenario.people) {
-            person.scenario = scenarios.size();
-            facade.addParticipant(person.id, person.name, split(person.roles, ','), scenario.roster);
+        // Each context owns its participants, so names, ids and roles can repeat across contexts.
+        context.roster = fileStem(path);
+        for (const ContextListing &person : listed) {
+            facade.addParticipant(person.id, person.name, split(person.roles, ','), context.roster);
             if (!facade.getLastError().empty()) {
                 notReady.push_back(path + ": participant " + person.id + " is listed twice");
-                continue;
             }
-            people.push_back(person);
         }
-        covered.push_back(scenario.workflowId);
-        scenarios.push_back(scenario);
+        covered.push_back(context.workflowId);
+        contexts.push_back(context);
     }
 
     for (const std::string &id : facade.definitionIds()) {
         if (std::find(covered.begin(), covered.end(), id) == covered.end()) {
-            notReady.push_back("Workflow " + id + " has no scenario yet: add one with WORKFLOW|" + id);
+            notReady.push_back("Workflow " + id + " has no context yet: add one with WORKFLOW|" + id);
         }
     }
     return true;
@@ -635,7 +584,7 @@ void Tui::run() {
         for (int i = 0; i < 6; ++i) {
             std::cout << "  " << bold(shades[i], banner[i]) << "\n";
         }
-        std::cout << "  " << fg(GREY, "One workflow engine. ") << bold(GOLD, std::to_string(scenarios.size()) + " ready to run.") << "\n\n";
+        std::cout << "  " << fg(GREY, "One workflow engine. ") << bold(GOLD, std::to_string(contexts.size()) + " contexts.") << "\n\n";
 
         if (!notices.empty()) {
             boxTop("What just happened", GOLD);
@@ -655,19 +604,25 @@ void Tui::run() {
             boxBottom(ORANGE);
         }
 
-        boxTop("Where are we going?", BLUE);
-        if (scenarios.empty()) {
-            boxLine(fg(GREY, "Nothing can run yet. Add a workflow to definitions/ and a scenario naming it to scenarios/."), BLUE);
+        boxTop("Which context?", BLUE);
+        if (contexts.empty()) {
+            boxLine(fg(GREY, "Nothing can run yet. Add a definition under definitions/ and a context that names its id under context/."), BLUE);
         }
         size_t nameWidth = 0;
-        for (const Scenario &scenario : scenarios) nameWidth = std::max(nameWidth, scenario.industry.size());
-        for (size_t i = 0; i < scenarios.size(); ++i) {
-            boxLine(bold(GREEN, pad(" " + std::to_string(i + 1), 4)) + pad(bold(WHITE, scenarios[i].industry), nameWidth + 3) + fg(GREY, scenarios[i].process), BLUE);
+        for (const Context &context : contexts) nameWidth = std::max(nameWidth, context.industry.size());
+        for (size_t i = 0; i < contexts.size(); ++i) {
+            const Context &context = contexts[i];
+            const std::string who = context.starterRole.empty() ? "anyone may start" : "started by " + context.starterRole;
+            const size_t used = 4 + nameWidth + 3;
+            const size_t room = screenWidth() > used + 6 ? screenWidth() - 4 - used : 6;
+            boxLine(bold(GREEN, pad(" " + std::to_string(i + 1), 4)) + pad(bold(WHITE, context.industry), nameWidth + 3) +
+                        fg(GREY, fit(context.process + "  ·  " + who, room)),
+                    BLUE);
         }
         boxLine(bold(RED, " 0 ") + " " + bold(WHITE, "Exit"), BLUE);
         boxBottom(BLUE);
 
-        const int choice = askNumber("Choose", 0, static_cast<int>(scenarios.size()));
+        const int choice = askNumber("Choose", 0, static_cast<int>(contexts.size()));
         if (choice == 0) {
             std::cout << bold(SKY, "Goodbye.") << "\n";
             return;
@@ -683,7 +638,8 @@ void Tui::run() {
 
 void Tui::mainMenu() {
     while (!inputClosed) {
-        beginScreen(scenarios[current].industry + "  ›  " + scenarios[current].process);
+        const Context &context = contexts[current];
+        beginScreen(context.industry + "  ›  " + context.process);
 
         const std::vector<const InstanceRecord *> mine = currentInstances();
         int running = 0;
@@ -692,8 +648,8 @@ void Tui::mainMenu() {
         }
 
         const struct { int key; int colour; const char *name; const char *hint; } options[] = {
-            {1, VIOLET, "Explain this workflow", "what the process does and who is involved"},
-            {2, GREEN, "Start a workflow instance", "enter the details and run it"},
+            {1, VIOLET, "Explain this workflow", "the definition, this context's people, and what they are asked"},
+            {2, GREEN, "Start a workflow instance", "the questions this context asks"},
             {3, SKY, "Open an instance", ""},
             {4, GOLD, "My work", "what you can act on right now"},
             {5, PINK, "Change participant", "choose who you are acting as"},
@@ -705,6 +661,7 @@ void Tui::mainMenu() {
 
         boxTop("Main menu", BLUE);
         boxLine("Acting as " + actorLabel(), BLUE);
+        boxLine(fg(GREY, context.workflowId + (context.starterRole.empty() ? "" : "  ·  started by " + context.starterRole)), BLUE);
         boxLine("", BLUE);
         for (const auto &option : options) {
             std::string hint = option.hint;
@@ -713,7 +670,7 @@ void Tui::mainMenu() {
             }
             boxLine(bold(option.colour, " " + std::to_string(option.key) + " ") + " " + pad(bold(WHITE, option.name), 28) + fg(GREY, hint), BLUE);
         }
-        boxLine(bold(RED, " 0 ") + " " + bold(WHITE, "Back to the workflow list"), BLUE);
+        boxLine(bold(RED, " 0 ") + " " + bold(WHITE, "Back to the contexts"), BLUE);
         boxBottom(BLUE);
 
         switch (askNumber("Choose", 0, 9)) {
@@ -791,43 +748,43 @@ void Tui::beginScreen(const std::string &title) {
 }
 
 void Tui::showIndustry() {
-    const Scenario &scenario = scenarios[current];
-    beginScreen(scenario.industry + "  ›  About");
+    const Context &context = contexts[current];
+    beginScreen(context.industry + "  ›  About");
 
     const int colour = VIOLET;
-    boxTop(scenario.process, colour);
-    for (const std::string &paragraph : descriptionLines(scenario.about)) {
+    boxTop(context.process, colour);
+    for (const std::string &paragraph : descriptionLines(context.about)) {
         if (paragraph.empty()) boxLine("", colour);
         else boxText(paragraph, colour);
     }
     boxLine("", colour);
-    if (!scenario.expected.empty()) {
+    if (!context.expected.empty()) {
         boxLine(bold(colour, "Expected result"), colour);
-        boxText(scenario.expected, colour);
+        boxText(context.expected, colour);
         boxLine("", colour);
     }
     boxLine(bold(colour, "Participants"), colour);
-    for (const Person &person : scenario.people) {
-        boxLine("  " + pad(bold(WHITE, person.name), 22) + fg(GREY, person.roles), colour);
+    for (Participant *person : facade.participantsIn(context.roster)) {
+        boxLine("  " + pad(bold(WHITE, person->getName()), 22) + fg(GREY, roleList(person)), colour);
     }
     boxLine("", colour);
-    if (!scenario.starterRole.empty()) {
+    if (!context.starterRole.empty()) {
         boxLine(bold(colour, "Started by"), colour);
-        boxLine("  " + scenario.starterRole, colour);
+        boxLine("  " + context.starterRole, colour);
         boxLine("", colour);
     }
-    if (!scenario.startFields.empty()) boxLine(bold(colour, "Details asked for at the start"), colour);
-    for (const FieldPrompt &field : scenario.startFields) {
+    if (!context.startFields.empty()) boxLine(bold(colour, "Details asked for at the start"), colour);
+    for (const FieldPrompt &field : context.startFields) {
         boxLine("  " + fit(field.label, screenWidth() - 8), colour);
     }
-    for (const std::pair<const std::string, std::vector<FieldPrompt>> &task : scenario.taskFields) {
+    for (const std::pair<const std::string, std::vector<FieldPrompt>> &task : context.taskFields) {
         boxLine(bold(colour, "Details asked for at " + task.first), colour);
         for (const FieldPrompt &field : task.second) {
             boxLine("  " + fit(field.label, screenWidth() - 8), colour);
         }
     }
     boxLine("", colour);
-    boxLine(fg(GREY, "Workflow: " + scenario.workflowId + "  (from " + DEFINITIONS_FOLDER + "/)"), colour);
+    boxLine(fg(GREY, "Workflow: " + context.workflowId + "  (from " + DEFINITIONS_FOLDER + "/)"), colour);
     boxBottom(colour);
     std::cout << "\n";
 
@@ -842,23 +799,23 @@ void Tui::showIndustry() {
 
 void Tui::startInstanceScreen() {
     const size_t index = current;
-    const Scenario &scenario = scenarios[index];
-    beginScreen(scenario.industry + "  ›  Start a workflow instance");
+    const Context &context = contexts[index];
+    beginScreen(context.industry + "  ›  Start a workflow instance");
 
-    // Starting is work too: only the role the scenario names may do it.
-    if (!scenario.starterRole.empty() && !currentActor()->hasRole(scenario.starterRole)) {
-        noticeError("Starting this workflow needs the role " + scenario.starterRole + ", and you are " + people[actor].roles + ".");
+    // Starting is work too: only the role the context names may do it.
+    if (!context.starterRole.empty() && !currentActor()->hasRole(context.starterRole)) {
+        noticeError("Starting this workflow needs the role " + context.starterRole + ", and you are " + roleList(currentActor()) + ".");
         return;
     }
 
-    boxTop("New instance, started by " + people[actor].name, GREEN);
+    boxTop("New instance, started by " + currentActor()->getName(), GREEN);
     boxLine(fg(GREY, "The engine gives it an instance id. Press Enter on an empty line to go back."), GREEN);
     boxBottom(GREEN);
 
     InstanceData data;
-    std::string summary = "Started by " + people[actor].name;
-    data.set("startedBy", people[actor].name);
-    for (const FieldPrompt &field : scenario.startFields) {
+    std::string summary = "Started by " + currentActor()->getName();
+    data.set("startedBy", currentActor()->getName());
+    for (const FieldPrompt &field : context.startFields) {
         std::string value;
         if (!ask(field.label, value)) {
             return;
@@ -871,7 +828,7 @@ void Tui::startInstanceScreen() {
         summary += ", " + value;
     }
 
-    const std::string id = facade.startInstance(scenario.workflowId, data, scenario.roster);
+    const std::string id = facade.startInstance(context.workflowId, data, context.roster);
     if (id.empty()) {
         noticeError("The engine could not start this instance: " + facade.getLastError());
         return;
@@ -880,27 +837,20 @@ void Tui::startInstanceScreen() {
     InstanceRecord record;
     record.id = id;
     record.summary = summary;
-    record.scenario = index;
+    record.context = index;
     instances.push_back(record);
 
     // The instance's own id belongs with the details entered for it.
     facade.getInstance(id)->getData().set("instanceId", id);
 
-    HistoryEntry started;
-    started.instanceId = id;
-    started.when = std::time(nullptr);
-    started.what = "CREATED";
-    started.detail = summary;
-    history.push_back(started);
-
-    noticeOk("Started " + id + " by " + people[actor].name);
+    noticeOk("Started " + id + " by " + currentActor()->getName());
     flushEvents();
     instanceScreen(record);
 }
 
 void Tui::openInstanceScreen() {
     const std::vector<const InstanceRecord *> mine = currentInstances();
-    beginScreen(scenarios[current].industry + "  ›  Instances");
+    beginScreen(contexts[current].industry + "  ›  Instances");
     if (mine.empty()) {
         boxTop("Nothing started yet", GOLD);
         boxLine("Choose 2 on the main menu to start your first instance.", GOLD);
@@ -942,7 +892,7 @@ void Tui::taskProgress(const std::string &instanceId, int &done, int &total) con
 }
 
 void Tui::instanceScreen(const InstanceRecord &record) {
-    const Scenario &scenario = scenarios[record.scenario];
+    const Context &context = contexts[record.context];
 
     while (!inputClosed) {
         std::vector<Row> rows;
@@ -953,9 +903,9 @@ void Tui::instanceScreen(const InstanceRecord &record) {
         int total = 0;
         taskProgress(record.id, done, total);
 
-        beginScreen(record.id + "  ›  " + scenario.industry);
+        beginScreen(record.id + "  ›  " + context.industry);
 
-        boxTop(scenario.process, BLUE);
+        boxTop(context.process, BLUE);
         boxLine(fg(GREY, fit(record.summary, screenWidth() - 4)), BLUE);
         boxLine(statusPill(instance->status()) + "   " + progressBar(done, total, 24) + " " + bold(WHITE, std::to_string(done) + "/" + std::to_string(total)) + fg(GREY, " tasks finished"), BLUE);
         boxLine("Acting as " + actorLabel(), BLUE);
@@ -1035,9 +985,10 @@ void Tui::itemScreen(const InstanceRecord &record, const std::string &itemId) {
     if (!role.empty()) {
         boxLine(pad(bold(GREY, "Role"), 12) + bold(PINK, role), colour);
     }
-    const ApprovalRouting *approval = task != nullptr ? dynamic_cast<const ApprovalRouting *>(task->getRouting()) : nullptr;
-    if (approval != nullptr) {
-        const std::vector<std::string> levels = approval->describeChain();
+    const std::vector<std::string> levels = task != nullptr && task->getRouting() != nullptr
+                                                ? task->getRouting()->describeChain()
+                                                : std::vector<std::string>();
+    if (!levels.empty()) {
         for (size_t i = 0; i < levels.size(); ++i) {
             const bool here = static_cast<int>(i) == item->getEscalationLevel();
             boxLine(pad(i == 0 ? bold(GREY, "Approval") : std::string(), 12) + (here ? bold(PINK, "▸ " + levels[i]) : fg(GREY, "  " + levels[i])), colour);
@@ -1068,7 +1019,7 @@ void Tui::itemScreen(const InstanceRecord &record, const std::string &itemId) {
                      : fg(240, key) + " " + pad(fg(GREY, action.name), 28) + fg(240, "the engine will refuse this")),
                 PINK);
     }
-    const bool canSwitch = item->getAssignee() != nullptr && item->getAssignee()->getId() != people[actor].id;
+    const bool canSwitch = item->getAssignee() != nullptr && item->getAssignee() != currentActor();
     if (canSwitch) {
         boxLine(bold(PINK, " 7 ") + " " + bold(WHITE, "Act as the assignee") + fg(GREY, " (" + item->getAssignee()->getName() + ")"), PINK);
     }
@@ -1080,7 +1031,7 @@ void Tui::itemScreen(const InstanceRecord &record, const std::string &itemId) {
         return;
     }
     if (choice == 7) {
-        actor = personIndex(item->getAssignee()->getId());
+        actor = item->getAssignee();
         itemScreen(record, itemId);
         return;
     }
@@ -1090,7 +1041,7 @@ void Tui::itemScreen(const InstanceRecord &record, const std::string &itemId) {
 void Tui::perform(const InstanceRecord &record, WorkItem *item, int choice) {
     Participant *who = currentActor();
     const std::string id = item->getId();
-    const std::string by = " by " + people[actor].name;
+    const std::string by = " by " + who->getName();
     const std::string needed = requiredRole(taskOf(item), facade.getInstance(record.id)->getData());
     bool accepted = false;
     std::string description;
@@ -1107,11 +1058,11 @@ void Tui::perform(const InstanceRecord &record, WorkItem *item, int choice) {
             break;
         case 3: {
             std::string outcome;
-            const Scenario &scenario = scenarios[record.scenario];
+            const Context &context = contexts[record.context];
             const std::vector<std::string> allowed = facade.availableActions(record.id, id, who);
-            const std::map<std::string, std::vector<FieldPrompt>>::const_iterator asked = scenario.taskFields.find(id);
+            const std::map<std::string, std::vector<FieldPrompt>>::const_iterator asked = context.taskFields.find(id);
             // Ask only when the engine will accept the completion, so a refusal changes no data.
-            if (asked != scenario.taskFields.end() && std::find(allowed.begin(), allowed.end(), "complete") != allowed.end()) {
+            if (asked != context.taskFields.end() && std::find(allowed.begin(), allowed.end(), "complete") != allowed.end()) {
                 InstanceData &data = facade.getInstance(record.id)->getData();
                 for (const FieldPrompt &field : asked->second) {
                     std::string value;
@@ -1125,8 +1076,8 @@ void Tui::perform(const InstanceRecord &record, WorkItem *item, int choice) {
                     data.set(field.key, value);
                 }
             }
-            const std::map<std::string, std::vector<std::string>>::const_iterator choices = scenario.outcomes.find(id);
-            if (choices == scenario.outcomes.end()) {
+            const std::map<std::string, std::vector<std::string>>::const_iterator choices = context.outcomes.find(id);
+            if (choices == context.outcomes.end()) {
                 if (!ask("Outcome [done]", outcome)) return;
                 if (outcome.empty()) outcome = "done";
             } else {
@@ -1152,16 +1103,16 @@ void Tui::perform(const InstanceRecord &record, WorkItem *item, int choice) {
             break;
         }
         case 5: {
-            const std::vector<size_t> roster = printRoster();
+            const std::vector<Participant *> roster = printRoster();
             const int picked = askNumber("Delegate to", 1, static_cast<int>(roster.size()));
             if (picked < 1) return;
-            const Person &target = people[roster[static_cast<size_t>(picked - 1)]];
-            accepted = facade.delegate(record.id, id, who, facade.findParticipant(target.id, scenarios[current].roster));
-            description = "Delegated " + item->getName() + " to " + target.name + by;
-            if (!accepted && target.id == people[actor].id) {
+            Participant *target = roster[static_cast<size_t>(picked - 1)];
+            accepted = facade.delegate(record.id, id, who, target);
+            description = "Delegated " + item->getName() + " to " + target->getName() + by;
+            if (!accepted && target == who) {
                 hint = "You cannot delegate work to yourself.";
-            } else if (!accepted && !facade.findParticipant(target.id, scenarios[current].roster)->hasRole(needed) && !needed.empty()) {
-                hint = "This work needs the role " + needed + ", and " + target.name + " holds " + target.roles + ".";
+            } else if (!accepted && !target->hasRole(needed) && !needed.empty()) {
+                hint = "This work needs the role " + needed + ", and " + target->getName() + " holds " + roleList(target) + ".";
             }
             break;
         }
@@ -1178,7 +1129,7 @@ void Tui::perform(const InstanceRecord &record, WorkItem *item, int choice) {
         const std::string assignee = item->getAssignee() ? "assigned to " + item->getAssignee()->getName() : "not assigned to anyone";
         notices.push_back(fg(GREY, "  " + item->getName() + " is " + item->getStateName() + " and " + assignee + "."));
         if (hint.empty() && !needed.empty() && !who->hasRole(needed)) {
-            hint = "This work needs the role " + needed + ", and you are " + people[actor].roles + ".";
+            hint = "This work needs the role " + needed + ", and you are " + roleList(who) + ".";
         }
         if (!hint.empty()) {
             notices.push_back(fg(GREY, "  " + hint));
@@ -1231,7 +1182,7 @@ void Tui::myWorkScreen() {
     std::stable_sort(work.begin(), work.end(), [](const WorkRow &a, const WorkRow &b) { return priorityOf(a.item) > priorityOf(b.item); });
 
     beginScreen("My work");
-    boxTop("Work for " + people[actor].name, GOLD);
+    boxTop("Work for " + currentActor()->getName(), GOLD);
     if (work.empty()) {
         boxLine("Nothing for you right now. Change participant (5) to work as someone else.", GOLD);
         boxBottom(GOLD);
@@ -1257,15 +1208,13 @@ void Tui::myWorkScreen() {
     }
 }
 
-/// Lists the current scenario's participants. @return Their positions in people, in menu order.
-std::vector<size_t> Tui::printRoster() {
-    std::vector<size_t> roster;
-    boxTop(scenarios[current].industry + " participants", PINK);
-    for (size_t i = 0; i < people.size(); ++i) {
-        if (people[i].scenario != current) continue;
-        roster.push_back(i);
-        boxLine(bold(PINK, pad(" " + std::to_string(roster.size()), 4)) +
-                    pad(bold(WHITE, people[i].name), 22) + fg(GREY, people[i].roles),
+/// Lists the current context's participants from the engine roster.
+std::vector<Participant *> Tui::printRoster() {
+    const std::vector<Participant *> roster = facade.participantsIn(contexts[current].roster);
+    boxTop(contexts[current].industry + " participants", PINK);
+    for (size_t i = 0; i < roster.size(); ++i) {
+        boxLine(bold(PINK, pad(" " + std::to_string(i + 1), 4)) +
+                    pad(bold(WHITE, roster[i]->getName()), 22) + fg(GREY, roleList(roster[i])),
                 PINK);
     }
     boxLine(bold(RED, pad(" 0", 4)) + bold(WHITE, "Back"), PINK);
@@ -1275,14 +1224,14 @@ std::vector<size_t> Tui::printRoster() {
 
 /// @return true if a participant was chosen; false if the user went back.
 bool Tui::chooseActor() {
-    beginScreen(scenarios[current].industry + "  ›  Who are you?");
-    const std::vector<size_t> roster = printRoster();
+    beginScreen(contexts[current].industry + "  ›  Who are you?");
+    const std::vector<Participant *> roster = printRoster();
     const int choice = askNumber("Act as", 0, static_cast<int>(roster.size()));
     if (choice < 1) {
         return false;
     }
     actor = roster[static_cast<size_t>(choice - 1)];
-    noticeOk("Now acting as " + people[actor].name);
+    noticeOk("Now acting as " + actor->getName());
     return true;
 }
 
@@ -1304,27 +1253,21 @@ void Tui::undoLast() {
         return;
     }
 
-    HistoryEntry row;
-    row.instanceId = instanceId;
-    row.when = std::time(nullptr);
-    row.what = "UNDONE";
-    row.detail = what;
-    history.push_back(row);
-
     noticeOk("Undone in " + instanceId + ": " + what);
-    notices.push_back(fg(GREY, "Restored from a snapshot. External service calls cannot be recalled."));
+    notices.push_back(fg(GREY, "Restored from the history log. External service calls cannot be recalled."));
 }
 
 void Tui::showInstanceHistory(const std::string &instanceId) {
     beginScreen("History of " + instanceId);
-    boxTop("Everything that happened, oldest first", SKY);
-    for (const HistoryEntry &row : history) {
-        if (row.instanceId != instanceId) continue;
-        const int colour = row.what == "UNDONE" ? PINK : VIOLET;
-        boxLine(fg(GREY, clock(row.when)) + "  " + pad(bold(colour, row.what), 11) + pad(fit(row.itemName, 30), 31) +
-                    fg(GREY, fit(row.detail, screenWidth() - 57)),
-                SKY);
+    boxTop("Audit log for this instance, oldest first", SKY);
+    const std::string token = "[INSTANCE:" + instanceId + "]";
+    int shown = 0;
+    for (const std::string &entry : audit->getAuditTrail()) {
+        if (entry.find(token) == std::string::npos) continue;
+        boxLine(fg(GREY, fit(entry, screenWidth() - 6)), SKY);
+        ++shown;
     }
+    if (shown == 0) boxLine(fg(GREY, "Nothing has been recorded yet."), SKY);
     boxBottom(SKY);
     pause();
 }
@@ -1367,7 +1310,7 @@ void Tui::showCommands(const std::string &instanceId) {
     }
     if (shown == 0) boxLine(fg(GREY, "No commands yet."), SKY);
     boxLine("", SKY);
-    boxLine(fg(GREY, "Refused actions are not kept. u undoes the newest command across all workflows."), SKY);
+    boxLine(fg(GREY, "Each kept command stored the instance in the history log. u restores the newest snapshot."), SKY);
     boxBottom(SKY);
     pause();
 }
@@ -1458,53 +1401,30 @@ void Tui::checkDeadlines() {
         return;
     }
 
+    const size_t before = notifier->getNotificationCount();
     facade.checkDeadlines(std::time(nullptr) + hours * 3600);
 
-    if (events->empty()) {
+    if (notifier->getNotificationCount() == before) {
         noticeOk("No deadlines have passed " + std::to_string(hours) + " hours from now.");
         return;
     }
-    checkingDeadlines = true;
     flushEvents();
-    checkingDeadlines = false;
 }
 
 // ---- Helpers --------------------------------------------------------------------------------
 
-/// Shows what the last action caused, and keeps it as history.
+/// Shows the notifications published by the last action. The audit log keeps the permanent record.
 void Tui::flushEvents() {
-    for (const WorkflowEvent &event : events->take()) {
-        const bool hasOutcome = event.type == EventType::COMPLETED || event.type == EventType::REJECTED ||
-                                event.type == EventType::CANCELLED || event.type == EventType::ESCALATED;
-        std::string detail = hasOutcome ? event.outcome : "";
-
-        WorkflowInstance *instance = facade.getInstance(event.instanceId);
-        WorkItem *item = instance != nullptr ? instance->findItem(event.itemId) : nullptr;
-        if (event.type == EventType::ASSIGNED && item != nullptr && item->getAssignee() != nullptr) {
-            detail = "-> " + item->getAssignee()->getName();
+    const std::vector<std::string> &log = notifier->getNotificationLog();
+    for (size_t i = shownNotifications; i < log.size(); ++i) {
+        std::string message = log[i];
+        if (message.compare(0, 15, "[NOTIFICATION][") == 0) {
+            const size_t end = message.find("] ", 15);
+            if (end != std::string::npos) message = message.substr(end + 2);
         }
-        if (event.type == EventType::ESCALATED && detail.empty()) {
-            const InstanceData *data = instance != nullptr ? &instance->getData() : nullptr;
-            const std::string service = "service." + event.itemId + ".";
-            if (checkingDeadlines) {
-                detail = "deadline passed";
-            } else if (data != nullptr && data->get(service + "success") == "false") {
-                detail = data->get(service + "message");
-            } else {
-                detail = "no one in this scenario holds the role";
-            }
-        }
-
-        HistoryEntry row;
-        row.instanceId = event.instanceId;
-        row.when = event.timestamp;
-        row.itemName = event.itemName;
-        row.what = eventTypeToString(event.type);
-        row.detail = detail;
-        history.push_back(row);
-
-        notices.push_back(pad(bold(eventColour(event.type), row.what), 11) + pad(fit(row.itemName, 32), 33) + fg(GREY, fit(detail, screenWidth() - 50)));
+        notices.push_back(fit(message, screenWidth() - 6));
     }
+    shownNotifications = log.size();
 }
 
 void Tui::noticeOk(const std::string &text) {
@@ -1523,29 +1443,20 @@ void Tui::noticeError(const std::string &text) {
     }
 }
 
-size_t Tui::personIndex(const std::string &id) const {
-    for (size_t i = 0; i < people.size(); ++i) {
-        if (people[i].id == id && people[i].scenario == current) {
-            return i;
-        }
-    }
-    return actor;
-}
-
 Participant *Tui::currentActor() const {
-    return facade.findParticipant(people[actor].id, scenarios[people[actor].scenario].roster);
+    return actor;
 }
 
 std::vector<const InstanceRecord *> Tui::currentInstances() const {
     std::vector<const InstanceRecord *> mine;
     for (const InstanceRecord &record : instances) {
-        if (record.scenario == current) mine.push_back(&record);
+        if (record.context == current) mine.push_back(&record);
     }
     return mine;
 }
 
 std::string Tui::actorLabel() const {
-    return bold(PINK, people[actor].name) + fg(GREY, "  " + people[actor].roles);
+    return bold(PINK, actor->getName()) + fg(GREY, "  " + roleList(actor));
 }
 
 } // namespace

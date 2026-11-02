@@ -200,6 +200,21 @@ Participant *WorkflowEngine::findParticipant(const std::string &id, const std::s
   return found == rosters.end() ? nullptr : found->second.findById(id).get();
 }
 
+std::vector<Participant *> WorkflowEngine::participantsIn(const std::string &roster) const
+{
+  const ParticipantDirectory *directory = &this->directory;
+  if (!roster.empty()) {
+    const std::map<std::string, ParticipantDirectory>::const_iterator found = rosters.find(roster);
+    if (found == rosters.end()) return std::vector<Participant *>();
+    directory = &found->second;
+  }
+  std::vector<Participant *> result;
+  for (const std::shared_ptr<Participant> &participant : directory->getAll()) {
+    result.push_back(participant.get());
+  }
+  return result;
+}
+
 // Get external service registry
 ServiceRegistry &WorkflowEngine::getServiceRegistry()
 {
@@ -254,8 +269,9 @@ bool WorkflowEngine::executeAction(
 
   if (success)
   {
-    // Keep successful command for undo
+    // The snapshot is the instance as it was before this action. HistoryLog owns it.
     actionHistory.push_back(action);
+    history.pushSnapshots(owner->getId(), action->releaseSnapshot());
 
     return true;
   }
@@ -279,11 +295,18 @@ bool WorkflowEngine::undoLastAction()
   }
 
   WorkItemAction *lastAction = actionHistory.back();
-
   actionHistory.pop_back();
 
-  bool success = lastAction->undo();
+  WorkflowInstance *owner = lastAction->getInstance();
+  WorkflowSnapshot *snapshot = owner == nullptr ? nullptr : history.popSnapshots(owner->getId());
+  const bool success = owner != nullptr && snapshot != nullptr;
+  if (success) {
+    owner->restoreSnapshot(*snapshot);
+  } else {
+    lastError = "The history log has no snapshot for that instance.";
+  }
 
+  delete snapshot;
   delete lastAction;
 
   return success;

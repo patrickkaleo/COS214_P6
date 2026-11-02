@@ -13,7 +13,14 @@ bool WorkItemAction::isAuthorized(const WorkItem &item) const {
 
 std::string WorkItemAction::snapshotLabel(const WorkItem &) const { return describe(); }
 std::string WorkItemAction::getSnapshotLabel() const {
+  if (!keptLabel.empty()) return keptLabel;
   return before ? before->getLabel() : describe();
+}
+
+WorkflowSnapshot *WorkItemAction::releaseSnapshot() {
+  WorkflowSnapshot *snapshot = before;
+  before = nullptr;
+  return snapshot;
 }
 
 WorkItemAction::~WorkItemAction()
@@ -44,6 +51,7 @@ bool WorkItemAction::execute()
   {
     return false;
   }
+  keptLabel = before->getLabel();
 
   bool success = false;
   try {

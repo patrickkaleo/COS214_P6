@@ -1,0 +1,27 @@
+# One context for the university definition: who is involved and what they can decide.
+# The workflow, its name and its description come from definitions/. FIELD and TASK_FIELD
+# name the details a participant types in; the values are never stored here.
+INDUSTRY|Education
+WORKFLOW|UNI_BURSARY
+STARTED_BY|AdmissionsOfficer
+EXPECTED|An admitted applicant with a paid bursary. A failed identity check rejects the application, and rejected funding opens an appeal instead of payment.
+PARTICIPANT|edu-admissions|Lerato Khumalo|AdmissionsOfficer
+PARTICIPANT|edu-reviewer|Dr Priya Pillay|FacultyReviewer
+PARTICIPANT|edu-committee|Prof Nomsa Sithole|BursaryCommittee
+PARTICIPANT|edu-bursary|Thandi Mahlangu|BursaryOfficer
+PARTICIPANT|edu-finance|Ayanda Zulu|FinanceManager
+PARTICIPANT|edu-admin|Sipho Ndlovu|WorkflowAdmin
+PARTICIPANT|edu-admissions2|Naledi Dube|AdmissionsOfficer
+PARTICIPANT|edu-reviewer2|Dr Johan Botha|FacultyReviewer
+PARTICIPANT|edu-bursary2|Rethabile Moeng|BursaryOfficer
+PARTICIPANT|edu-engineering|Dr Sizwe Radebe|EngineeringReviewer
+OUTCOMES|DECIDE|approved,declined
+OUTCOMES|APPROVE|approved,not approved
+FIELD|surname|Applicant surname
+FIELD|idNumber|Applicant ID number, 13 digits
+FIELD|degree|Degree applied for (Engineering goes to the engineering reviewer)
+TASK_FIELD|VERIFY_ID|surname|Applicant surname
+TASK_FIELD|VERIFY_ID|idNumber|Applicant ID number, 13 digits
+TASK_FIELD|FUNDING_DOCS|amount|Bursary amount in rands
+TASK_FIELD|FUNDING_DOCS|accountNumber|Bank account, 9 to 11 digits
+TASK_FIELD|FUNDING_DOCS|branchCode|Branch code

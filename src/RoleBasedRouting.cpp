@@ -42,6 +42,10 @@ RoutingStrategy* RoleBasedRouting::clone() const {
     return new RoleBasedRouting(*this);
 }
 
+std::string RoleBasedRouting::roleFor(const InstanceData&) const {
+    return role;
+}
+
 std::string RoleBasedRouting::getRole() const {
     return role;
 }

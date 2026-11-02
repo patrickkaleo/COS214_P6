@@ -1,0 +1,190 @@
+/**
+ * @file WorkItem.cpp
+ * @brief WorkItem implementation aligned with WorkItem.h (State + Composite + Observer hooks).
+ * @version 1.0
+ */
+
+#include "WorkItem.h"
+#include "WorkItemState.h"
+#include "CreatedState.h"
+#include "EventDispatcher.h"
+#include "WorkflowEvent.h"
+#include "WorkflowMediator.h"
+#include "Participant.h"
+#include "SubProcess.h"
+
+#include <algorithm>
+#include <string>
+
+using namespace std;
+
+// Construction / destruction
+WorkItem::WorkItem(const string& id, const string& name)
+    : id_(id),
+      name_(name),
+      instanceId(""),
+      outcome_(""),
+      state_(new CreatedState()),
+      assignee(nullptr),
+      escalationLevel(0),
+      parent_(nullptr),
+      mediator_(nullptr)
+{}
+
+WorkItem::WorkItem(const WorkItem& other)
+    : id_(other.id_),
+      name_(other.name_),
+      instanceId(other.instanceId),
+      outcome_(other.outcome_),
+      state_(other.state_ ? other.state_->clone() : nullptr),
+      assignee(other.assignee),
+      escalationLevel(other.escalationLevel),
+      parent_(nullptr),
+      mediator_(nullptr)
+{}
+
+WorkItem::~WorkItem() {
+    delete state_;
+}
+
+// Lifecycle
+bool WorkItem::makeAvailable() {
+    if (!state_) return false;
+    if (!state_->makeAvailable(*this)) {
+        return false;
+    }
+    onAvailable();
+    return true;
+}
+
+bool WorkItem::assign(Participant* p) {
+    if (!state_) return false;
+    return state_->assign(*this, p);
+}
+
+bool WorkItem::start() {
+    if (!state_) return false;
+    return state_->start(*this);
+}
+
+bool WorkItem::complete(const string& outcome) {
+    if (!state_) return false;
+    if (!state_->complete(*this, outcome)) return false;
+    finished();
+    return true;
+}
+
+bool WorkItem::reject(const string& reason) {
+    if (!state_) return false;
+    if (!state_->reject(*this, reason)) return false;
+    finished();
+    return true;
+}
+
+bool WorkItem::cancel() {
+    if (!state_) return false;
+    if (!state_->cancel(*this)) return false;
+    finished();
+    return true;
+}
+
+bool WorkItem::escalate() {
+    if (!state_) return false;
+    return state_->escalate(*this);
+}
+
+void WorkItem::finished() {
+    onFinished();
+    if (mediator_) {
+        mediator_->itemChanged(*this);
+    }
+}
+
+void WorkItem::onFinished() {
+}
+
+// State transition + EventDispatcher (per-item listeners)
+void WorkItem::changeState(WorkItemState* next, EventType event) {
+    if (state_ == next) return;
+    delete state_;
+    state_ = next;
+
+    WorkflowEvent ev(event, instanceId, id_, name_, outcome_);
+    EventDispatcher::getInstance().notifyListeners(ev);
+    notify(ev);
+}
+
+void WorkItem::setState(WorkItemState* s) {
+    if (state_ == s) return;
+    delete state_;
+    state_ = s;
+}
+
+// Helpers
+void WorkItem::setAssignee(Participant* participant) {
+    assignee = participant;
+}
+
+void WorkItem::incrementEscalation() {
+    ++escalationLevel;
+}
+
+bool WorkItem::isFinished() const {
+    if (!state_) return false;
+    return state_->isFinal();
+}
+
+string WorkItem::getStateName() const {
+    if (!state_) return "None";
+    return state_->name();
+}
+
+// Observer support
+void WorkItem::attach(WorkflowEventListener* l) {
+    if (!l) return;
+    for (const auto& existing : listeners_) {
+        if (existing->active && existing->listener == l) return;
+    }
+    listeners_.push_back(std::make_shared<ListenerRegistration>(l));
+}
+
+void WorkItem::detach(WorkflowEventListener* l) {
+    for (const auto& registration : listeners_) {
+        if (registration->listener == l) registration->active = false;
+    }
+    listeners_.erase(
+        remove_if(listeners_.begin(), listeners_.end(),
+                  [](const std::shared_ptr<ListenerRegistration>& registration) {
+                      return !registration->active;
+                  }),
+        listeners_.end());
+}
+
+void WorkItem::notify(const WorkflowEvent& event) {
+    // Keep registration identities stable while callbacks add, detach or reattach.
+    // A detached listener may already have been destroyed, so never dereference it.
+    const auto snapshot = listeners_;
+    for (const auto& registration : snapshot) {
+        if (registration->active) {
+            registration->listener->onEvent(event);
+        }
+    }
+}
+
+int WorkItem::childCount() const {
+    return 0;
+}
+
+WorkItem* WorkItem::getChild(int index) const {
+    (void)index;
+    return nullptr;
+}
+
+void WorkItem::setRoutingContext(const InstanceData* data, const ParticipantDirectory* directory) {
+    for (int i = 0; i < childCount(); ++i) {
+        WorkItem* c = getChild(i);
+        if (c) {
+            c->setRoutingContext(data, directory);
+        }
+    }
+}

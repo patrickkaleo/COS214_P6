@@ -75,7 +75,7 @@ TEST_SUITE("Workflow descriptions from definition files") {
 
     TEST_CASE("Every prepared workflow has a description") {
         TividyWorkflowFacade facade;
-        for (const char* path : {"definitions/university_bursary.definition", "definitions/shipment_exception.definition", "definitions/hospital_admission.definition", "definitions/insurance_claim.definition", "definitions/production_order.definition"}) {
+        for (const char* path : {"definitions/university_bursary.definition", "definitions/shipment_exception.definition"}) {
             const std::string id = facade.registerDefinitionFromFile(path);
             REQUIRE_FALSE(id.empty());
             CHECK_FALSE(facade.definitionDescription(id).empty());

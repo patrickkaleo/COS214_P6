@@ -28,6 +28,8 @@ private:
     std::map<std::string, std::string> valueToRole; ///< Mapping of field values to role names.
     std::string fallbackRole;                     ///< Default role if no mapping matches.
 
+    std::string resolveRole(const InstanceData& data) const;
+
 public:
     /**
      * @brief Default constructor.
@@ -70,6 +72,8 @@ public:
      * @return RoutingStrategy* Newly allocated clone of this strategy.
      */
     virtual RoutingStrategy* clone() const override;
+
+    std::string roleFor(const InstanceData& data) const override;
 
     std::string getField() const;
     void setField(const std::string& fieldName);
