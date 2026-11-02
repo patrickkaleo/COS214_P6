@@ -37,7 +37,10 @@ void DependencyMediator::registerTree(WorkItem& root) {
 void DependencyMediator::openChildren(SubProcess& subProcess) {
     openedBranches.insert(subProcess.getId());
     for (int i = 0; i < subProcess.childCount(); ++i) {
-        evaluate(*subProcess.getChild(i));
+        WorkItem* child = subProcess.getChild(i);
+        if (child != nullptr) {
+            evaluate(*child);
+        }
     }
     // Covers an empty branch, or one whose children were all skipped.
     completeIfDone(subProcess);
