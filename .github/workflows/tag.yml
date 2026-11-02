@@ -4,9 +4,13 @@ on:
   pull_request:
     branches:
       - main
+  push:
+    branches:
+      - main
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
   test:
@@ -39,11 +43,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build image
-        run: docker build -t tividy:pr-${{ github.event.pull_request.number }} .
+        run: docker build -t tividy:ci-${{ github.run_id }} .
 
       - name: Extract binary
         run: |
-          docker create --name tividy-extract tividy:pr-${{ github.event.pull_request.number }}
+          docker create --name tividy-extract tividy:ci-${{ github.run_id }}
           docker cp tividy-extract:/app/tividy ./tividy
           docker rm tividy-extract
 
@@ -57,18 +61,50 @@ jobs:
   cd:
     name: Release
     needs: ci
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
+      - name: Require an approved pull request
+        id: approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pr=$(gh api -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+            --jq '.[0].number // empty')
+          if [ -z "$pr" ]; then
+            echo "This commit did not come from a pull request. No release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          approved=$(gh api "/repos/${{ github.repository }}/pulls/${pr}/reviews" --jq '
+            [ .[] | select(.user.login != null and .state != "PENDING" and .state != "DISMISSED") ]
+            | group_by(.user.login)
+            | map(max_by(.submitted_at))
+            | (map(select(.state == "APPROVED")) | length > 0)
+              and (map(select(.state == "CHANGES_REQUESTED")) | length == 0)
+          ')
+          if [ "$approved" != "true" ]; then
+            echo "Pull request #${pr} is not approved. No release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Pull request #${pr} is approved."
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
       - name: Download binary
+        if: steps.approval.outputs.release == 'true'
         uses: actions/download-artifact@v4
         with:
           name: tividy
 
       - name: Publish GitHub release
+        if: steps.approval.outputs.release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
-          target_commitish: ${{ github.event.pull_request.head.sha }}
+          target_commitish: ${{ github.sha }}
           files: tividy
           fail_on_unmatched_files: true
           generate_release_notes: true
