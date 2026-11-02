@@ -12,10 +12,7 @@
  * @copyright Copyright (c) 2026
  *
  */
-<<<<<<< Updated upstream
 
-=======
->>>>>>> Stashed changes
 #include <string>
 #include <map>
 #include <vector>
