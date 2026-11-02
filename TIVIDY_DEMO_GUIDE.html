@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TIVIDY Workflow Engine — Complete Demo & Defense Guide (Team ADKMNPT)</title>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-card: #21262d;
+            --bg-card-hover: #30363d;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-purple: #bc8cff;
+            --accent-gold: #d29922;
+            --accent-red: #f85149;
+            --accent-teal: #39c5bb;
+            --border-color: #30363d;
+            --code-bg: #0d1117;
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar Navigation */
+        nav.sidebar {
+            width: 320px;
+            background-color: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            overflow-y: auto;
+            padding: 24px 16px;
+            z-index: 100;
+        }
+
+        nav.sidebar h2 {
+            font-size: 1.15rem;
+            color: var(--accent-blue);
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        nav.sidebar p.subtitle {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 18px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+        }
+
+        nav.sidebar ul {
+            list-style: none;
+        }
+
+        nav.sidebar li {
+            margin-bottom: 4px;
+        }
+
+        nav.sidebar a {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 7px 10px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.88rem;
+            transition: all 0.2s;
+        }
+
+        nav.sidebar a:hover, nav.sidebar a.active {
+            background-color: var(--bg-card);
+            color: var(--accent-blue);
+        }
+
+        nav.sidebar .badge {
+            display: inline-block;
+            padding: 2px 7px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            border-radius: 10px;
+            background-color: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        nav.sidebar .badge.green {
+            background-color: rgba(63, 185, 80, 0.2);
+            color: var(--accent-green);
+        }
+
+        nav.sidebar .badge.gold {
+            background-color: rgba(210, 153, 34, 0.2);
+            color: var(--accent-gold);
+        }
+
+        /* Main Content Container */
+        main.content {
+            margin-left: 320px;
+            padding: 40px 60px;
+            max-width: 1250px;
+            width: calc(100% - 320px);
+        }
+
+        header.hero {
+            background: linear-gradient(135deg, rgba(88, 166, 255, 0.12) 0%, rgba(188, 140, 255, 0.12) 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 32px;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        header.hero h1 {
+            font-size: 2.2rem;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        header.hero h1 span.highlight {
+            color: var(--accent-blue);
+        }
+
+        header.hero p {
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+            margin-bottom: 20px;
+            max-width: 900px;
+        }
+
+        .meta-tags {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .meta-tag {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+        }
+
+        .meta-tag strong {
+            color: var(--accent-gold);
+        }
+
+        .meta-tag.success strong {
+            color: var(--accent-green);
+        }
+
+        .meta-tag.highlight strong {
+            color: var(--accent-blue);
+        }
+
+        section {
+            margin-bottom: 60px;
+            scroll-margin-top: 30px;
+        }
+
+        h2.section-title {
+            font-size: 1.6rem;
+            color: var(--text-primary);
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        h3.subsection-title {
+            font-size: 1.25rem;
+            color: var(--accent-blue);
+            margin: 28px 0 12px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        p {
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        /* Callout Boxes */
+        .callout {
+            border-left: 4px solid var(--accent-blue);
+            background-color: var(--bg-secondary);
+            padding: 16px 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+            border-top: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .callout.gold { border-left-color: var(--accent-gold); }
+        .callout.green { border-left-color: var(--accent-green); }
+        .callout.red { border-left-color: var(--accent-red); }
+        .callout.purple { border-left-color: var(--accent-purple); }
+        .callout.teal { border-left-color: var(--accent-teal); }
+
+        .callout-title {
+            font-weight: 700;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .callout.gold .callout-title { color: var(--accent-gold); }
+        .callout.green .callout-title { color: var(--accent-green); }
+        .callout.red .callout-title { color: var(--accent-red); }
+        .callout.purple .callout-title { color: var(--accent-purple); }
+        .callout.teal .callout-title { color: var(--accent-teal); }
+
+        /* Code Blocks */
+        pre {
+            background-color: var(--code-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+            margin: 16px 0;
+            font-family: var(--font-mono);
+            font-size: 0.86rem;
+            color: #e6edf3;
+            line-height: 1.5;
+        }
+
+        code {
+            font-family: var(--font-mono);
+            background-color: rgba(110, 118, 129, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.88rem;
+            color: var(--accent-blue);
+        }
+
+        pre code {
+            background-color: transparent;
+            padding: 0;
+            color: inherit;
+        }
+
+        .token-keyword { color: var(--accent-purple); font-weight: bold; }
+        .token-id { color: var(--accent-blue); font-weight: 600; }
+        .token-comment { color: var(--text-muted); font-style: italic; }
+        .token-param { color: var(--accent-gold); }
+        .token-string { color: var(--accent-green); }
+
+        /* Cards Grid */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .card:hover {
+            border-color: var(--accent-blue);
+            transform: translateY(-2px);
+        }
+
+        .card h4 {
+            color: var(--accent-blue);
+            font-size: 1.05rem;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card .role-badge {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            background-color: var(--bg-card);
+            color: var(--accent-purple);
+            border: 1px solid var(--border-color);
+        }
+
+        .card p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .card ul {
+            font-size: 0.85rem;
+            padding-left: 20px;
+            color: var(--text-secondary);
+        }
+
+        .card li {
+            margin-bottom: 4px;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background-color: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.88rem;
+        }
+
+        th {
+            background-color: var(--bg-card);
+            color: var(--accent-blue);
+            font-weight: 600;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Step Timeline */
+        .timeline {
+            position: relative;
+            margin: 24px 0;
+            padding-left: 32px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: 6px;
+            bottom: 6px;
+            width: 2px;
+            background-color: var(--border-color);
+        }
+
+        .timeline-step {
+            position: relative;
+            margin-bottom: 24px;
+        }
+
+        .timeline-step::before {
+            content: '';
+            position: absolute;
+            left: -28px;
+            top: 4px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background-color: var(--accent-blue);
+            border: 3px solid var(--bg-primary);
+        }
+
+        .timeline-step.green::before { background-color: var(--accent-green); }
+        .timeline-step.gold::before { background-color: var(--accent-gold); }
+        .timeline-step.red::before { background-color: var(--accent-red); }
+
+        .timeline-step h4 {
+            font-size: 1rem;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+
+        .timeline-step p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        /* Accordion / Details */
+        details {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+
+        summary {
+            padding: 14px 18px;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--text-primary);
+            user-select: none;
+            background-color: var(--bg-card);
+            transition: background-color 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        summary:hover {
+            background-color: var(--bg-card-hover);
+        }
+
+        details[open] summary {
+            border-bottom: 1px solid var(--border-color);
+            color: var(--accent-blue);
+        }
+
+        details .details-content {
+            padding: 16px 20px;
+        }
+
+        /* Question & Answer Box */
+        .qa-box {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: var(--bg-secondary);
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .qa-header {
+            background-color: var(--bg-card);
+            padding: 12px 18px;
+            font-weight: 600;
+            color: var(--accent-gold);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .qa-body {
+            padding: 16px 20px;
+        }
+
+        .qa-body p {
+            margin-bottom: 8px;
+        }
+
+        .qa-body p.quote {
+            background-color: rgba(88, 166, 255, 0.08);
+            border-left: 3px solid var(--accent-blue);
+            padding: 10px 14px;
+            border-radius: 0 4px 4px 0;
+            font-style: italic;
+            color: #d1d5db;
+        }
+
+        .kbd-key {
+            display: inline-block;
+            padding: 2px 6px;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: var(--text-primary);
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.2);
+        }
+
+        .status-pill {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            border-radius: 12px;
+            text-transform: uppercase;
+        }
+        .status-pill.completed { background-color: rgba(63, 185, 80, 0.2); color: var(--accent-green); }
+        .status-pill.rejected { background-color: rgba(248, 81, 73, 0.2); color: var(--accent-red); }
+        .status-pill.escalated { background-color: rgba(210, 153, 34, 0.2); color: var(--accent-gold); }
+        .status-pill.inprogress { background-color: rgba(88, 166, 255, 0.2); color: var(--accent-blue); }
+        .status-pill.assigned { background-color: rgba(57, 197, 187, 0.2); color: var(--accent-teal); }
+        .status-pill.available { background-color: rgba(210, 153, 34, 0.2); color: var(--accent-gold); }
+        .status-pill.cancelled { background-color: rgba(110, 118, 129, 0.2); color: var(--text-muted); }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR NAVIGATION -->
+    <nav class="sidebar">
+        <h2>⚡ TIVIDY Navigator</h2>
+        <p class="subtitle">COS 214 Project Defense Guide (Team ADKMNPT)</p>
+        <ul>
+            <li><a href="#overview">1. Executive Overview</a></li>
+            <li><a href="#blueprint-architecture">2. The Blueprint Files (.definition & .scenario)</a></li>
+            <li><a href="#generic-vs-specific">3. What Makes It Generic? <span class="badge green">5 Industries</span></a></li>
+            <li><a href="#patterns">4. The 14 GoF Design Patterns <span class="badge">14</span></a></li>
+            <li><a href="#state-lifecycle">5. WorkItem State Machine <span class="badge">8 States</span></a></li>
+            <li><a href="#scenarios">6. Industry Contexts &amp; Scenarios</a></li>
+            <li><a href="#logistics-fail" style="color: var(--accent-gold); font-weight: bold;">★ 7. Logistics Failure & Recovery <span class="badge gold">Demo</span></a></li>
+            <li><a href="#tui-runbook">8. Interactive TUI Controls & Shortcuts</a></li>
+            <li><a href="#presentation-runbook">9. 30-Min Demo & Presentation Runbook</a></li>
+            <li><a href="#tough-questions">10. Tough Marker Q&A <span class="badge">Top 12</span></a></li>
+            <li><a href="#team-roles">11. Team Contribution Roster <span class="badge">ADKMNPT</span></a></li>
+            <li><a href="#verification">12. Verification & Submission Structure</a></li>
+        </ul>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="content">
+
+        <header class="hero">
+            <h1>TIVIDY: <span class="highlight">Generic Workflow Engine</span></h1>
+            <p>A comprehensive architectural, conceptual, and live demonstration guide for the COS 214 Practical 6 project defense by <strong>Team ADKMNPT</strong>.</p>
+            <div class="meta-tags">
+                <span class="meta-tag highlight">Language: <strong>C++11</strong></span>
+                <span class="meta-tag success">Unit Tests: <strong>172 Passing / 1694 Assertions (0 Failures)</strong></span>
+                <span class="meta-tag">GoF Patterns: <strong>14 Distinct Patterns</strong></span>
+                <span class="meta-tag">Target Industries: <strong>5 Ready to Run</strong></span>
+                <span class="meta-tag">Presentation Deck: <strong>ADKMNPT.pdf</strong></span>
+                <span class="meta-tag">Build & Run: <strong>Makefile + Docker</strong></span>
+            </div>
+        </header>
+
+        <!-- SECTION 1: OVERVIEW -->
+        <section id="overview">
+            <h2 class="section-title">1. Executive Architectural Overview</h2>
+            <p>
+                <strong>TIVIDY</strong> is a generic Workflow Management System (WfMS) adhering to the standard Workflow Management Coalition (WfMC) architectural reference model.
+                Its primary responsibility is to define, validate, execute, inspect, and recover automated business processes composed of human tasks, automated services, decision gates, and multi-tier approval hierarchies.
+            </p>
+
+            <div class="callout gold">
+                <div class="callout-title">🌟 The Core Axiom of TIVIDY</div>
+                Processes are <strong>DATA</strong>, not <strong>CODE</strong>. There are no classes called <code>UniversityAdmissionTask</code>, <code>HospitalSurgeryTask</code>, or <code>ShipmentRerouteTask</code>. All business logic, control flows, task hierarchies, and routing rules are declared externally in declarative text files. The exact same compiled C++ executable interprets these files using pure polymorphic GoF patterns without requiring recompilation.
+            </div>
+
+            <p>The system lifecycle follows five distinct operational phases:</p>
+            <div class="card-grid">
+                <div class="card">
+                    <h4>1. Build Time <span class="role-badge">Builder / Director</span></h4>
+                    <p><code>FileWorkflowDefinitionBuilder</code> parses <code>definitions/*.definition</code>. <code>WorkflowDirector</code> coordinates the step-by-step assembly of stages, tasks, dependency rules, routing strategies, decorators, and external service linkages into an immutable <code>WorkflowDefinition</code> blueprint.</p>
+                </div>
+                <div class="card">
+                    <h4>2. Scenario Binding <span class="role-badge">ParticipantDirectory</span></h4>
+                    <p><code>context/*.context</code> files define human participants, their organizational roles, starter permissions, and UI input/completion fields. Each scenario is registered into an isolated roster in <code>ParticipantDirectory</code>, cleanly separating workflow structural logic from organizational rosters.</p>
+                </div>
+                <div class="card">
+                    <h4>3. Instantiation & Isolation <span class="role-badge">Prototype</span></h4>
+                    <p><code>WorkflowEngine::createInstance()</code> deep-clones the definition's composite tree via <code>WorkItem::clone()</code> into an independent <code>WorkflowInstance</code> with isolated <code>InstanceData</code>, a fresh <code>DependencyMediator</code>, and newly initialized state machines.</p>
+                </div>
+                <div class="card">
+                    <h4>4. Execution & Governance <span class="role-badge">State / Mediator / Command</span></h4>
+                    <p>Human participants interact through <code>TividyWorkflowFacade</code> executing discrete <code>WorkItemAction</code> commands (<code>ClaimAction</code>, <code>StartAction</code>, <code>CompleteAction</code>, <code>RejectAction</code>, <code>DelegateAction</code>, <code>CancelAction</code>). <code>DependencyMediator</code> evaluates downstream rules to advance or prune branches.</p>
+                </div>
+                <div class="card">
+                    <h4>5. Telemetry, SLAs & Undo <span class="role-badge">Observer / Memento</span></h4>
+                    <p>Every lifecycle transition broadcasts through the <code>EventDispatcher</code> Meyers' Singleton to <code>AuditLogger</code>, <code>NotificationService</code>, and <code>MonitoringService</code>. <code>WorkflowSnapshot</code> captures pre-action snapshots enabling full transactional rollback via <code>undoLast()</code>.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: THE BLUEPRINT ARCHITECTURE -->
+        <section id="blueprint-architecture">
+            <h2 class="section-title">2. The Blueprint Files Explained (.definition &amp; .context)</h2>
+            <p>
+                In TIVIDY, business workflows are decoupled into two distinct declarative file types stored in <code>definitions/</code> and <code>context/</code>:
+            </p>
+            <ul>
+                <li><strong><code>.definition</code> files</strong>: Structural workflow topology (processes, tasks, dependencies, routing, service bindings, decorators, deadlines).</li>
+                <li><strong><code>.context</code> files</strong>: Contextual scenario parameters (industry name, allowed starter role, human participants with roles, and UI field prompts).</li>
+            </ul>
+
+            <h3 class="subsection-title">A. The .definition File Syntax</h3>
+            <p>Here is an example from <code>definitions/hospital_admission.definition</code> illustrating how the pipe-delimited format configures the engine:</p>
+
+            <pre><code><span class="token-keyword">DEFINITION</span>
+<span class="token-id">HOSP_ADMIT</span>|<span class="token-string">Hospital Admission</span>|<span class="token-param">1</span>
+
+<span class="token-keyword">WORKITEMS</span>
+<span class="token-keyword">process</span>|<span class="token-id">ADMISSION</span>|<span class="token-param">-</span>|<span class="token-string">Hospital Admission</span>
+<span class="token-keyword">process</span>|<span class="token-id">INTAKE</span>|<span class="token-id">ADMISSION</span>|<span class="token-string">Patient Intake</span>
+<span class="token-keyword">task</span>|<span class="token-id">REGISTER</span>|<span class="token-id">INTAKE</span>|<span class="token-string">Register Patient</span>
+<span class="token-keyword">task</span>|<span class="token-id">CHECK_ID</span>|<span class="token-id">INTAKE</span>|<span class="token-string">Verify Patient Identity</span>
+<span class="token-keyword">process</span>|<span class="token-id">TRIAGE</span>|<span class="token-id">ADMISSION</span>|<span class="token-string">Triage</span>
+<span class="token-keyword">task</span>|<span class="token-id">ASSESS_ACUITY</span>|<span class="token-id">TRIAGE</span>|<span class="token-string">Assess Acuity</span>
+<span class="token-keyword">task</span>|<span class="token-id">ASSIGN_CLINICIAN</span>|<span class="token-id">TRIAGE</span>|<span class="token-string">Assign Clinician</span>
+<span class="token-keyword">process</span>|<span class="token-id">DISPOSITION</span>|<span class="token-id">ADMISSION</span>|<span class="token-string">Disposition</span>
+<span class="token-keyword">task</span>|<span class="token-id">ADMISSION_DECISION</span>|<span class="token-id">DISPOSITION</span>|<span class="token-string">Admission Decision</span>
+<span class="token-keyword">task</span>|<span class="token-id">ASSIGN_BED</span>|<span class="token-id">DISPOSITION</span>|<span class="token-string">Assign Bed</span>
+<span class="token-keyword">task</span>|<span class="token-id">WARD_ROUND</span>|<span class="token-id">DISPOSITION</span>|<span class="token-string">Record Ward Round</span>
+<span class="token-keyword">task</span>|<span class="token-id">DISCHARGE_ADVICE</span>|<span class="token-id">DISPOSITION</span>|<span class="token-string">Discharge Advice</span>
+
+<span class="token-keyword">DEPENDENCIES</span>
+<span class="token-id">REGISTER</span>|<span class="token-id">CHECK_ID</span>|<span class="token-param">*</span>
+<span class="token-id">INTAKE</span>|<span class="token-id">TRIAGE</span>|<span class="token-param">*</span>
+<span class="token-id">ASSESS_ACUITY</span>|<span class="token-id">ASSIGN_CLINICIAN</span>|<span class="token-param">*</span>
+<span class="token-id">TRIAGE</span>|<span class="token-id">DISPOSITION</span>|<span class="token-param">*</span>
+<span class="token-id">ADMISSION_DECISION</span>|<span class="token-id">ASSIGN_BED</span>|<span class="token-param">admit</span>
+<span class="token-id">ASSIGN_BED</span>|<span class="token-id">WARD_ROUND</span>|<span class="token-param">*</span>
+<span class="token-id">ADMISSION_DECISION</span>|<span class="token-id">DISCHARGE_ADVICE</span>|<span class="token-param">discharge</span>
+
+<span class="token-keyword">ROUTING</span>
+<span class="token-id">REGISTER</span>|<span class="token-keyword">role</span>|<span class="token-param">AdmissionsClerk</span>
+<span class="token-id">CHECK_ID</span>|<span class="token-keyword">role</span>|<span class="token-param">AdmissionsClerk</span>
+<span class="token-id">ASSESS_ACUITY</span>|<span class="token-keyword">role</span>|<span class="token-param">TriageNurse</span>
+<span class="token-id">ASSIGN_CLINICIAN</span>|<span class="token-keyword">data</span>|<span class="token-param">acuity</span>|<span class="token-param">WardDoctor</span>|<span class="token-string">Critical</span>|<span class="token-param">EmergencyDoctor</span>
+<span class="token-id">ADMISSION_DECISION</span>|<span class="token-keyword">data</span>|<span class="token-param">acuity</span>|<span class="token-param">WardDoctor</span>|<span class="token-string">Critical</span>|<span class="token-param">EmergencyDoctor</span>
+<span class="token-id">ASSIGN_BED</span>|<span class="token-keyword">role</span>|<span class="token-param">BedManager</span>
+<span class="token-id">WARD_ROUND</span>|<span class="token-keyword">data</span>|<span class="token-param">acuity</span>|<span class="token-param">WardDoctor</span>|<span class="token-string">Critical</span>|<span class="token-param">EmergencyDoctor</span>
+<span class="token-id">DISCHARGE_ADVICE</span>|<span class="token-keyword">data</span>|<span class="token-param">acuity</span>|<span class="token-param">WardDoctor</span>|<span class="token-string">Critical</span>|<span class="token-param">EmergencyDoctor</span>
+
+<span class="token-keyword">SERVICES</span>
+<span class="token-keyword">service</span>|<span class="token-id">CHECK_ID</span>|<span class="token-param">IdentityVerificationService</span>
+
+<span class="token-keyword">EXTRAS</span>
+<span class="token-keyword">priority</span>|<span class="token-id">ASSESS_ACUITY</span>|<span class="token-param">2</span>
+<span class="token-keyword">priority</span>|<span class="token-id">ASSIGN_CLINICIAN</span>|<span class="token-param">2</span>
+<span class="token-keyword">deadline</span>|<span class="token-id">ADMISSION_DECISION</span>|<span class="token-param">4</span></code></pre>
+
+            <h3 class="subsection-title">Section-by-Section Parser Breakdown</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Section Keyword</th>
+                        <th>Syntax Pattern</th>
+                        <th>Engine Instantiation &amp; Action</th>
+                        <th>Design Pattern</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>DEFINITION</code></td>
+                        <td><code>id | name | version</code></td>
+                        <td>Creates a <code>WorkflowDefinition</code> container with a unique ID and version number.</td>
+                        <td><strong>Builder</strong> (Product)</td>
+                    </tr>
+                    <tr>
+                        <td><code>WORKITEMS</code></td>
+                        <td><code>type | id | parentId | name</code></td>
+                        <td>
+                            If <code>process</code>, instantiates a <code>SubProcess</code> (composite). Parent <code>-</code> marks the root node.<br>
+                            If <code>task</code>, instantiates a <code>Task</code> (leaf) and adds it as a child to the specified parent <code>SubProcess</code>.
+                        </td>
+                        <td><strong>Composite</strong> (Component, Leaf, Composite)</td>
+                    </tr>
+                    <tr>
+                        <td><code>DEPENDENCIES</code></td>
+                        <td><code>fromId | toId | outcome</code></td>
+                        <td>
+                            Creates <code>DependencyRule</code> objects stored inside <code>DependencyMediator</code>.<br>
+                            Outcome <code>*</code> matches any successful completion. Named outcomes (e.g. <code>admit</code>, <code>discharge</code>, <code>reroute</code>, <code>hold</code>) evaluate decision branches. Outcome <code>rejected</code> captures rejections.
+                        </td>
+                        <td><strong>Mediator</strong> (Colleague Coordination)</td>
+                    </tr>
+                    <tr>
+                        <td><code>ROUTING</code></td>
+                        <td>
+                            <code>itemId | role | roleName</code><br>
+                            <code>itemId | data | field | fallback | v1 | r1 | v2 | r2</code><br>
+                            <code>approval | itemId | ruleType | param | r1 | r2 ...</code>
+                        </td>
+                        <td>
+                            If <code>role</code>, attaches a <code>RoleBasedRouting</code> strategy.<br>
+                            If <code>data</code>, attaches a <code>DataRuleRouting</code> strategy evaluating <code>InstanceData</code>.<br>
+                            If <code>approval</code>, attaches an <code>ApprovalRouting</code> strategy backed by a <code>Chain of Responsibility</code>.
+                        </td>
+                        <td><strong>Strategy / CoR</strong> (Routing Algorithms)</td>
+                    </tr>
+                    <tr>
+                        <td><code>SERVICES</code></td>
+                        <td><code>service | itemId | serviceName</code></td>
+                        <td>Calls <code>Task::setServiceName()</code>. When completed, the task invokes the adapter registered in <code>ServiceRegistry</code>.</td>
+                        <td><strong>Adapter</strong> (External Systems)</td>
+                    </tr>
+                    <tr>
+                        <td><code>EXTRAS</code></td>
+                        <td>
+                            <code>priority | id | level</code><br>
+                            <code>deadline | id | hours</code><br>
+                            <code>audit | id</code>
+                        </td>
+                        <td>
+                            <code>priority</code>: wraps the task in a <code>PriorityDecorator</code>.<br>
+                            <code>audit</code>: wraps the task in an <code>AuditDecorator</code>.<br>
+                            <code>deadline</code>: sets deadline SLA hours on the task.
+                        </td>
+                        <td><strong>Decorator</strong> (Dynamic Behavior Extension)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 class="subsection-title">B. The .context File Syntax</h3>
+            <p>Here is an excerpt from <code>context/healthcare.context</code> showing how participants and UI interaction are declared:</p>
+
+            <pre><code><span class="token-keyword">INDUSTRY</span>|<span class="token-string">Healthcare</span>
+<span class="token-keyword">WORKFLOW</span>|<span class="token-id">HOSP_ADMIT</span>
+<span class="token-keyword">STARTED_BY</span>|<span class="token-param">AdmissionsClerk</span>
+<span class="token-keyword">EXPECTED</span>|<span class="token-string">An admitted patient with a bed and a ward round, or a patient sent home with discharge advice.</span>
+<span class="token-keyword">PARTICIPANT</span>|<span class="token-id">hc-clerk</span>|<span class="token-string">Amahle Dlamini</span>|<span class="token-param">AdmissionsClerk</span>
+<span class="token-keyword">PARTICIPANT</span>|<span class="token-id">hc-nurse</span>|<span class="token-string">Lindiwe Khumalo</span>|<span class="token-param">TriageNurse</span>
+<span class="token-keyword">PARTICIPANT</span>|<span class="token-id">hc-emergency</span>|<span class="token-string">Dr Carla Venter</span>|<span class="token-param">EmergencyDoctor</span>
+<span class="token-keyword">PARTICIPANT</span>|<span class="token-id">hc-beds</span>|<span class="token-string">Thabo Molefe</span>|<span class="token-param">BedManager</span>
+<span class="token-keyword">OUTCOMES</span>|<span class="token-id">ADMISSION_DECISION</span>|<span class="token-string">admit,discharge</span>
+<span class="token-keyword">FIELD</span>|<span class="token-param">surname</span>|<span class="token-string">Patient surname</span>
+<span class="token-keyword">FIELD</span>|<span class="token-param">idNumber</span>|<span class="token-string">Patient ID number, 13 digits</span>
+<span class="token-keyword">FIELD</span>|<span class="token-param">acuity</span>|<span class="token-string">Acuity (Critical goes to the emergency doctor)</span>
+<span class="token-keyword">TASK_FIELD</span>|<span class="token-id">CHECK_ID</span>|<span class="token-param">surname</span>|<span class="token-string">Patient surname</span></code></pre>
+        </section>
+
+        <!-- SECTION 3: GENERIC VS SPECIFIC -->
+        <section id="generic-vs-specific">
+            <h2 class="section-title">3. What Makes Code "Generic" vs. "Non-Generic"?</h2>
+            <p>
+                In the COS 214 project defense, examiners will repeatedly test whether your engine is genuinely generic or merely a facade over hardcoded domain logic. Here is the rigorous architectural evidence:
+            </p>
+
+            <div class="card-grid">
+                <div class="card" style="border-left: 4px solid var(--accent-red);">
+                    <h4 style="color: var(--accent-red);">❌ Hardcoded / Non-Generic (Zero Marks)</h4>
+                    <ul>
+                        <li>Creating classes named after business domains: <code>BursaryApplicationTask</code>, <code>ShipmentInspectionTask</code>, <code>SurgerySubProcess</code>.</li>
+                        <li>Hardcoding business branching in C++: <code>if (isBursary) doThis(); else doThat();</code></li>
+                        <li>Hardcoding role names or user IDs directly into task code.</li>
+                        <li>Requiring code modifications and C++ recompilation to introduce a new industry.</li>
+                        <li>Building different executables or different engines for different business workflows.</li>
+                    </ul>
+                </div>
+                <div class="card" style="border-left: 4px solid var(--accent-green);">
+                    <h4 style="color: var(--accent-green);">✅ Generic / Extensible (TIVIDY Architecture)</h4>
+                    <ul>
+                        <li>Every task is a polymorphic <code>Task</code>; every stage is a <code>SubProcess</code>.</li>
+                        <li>All control flow is governed by generic <code>DependencyRule</code> tuples evaluated by <code>DependencyMediator</code>.</li>
+                        <li>Routing strategies operate purely on generic string roles and dynamic <code>InstanceData</code> key-value mappings.</li>
+                        <li><strong>5 Diverse Industries</strong> run on the exact same compiled binary (<code>./tividy</code>) without changing one line of C++ code!</li>
+                        <li>New workflows are added by simply dropping a <code>.definition</code> and a <code>.scenario</code> file into the directories.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="callout purple">
+                <div class="callout-title">💡 The Boundary: What IS Allowed to Vary?</div>
+                Only <strong>two things</strong> change when introducing a brand-new industry:
+                <ol style="margin-left: 20px; margin-top: 8px;">
+                    <li><strong>The Declarative Files (`definitions/*.definition` &amp; `context/*.context`)</strong>: Defines the task tree topology, role allocations, UI prompts, and dependency rules.</li>
+                    <li><strong>External Service Adapters (`ExternalService` subclasses)</strong>: When a workflow connects to an external proprietary system (e.g. Home Affairs ID database, bank payment API, or courier tracking system), an adapter translates between that external API and TIVIDY's standard <code>ServiceRequest / ServiceResult</code> interface.</li>
+                </ol>
+            </div>
+        </section>
+
+        <!-- SECTION 4: THE 14 GOF DESIGN PATTERNS -->
+        <section id="patterns">
+            <h2 class="section-title">4. The 14 GoF Design Patterns in TIVIDY</h2>
+            <p>The project specification requires a minimum of 10 patterns (at least 2 creational, 2 structural, and 2 behavioural). TIVIDY implements <strong>14 GoF patterns</strong> with clear architectural justification:</p>
+
+            <details open>
+                <summary>1. Builder (Creational) <span class="role-badge">FileWorkflowDefinitionBuilder / Director</span></summary>
+                <div class="details-content">
+                    <p><strong>GoF Roles:</strong> <code>Director</code> = <code>WorkflowDirector</code> | <code>Builder</code> = <code>WorkflowDefinitionBuilder</code> | <code>ConcreteBuilder</code> = <code>FileWorkflowDefinitionBuilder</code> | <code>Product</code> = <code>WorkflowDefinition</code>.</p>
+                    <p><strong>Design Problem:</strong> Constructing a multi-level workflow definition from a declarative blueprint requires strict ordering: creating stages, resolving parent references, attaching routing strategies, registering dependency rules with the mediator, and wrapping nodes with decorators. Builder encapsulates this parsing and construction sequence, isolating it from the engine core.</p>
+                </div>
+            </details>
+
+            <details open>
+                <summary>2. Prototype (Creational) <span class="role-badge">WorkItem::clone()</span></summary>
+                <div class="details-content">
+                    <p><strong>GoF Roles:</strong> <code>Prototype</code> = <code>WorkItem</code> (declares <code>virtual WorkItem* clone() const = 0;</code>) | <code>ConcretePrototypes</code> = <code>Task</code>, <code>SubProcess</code>, <code>PriorityDecorator</code>, <code>AuditDecorator</code>.</p>
+                    <p><strong>Design Problem:</strong> A <code>WorkflowDefinition</code> acts as a shared, immutable blueprint. Running instances must never mutate the definition's state or hierarchy. <code>WorkflowDefinition::instantiateTree()</code> clones the entire composite tree, producing completely isolated instances with independent state machines and instance data.</p>
+                </div>
+            </details>
+
+            <details open>
+                <summary>3. Singleton (Creational) <span class="role-badge">EventDispatcher</span></summary>
+                <div class="details-content">
+                    <p><strong>GoF Roles:</strong> <code>Singleton</code> = <code>EventDispatcher</code> (accessed via <code>EventDispatcher::getInstance()</code>).</p>
+                    <p><strong>Design Problem:</strong> In a deeply nested composite tree, work items and state transitions need to publish lifecycle events system-wide. Passing an event-bus pointer through dozens of constructors would severely pollute the design. Implemented as a C++11 <strong>Meyers' Singleton</strong> (function-local static variable), guaranteeing thread-safety, lazy initialization, and zero memory leaks.</p>
+                </div>
+            </details>
+
+            <details open>
+                <summary>4. Composite (Structural) <span class="role-badge">WorkItem / SubProcess / Task</span></summary>
+                <div class="details-content">
+                    <p><strong>GoF Roles:</strong> <code>Component</code> = <code>WorkItem</code> | <code>Leaf</code> = <code>Task</code> | <code>Composite</code> = <code>SubProcess</code>.</p>
+                    <p><strong>Design Problem:</strong> Work items exist at different levels of abstraction: atomic tasks and multi-task stages. Composite allows callers (the engine, mediators, iterators) to treat individual tasks and composite branches identically for operations like <code>makeAvailable()</code>, <code>cancel()</code>, and depth-first traversal.</p>
+                </div>
+            </details>
+
+            <details open>
+                <summary>5. Decorator (Structural) <span class="role-badge">PriorityDecorator / AuditDecorator</span></summary>
+                <div class="details-content">
+                    <p><strong>GoF Roles:</strong> <code>Component</code> = <code>WorkItem</code> | <code>Decorator Base</code> = <code>WorkItemDecorator</code> | <code>ConcreteDecorators</code> = <code>PriorityDecorator</code>, <code>AuditDecorator</code>.</p>
+                    <p><strong>Design Problem:</strong> Tasks require orthogonal runtime capabilities (such as urgency escalation weighting or dedicated audit trail logging) without creating a combinatorial explosion of subclasses (avoiding <code>UrgentAuditedTask</code>). Because <code>WorkItemDecorator</code> inherits from <code>WorkItem</code>, decorated tasks fit seamlessly inside <code>SubProcess</code> trees.</p>
+                </div>
+            </details>
+
+            <details open>
+                <summary>6. Adapter (Structural) <span class="role-badge">4 Service Adapters</span></summary>
+                <div class="details-content">
+                    <p><strong>GoF Roles:</strong> <code>Target</code> = <code>ExternalService</code> | <code>Adapters</code> = <code>GovernmentIDAdapter</code>, <code>BankGatewayAdapter</code>, <code>TrackingServiceAdapter</code>, <code>CarrierAdapter</code> | <code>Adaptees</code> = <code>NationalIdRegistry</code>, <code>BankPaymentGateway</code>, <code>CourierTrackingApi</code>, <code>CarrierBookingSystem</code> | <code>Registry</code> = <code>ServiceRegistry</code>.</p>
+                    <p><strong>Design Problem:</strong> External legacy APIs use incompatible interfaces, return codes, and data formats. Adapters wrap these systems, translating TIVIDY's standard <code>ServiceRequest</code> into adaptee calls and converting responses into a uniform <code>ServiceResult</code>.</p>
+                </div>
+            </details>
+
+            <details open>
+                <summary>7. Facade (Structural) <span class="role-badge">TividyWorkflowFacade</span></summary>
+                <div class="details-content">
+                    <p><strong>GoF Roles:</strong> <code>Facade</code> = <code>TividyWorkflowFacade</code> | <code>Subsystem</code> = <code>WorkflowEngine</code>, <code>WorkflowDirector</code>, <code>ParticipantDirectory</code>, <code>ServiceRegistry</code>, <code>EventDispatcher</code>.</p>
+                    <p><strong>Design Problem:</strong> Starting and controlling a workflow instance requires coordinating directors, builders, engine registries, action command wrapping, participant directory lookups, and observer dispatchers. The Facade provides a clean, unified API for terminal or graphical user interfaces.</p>
+                </div>
+            </details>
+
+            <details open>
+                <summary>8. State (Behavioural) <span class="role-badge">WorkItemState (8 States)</span></summary>
+                <div class="details-content">
+                    <p><strong>GoF Roles:</strong> <code>Context</code> = <code>WorkItem</code> | <code>State Interface</code> = <code>WorkItemState</code> | <code>ConcreteStates</code> = <code>Created</code>, <code>Available</code>, <code>Assigned</code>, <code>InProgress</code>, <code>Completed</code>, <code>Rejected</code>, <code>Escalated</code>, <code>Cancelled</code>.</p>
+                    <p><strong>Design Problem:</strong> Eliminates large switch statements and boolean status flags. Each state encapsulates the legal transitions from that point in the lifecycle and refuses illegal operations with clear domain messages.</p>
+                </div>
+            </details>
+
+            <details open>
+                <summary>9. Strategy (Behavioural) <span class="role-badge">RoleBased / DataRule / Approval</span></summary>
+                <div class="details-content">
+                    <p><strong>GoF Roles:</strong> <code>Strategy Interface</code> = <code>RoutingStrategy</code> | <code>ConcreteStrategies</code> = <code>RoleBasedRouting</code>, <code>DataRuleRouting</code>, <code>ApprovalRouting</code>.</p>
+                    <p><strong>Design Problem:</strong> Tasks allocate work according to different business policies (role qualifications, form data values, or multi-tiered approval chains). Strategy encapsulates these algorithms so they can be swapped dynamically.</p>
+                </div>
+            </details>
+
+            <details open>
+                <summary>10. Observer (Behavioural) <span class="role-badge">EventDispatcher / 3 Listeners</span></summary>
+                <div class="details-content">
+                    <p><strong>GoF Roles:</strong> <code>Subject</code> = <code>EventDispatcher</code> | <code>Observer</code> = <code>WorkflowEventListener</code> | <code>ConcreteObservers</code> = <code>AuditLogger</code>, <code>NotificationService</code>, <code>MonitoringService</code>.</p>
+                    <p><strong>Design Problem:</strong> Multiple independent subsystems (audit loggers, monitoring metrics, notifications) need to react to workflow lifecycle events without the core engine being tightly coupled to them.</p>
+                </div>
+            </details>
+
+            <details open>
+                <summary>11. Mediator (Behavioural) <span class="role-badge">DependencyMediator</span></summary>
+                <div class="details-content">
+                    <p><strong>GoF Roles:</strong> <code>Mediator</code> = <code>WorkflowMediator</code> | <code>ConcreteMediator</code> = <code>DependencyMediator</code> | <code>Colleagues</code> = <code>WorkItem</code>, <code>Task</code>, <code>SubProcess</code>.</p>
+                    <p><strong>Design Problem:</strong> Work items must trigger subsequent tasks, evaluate branches, synchronize parallel joins, and propagate rejections without tasks having direct references to each other. <code>DependencyMediator</code> centralizes all inter-item sequencing as data rules.</p>
+                </div>
+            </details>
+
+            <details open>
+                <summary>12. Chain of Responsibility (Behavioural) <span class="role-badge">ApprovalHandler Chain</span></summary>
+                <div class="details-content">
+                    <p><strong>GoF Roles:</strong> <code>Handler</code> = <code>ApprovalHandler</code> | <code>ConcreteHandler</code> = <code>ConcreteApprovalHandler</code> | <code>Rules</code> = <code>ThresholdRule</code>, <code>AlwaysAcceptRule</code> | <code>Request</code> = <code>ApprovalRequest</code>.</p>
+                    <p><strong>Design Problem:</strong> Approval requests may require sign-off from different organizational tiers based on financial amounts or authority limits. Handlers pass requests along the chain until a qualified participant approves.</p>
+                </div>
+            </details>
+
+            <details open>
+                <summary>13. Command (Behavioural) <span class="role-badge">WorkItemAction Hierarchy</span></summary>
+                <div class="details-content">
+                    <p><strong>GoF Roles:</strong> <code>Command</code> = <code>WorkItemAction</code> | <code>ConcreteCommands</code> = <code>ClaimAction</code>, <code>StartAction</code>, <code>CompleteAction</code>, <code>RejectAction</code>, <code>DelegateAction</code>, <code>CancelAction</code> | <code>Invoker</code> = <code>WorkflowEngine</code>.</p>
+                    <p><strong>Design Problem:</strong> Encapsulates user requests as standalone objects, enabling validation, history logging, checkpoint snapshotting, and transaction rollback.</p>
+                </div>
+            </details>
+
+            <details open>
+                <summary>14. Memento &amp; Iterator (Behavioural) <span class="role-badge">WorkflowSnapshot / Iterators</span></summary>
+                <div class="details-content">
+                    <p><strong>GoF Roles (Memento):</strong> <code>Memento</code> = <code>WorkflowSnapshot</code> | <code>Originator</code> = <code>WorkflowInstance</code> | <code>Caretakers</code> = <code>WorkItemAction</code>, <code>HistoryLog</code>.</p>
+                    <p><strong>GoF Roles (Iterator):</strong> <code>Iterator</code> = <code>Iterator&lt;T&gt;</code> | <code>ConcreteIterators</code> = <code>DepthFirstWorkItemIterator</code>, <code>ApprovalChainIterator</code>.</p>
+                    <p><strong>Design Problem:</strong> Memento captures internal instance state before each command without violating encapsulation, allowing complete rollback on <code>undo()</code>. Iterator traverses composite trees and approval chains without exposing internal collections.</p>
+                </div>
+            </details>
+        </section>
+
+        <!-- SECTION 5: STATE LIFECYCLE -->
+        <section id="state-lifecycle">
+            <h2 class="section-title">5. WorkItem State Machine &amp; Lifecycle</h2>
+            <p>Every <code>WorkItem</code> delegates its lifecycle to an instance of <code>WorkItemState</code>. Transitions are strictly enforced:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Current State</th>
+                        <th>Allowed Transitions</th>
+                        <th>Triggered By</th>
+                        <th>Terminal?</th>
+                        <th>Invariant Guarantees</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="status-pill available">Created</span></td>
+                        <td>&rarr; <code>Available</code>, &rarr; <code>Cancelled</code></td>
+                        <td><code>makeAvailable()</code> / <code>cancel()</code></td>
+                        <td>No</td>
+                        <td>Initial un-ready state. Waiting for incoming dependency rules to resolve.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="status-pill available">Available</span></td>
+                        <td>&rarr; <code>Assigned</code>, &rarr; <code>Escalated</code>, &rarr; <code>Cancelled</code></td>
+                        <td><code>assign(p)</code> / <code>escalate()</code> / <code>cancel()</code></td>
+                        <td>No</td>
+                        <td>Ready for work. Displayed to qualified participants for claiming.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="status-pill assigned">Assigned</span></td>
+                        <td>&rarr; <code>InProgress</code>, &rarr; <code>Assigned</code> (reassign), &rarr; <code>Escalated</code>, &rarr; <code>Cancelled</code></td>
+                        <td><code>start()</code> / <code>delegate()</code> / <code>escalate()</code> / <code>cancel()</code></td>
+                        <td>No</td>
+                        <td>Bound to a specific participant. Can be started or delegated to a peer.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="status-pill inprogress">InProgress</span></td>
+                        <td>&rarr; <code>Completed</code>, &rarr; <code>Rejected</code>, &rarr; <code>Escalated</code>, &rarr; <code>Cancelled</code></td>
+                        <td><code>complete(outcome)</code> / <code>reject(reason)</code> / <code>escalate()</code> / <code>cancel()</code></td>
+                        <td>No</td>
+                        <td>Active execution. Service calls invoke here. Service failure triggers escalation.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="status-pill escalated">Escalated</span></td>
+                        <td>&rarr; <code>Assigned</code>, &rarr; <code>Cancelled</code></td>
+                        <td><code>assign(p)</code> (reclaimed by higher authority) / <code>cancel()</code></td>
+                        <td>No</td>
+                        <td>Alert condition. Operations blocked until reclaimed by a supervisor or cancelled.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="status-pill completed">Completed</span></td>
+                        <td>None (all mutations refused)</td>
+                        <td>Terminal state</td>
+                        <td><strong>Yes</strong></td>
+                        <td>Successful finish. Triggers <code>DependencyMediator</code> to activate downstream items.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="status-pill rejected">Rejected</span></td>
+                        <td>None (all mutations refused)</td>
+                        <td>Terminal state</td>
+                        <td><strong>Yes</strong></td>
+                        <td>Business refusal. Propagates upstream to cancel downstream dead branches.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="status-pill cancelled">Cancelled</span></td>
+                        <td>None (all mutations refused)</td>
+                        <td>Terminal state</td>
+                        <td><strong>Yes</strong></td>
+                        <td>Pruned branch or manually aborted item. Irreversible terminal state.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- SECTION 6: THE 5 INDUSTRY SCENARIOS -->
+        <section id="scenarios">
+            <h2 class="section-title">6. Industry Contexts &amp; Scenarios (5 Workflows + Distance Learning)</h2>
+            <p>
+                TIVIDY comes pre-configured with <strong>5 diverse industry blueprints and organizational context files</strong> in <code>definitions/</code> and <code>context/</code>. Every scenario runs on the exact same engine classes:
+            </p>
+
+            <div class="card-grid">
+                <!-- Education -->
+                <div class="card">
+                    <h4>1. Education: Admissions &amp; Bursary <span class="role-badge">UNI_BURSARY</span></h4>
+                    <p><strong>Files:</strong> <code>definitions/university_bursary.definition</code> &amp; <code>context/education.context</code> (plus <code>context/distance.context</code>)</p>
+                    <p><strong>Starter:</strong> <code>AdmissionsOfficer</code> (Lerato Khumalo / Naledi Dube)</p>
+                    <ul>
+                        <li><strong>Identity Verification:</strong> Invokes <code>GovernmentIDAdapter</code>. Surname <code>Wrong</code> rejects application.</li>
+                        <li><strong>Academic Review:</strong> Data routing on degree: <code>Engineering</code> &rarr; EngineeringReviewer; other &rarr; FacultyReviewer.</li>
+                        <li><strong>Approval Chain:</strong> CoR on bursary amount: BursaryOfficer (&le;50k), FinanceManager (&le;150k), BursaryCommittee (&gt;150k).</li>
+                        <li><strong>Payment Service:</strong> <code>BankGatewayAdapter</code> executes EFT. Amount <code>200000</code> exceeds limit and escalates.</li>
+                        <li><strong>Appeal Branch:</strong> Rejecting funding documents cancels approval and opens the appeal process.</li>
+                    </ul>
+                </div>
+
+                <!-- Logistics -->
+                <div class="card">
+                    <h4>2. Logistics: Shipment Exception <span class="role-badge">SHIP_EX</span></h4>
+                    <p><strong>Files:</strong> <code>definitions/shipment_exception.definition</code> &amp; <code>context/logistics.context</code></p>
+                    <p><strong>Starter:</strong> <code>WarehouseClerk</code> (Bongani Dube / Mandla Sithole)</p>
+                    <ul>
+                        <li><strong>Tracking Lookup:</strong> Invokes <code>TrackingServiceAdapter</code>. Waybill <code>WB9999</code> fails and escalates.</li>
+                        <li><strong>Decision Branch:</strong> Outcome <code>reroute</code> opens carrier dispatch; <code>hold</code> opens warehouse holding.</li>
+                        <li><strong>Carrier Booking:</strong> Invokes <code>CarrierAdapter</code>. Hub <code>Polokwane</code> is unserved and fails/escalates.</li>
+                        <li><strong>Catastrophic Rejection:</strong> Rejecting Log Exception aborts the entire shipment (marks whole pipeline Cancelled).</li>
+                    </ul>
+                </div>
+
+                <!-- Healthcare -->
+                <div class="card">
+                    <h4>3. Healthcare: Hospital Admission <span class="role-badge">HOSP_ADMIT</span></h4>
+                    <p><strong>Files:</strong> <code>definitions/hospital_admission.definition</code> &amp; <code>context/healthcare.context</code></p>
+                    <p><strong>Starter:</strong> <code>AdmissionsClerk</code> (Amahle Dlamini / Palesa Mthembu)</p>
+                    <ul>
+                        <li><strong>Patient Intake:</strong> Registers patient and calls <code>IdentityVerificationService</code>.</li>
+                        <li><strong>Acuity Routing:</strong> Data routing on acuity: <code>Critical</code> &rarr; EmergencyDoctor; other &rarr; WardDoctor.</li>
+                        <li><strong>Disposition Decision:</strong> Outcome <code>admit</code> assigns bed &amp; ward round; <code>discharge</code> gives discharge advice.</li>
+                        <li><strong>Deadline:</strong> Admission decision SLA triggers escalation after 4 hours.</li>
+                    </ul>
+                </div>
+
+                <!-- Insurance -->
+                <div class="card">
+                    <h4>4. Insurance: Claim Processing <span class="role-badge">INS_CLAIM</span></h4>
+                    <p><strong>Files:</strong> <code>definitions/insurance_claim.definition</code> &amp; <code>context/insurance.context</code></p>
+                    <p><strong>Starter:</strong> <code>ClaimsClerk</code> (Neo Khumalo / Sibusiso Dube)</p>
+                    <ul>
+                        <li><strong>Policy Check:</strong> Verifies policyholder with <code>IdentityVerificationService</code>.</li>
+                        <li><strong>Assessment Gate:</strong> Outcome <code>accept</code> opens settlement collection; <code>decline</code> issues decline notice.</li>
+                        <li><strong>Tiered Approval:</strong> ClaimsAssessor (&le;20k), ClaimsManager (&le;100k), ClaimsCommittee (&gt;100k).</li>
+                        <li><strong>Payout Gateway:</strong> Bank payment EFT gateway via <code>BankGatewayAdapter</code>.</li>
+                    </ul>
+                </div>
+
+                <!-- Manufacturing -->
+                <div class="card">
+                    <h4>5. Manufacturing: Production Order <span class="role-badge">PROD_ORDER</span></h4>
+                    <p><strong>Files:</strong> <code>definitions/production_order.definition</code> &amp; <code>context/manufacturing.context</code></p>
+                    <p><strong>Starter:</strong> <code>Planner</code> (Kabelo Naidoo / Lerato Sekhoto)</p>
+                    <ul>
+                        <li><strong>Specification Confirmation:</strong> Confirms specs before manufacturing commences.</li>
+                        <li><strong>Assembly Line Routing:</strong> Product line routing: <code>Electronics</code> &rarr; ElectronicsLine; <code>Food</code> &rarr; FoodLine; other &rarr; GeneralLine.</li>
+                        <li><strong>Quality Gate:</strong> Outcome <code>pass</code> routes to batch packing; <code>fail</code> routes to rework loop.</li>
+                        <li><strong>Dispatch:</strong> Final product dispatch and order closure.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 7: LOGISTICS FAIL DEEP DIVE -->
+        <section id="logistics-fail">
+            <h2 class="section-title" style="color: var(--accent-gold);">★ 7. Masterclass: Logistics Failure &amp; Exception Handling (Live Demo Segment)</h2>
+            <p>
+                This section is designed specifically for <strong>your live presentation segment</strong>. In real-world enterprise workflows, failure handling separates toy demonstrations from production-grade engineering. 
+                In TIVIDY, when an external API fails, a parcel is destroyed, or a carrier has no capacity, the engine does not crash or corrupt its state—it executes polymorphic recovery, cascading branch aborts, and automatic task escalations.
+            </p>
+
+            <div class="callout gold">
+                <div class="callout-title">🎯 Your Presentation Goal in 3 Sentences</div>
+                You are presenting the <strong>Logistics Exception &amp; Failure Pathways</strong>. You will show examiners how TIVIDY gracefully handles:
+                (1) <em>External Service API outages</em> (Tracking lookup failure &rarr; automatic task escalation),
+                (2) <em>Fatal physical rejections</em> (Warehouse damage &rarr; cascading mediator branch abort), and
+                (3) <em>Undo recovery</em> (Rolling back an escalated task to InProgress using Memento).
+            </div>
+
+            <h3 class="subsection-title">Part A: Failure Mode 1 — External Tracking API Failure &amp; Automatic Escalation</h3>
+            <p><strong>Business Scenario:</strong> A courier arrives at the warehouse with an unknown or damaged barcode. The clerk logs the exception, but when the analyst attempts to classify it, the third-party courier tracking API reports the waybill does not exist (HTTP 404 / <code>NOT_FOUND</code>).</p>
+
+            <div class="card" style="border-left: 4px solid var(--accent-gold); margin-bottom: 20px;">
+                <h4 style="color: var(--accent-gold);">🎙️ Spoken Script (Say this aloud to the examiners):</h4>
+                <p style="font-style: italic; color: #e6edf3;">
+                    &ldquo;Now I will demonstrate how the generic engine handles external infrastructure failures. In our Logistics scenario, tasks can be bound to external third-party systems via the Adapter pattern. Here, Classify Severity calls a TrackingServiceAdapter.<br><br>
+                    I am starting a shipment exception with waybill &#39;WB9999&#39;—a waybill not recognized by the carrier API. We complete the initial logging as Bongani Dube. Now, Kagiso Molefe starts &#39;Classify Severity&#39; and clicks Complete.<br><br>
+                    Notice what happens: the third-party API returns &#39;ERR;NOT_FOUND&#39;. In a fragile system, this would throw an unhandled exception or crash. But in TIVIDY, Task::executeService catches the failure and calls target-&gt;escalate(). The task immediately transitions from InProgressState to EscalatedState, the escalation level increments to 1, and EventDispatcher broadcasts an ESCALATED event to the AuditLogger and MonitoringService. The workflow remains safe and inspectable.&rdquo;
+                </p>
+            </div>
+
+            <div class="timeline">
+                <div class="timeline-step gold">
+                    <h4>Step 1: Start Instance with Bad Waybill</h4>
+                    <p>From Main Menu: Choose <code>4</code> (<em>Logistics — Shipment Exception</em>).</p>
+                    <p>Select <code>Bongani Dube</code> (WarehouseClerk) &rarr; Choose <code>1</code> (<em>Start a new instance</em>).</p>
+                    <p>At the <code>waybill</code> prompt, type <code>WB9999</code>.</p>
+                </div>
+                <div class="timeline-step">
+                    <h4>Step 2: Log Exception (Normal Advance)</h4>
+                    <p>Choose <code>Log Exception</code> &rarr; Choose <code>2</code> (<em>Start work</em>) &rarr; Re-open item &rarr; Choose <code>3</code> (<em>Complete</em>).</p>
+                    <p><code>Log Exception</code> finishes as <code>Completed</code>, opening <code>Classify Severity</code> for <strong>Kagiso Molefe</strong>.</p>
+                </div>
+                <div class="timeline-step red">
+                    <h4>Step 3: Trigger the API Failure</h4>
+                    <p>Open <code>Classify Severity</code> &rarr; Choose <code>7</code> (<em>Act as the assignee: Kagiso Molefe</em>) &rarr; Choose <code>2</code> (<em>Start work</em>) &rarr; Choose <code>3</code> (<em>Complete</em>).</p>
+                    <p><strong>Observe the Screen:</strong></p>
+                    <pre><code>▲ Classify Severity could not finish, so it escalated.
+⇄ TrackingService: Unknown waybill WB9999
+ESCALATED   Classify Severity   level 1</code></pre>
+                </div>
+                <div class="timeline-step green">
+                    <h4>Step 4: Show State &amp; Allowed Actions</h4>
+                    <p>Re-open <code>Classify Severity</code>: Point out that <code>Start work</code>, <code>Complete</code>, and <code>Reject</code> are now disabled by <code>EscalatedState</code>! Only <code>Claim</code> (reclaiming by higher authority) or <code>Cancel</code> are legally allowed.</p>
+                </div>
+            </div>
+
+            <h3 class="subsection-title">Part B: Failure Mode 2 — Unhandled Rejection &amp; Cascading Stage Abort</h3>
+            <p><strong>Business Scenario:</strong> A forklift punctures a chemical container in the receiving bay. The shipment is utterly destroyed. Warehouse Clerk Bongani Dube rejects the exception report immediately. Because there is no recovery from total destruction, the entire handling and closure pipeline must be cancelled immediately.</p>
+
+            <div class="card" style="border-left: 4px solid var(--accent-red); margin-bottom: 20px;">
+                <h4 style="color: var(--accent-red);">🎙️ Spoken Script (Say this aloud to the examiners):</h4>
+                <p style="font-style: italic; color: #e6edf3;">
+                    &ldquo;Now I will demonstrate a business-level catastrophic failure. In our definition file, there are rules for successful completion, but no rule handling rejection from Log Exception.<br><br>
+                    Watch what happens when Bongani Dube rejects Log Exception with the reason &#39;Cargo destroyed by forklift&#39;.<br><br>
+                    Under the hood, our DependencyMediator inspects the outgoing rules. Because no rule handles &#39;rejected&#39;, it knows the branch cannot continue. It immediately calls parent-&gt;reject() on Exception Report. Because Exception Report is rejected, all downstream stages—Exception Handling and Case Closure—are automatically marked Cancelled!<br><br>
+                    This demonstrates the power of our Composite + Mediator architecture: parent processes enforce lifecycle invariants across their entire tree.&rdquo;
+                </p>
+            </div>
+
+            <div class="timeline">
+                <div class="timeline-step">
+                    <h4>Step 1: Start Fresh Logistics Instance</h4>
+                    <p>From Main Menu: Choose <code>4</code> &rarr; <code>1</code> &rarr; Accept default waybill (<code>WB1002</code>).</p>
+                </div>
+                <div class="timeline-step red">
+                    <h4>Step 2: Reject Log Exception</h4>
+                    <p>Open <code>Log Exception</code> &rarr; Choose <code>2</code> (<em>Start work</em>) &rarr; Re-open item &rarr; Choose <code>4</code> (<em>Reject</em>).</p>
+                    <p>When prompted for reason, type: <code>Cargo destroyed in forklift accident</code>.</p>
+                </div>
+                <div class="timeline-step gold">
+                    <h4>Step 3: Point to the Resulting Tree</h4>
+                    <p>Look at the instance screen:
+                    <pre><code>#   Work item                    State          Assignee        Outcome
+1   Shipment Exception           ✖ Rejected     -               rejected
+2   ├─ Exception Report          ✖ Rejected     -               rejected
+3   │  ├─ Log Exception          ✖ Rejected     Bongani Dube    Cargo destroyed...
+4   │  └─ Classify Severity      - Cancelled    -
+5   ├─ Exception Handling        - Cancelled    -
+9   └─ Case Closure              - Cancelled    -</code></pre>
+                    Point out: The entire workflow cleanly terminated with status <code>[TERMINATED]</code>! Not a single subsequent task was erroneously assigned or executed.</p>
+                </div>
+            </div>
+
+            <h3 class="subsection-title">Part C: The 5 Design Patterns Cooperating in Logistics Failures</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Pattern</th>
+                        <th>Class Involved</th>
+                        <th>Exact Role in the Logistics Failure</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Adapter</strong></td>
+                        <td><code>TrackingServiceAdapter</code><br>(<code>src/TrackingServiceAdapter.cpp</code>)</td>
+                        <td>Catches <code>ERR;NOT_FOUND</code> from <code>CourierTrackingApi</code> and translates it into standard <code>ServiceResult::failure(&quot;Unknown waybill WB9999&quot;)</code>.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>State</strong></td>
+                        <td><code>InProgressState</code> &rarr; <code>EscalatedState</code><br>(<code>src/InProgressState.cpp</code>)</td>
+                        <td>When the service fails, <code>Task::executeService()</code> calls <code>target-&gt;escalate()</code>. <code>InProgressState::escalate()</code> transitions the item into <code>EscalatedState</code> and increments the escalation counter.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Mediator</strong></td>
+                        <td><code>DependencyMediator</code><br>(<code>src/DependencyMediator.cpp</code>)</td>
+                        <td>On rejection, detects that no rule matches <code>rejected</code>. Calls <code>parent-&gt;reject()</code> on <code>Exception Report</code>, and automatically marks all downstream dependent stages <code>Cancelled</code>.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Observer</strong></td>
+                        <td><code>EventDispatcher</code><br>(<code>src/EventDispatcher.cpp</code>)</td>
+                        <td>Dispatches <code>EventType::ESCALATED</code> or <code>EventType::REJECTED</code> to <code>AuditLogger</code> and <code>MonitoringService</code>. Real-time failure metrics immediately update.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Command &amp; Memento</strong></td>
+                        <td><code>CompleteAction</code> &amp; <code>WorkflowSnapshot</code><br>(<code>src/CompleteAction.cpp</code>)</td>
+                        <td>Takes a snapshot before calling the service. If the user presses <kbd class="kbd-key">u</kbd> (Undo), <code>restoreSnapshot()</code> reverts the task to <code>InProgress</code> so the user can re-attempt or correct the waybill.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- SECTION 8: TUI CONTROLS & SHORTCUTS -->
+        <section id="tui-runbook">
+            <h2 class="section-title">8. Interactive TUI Controls &amp; Shortcuts</h2>
+            <p>
+                The TIVIDY Terminal User Interface (TUI) is an interactive, full-color terminal experience built directly on top of <code>TividyWorkflowFacade</code>:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>TUI Key / Option</th>
+                        <th>Where Used</th>
+                        <th>Functionality &amp; Behavioral Guarantee</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><kbd class="kbd-key">▸</kbd> Indicator</td>
+                        <td>Work-item table</td>
+                        <td>Marks every task or sub-process the active participant can act upon right now based on role permissions and item state.</td>
+                    </tr>
+                    <tr>
+                        <td><kbd class="kbd-key">7</kbd> <strong>Act as the assignee</strong></td>
+                        <td>Work item action menu</td>
+                        <td>Convenience shortcut: immediately switches your active participant to that work item's current assignee.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Allowed</strong> vs other actions</td>
+                        <td>Work item action menu</td>
+                        <td>Allowed actions succeed. Disallowed actions remain selectable so you can witness the engine reject illegal operations and explain why.</td>
+                    </tr>
+                    <tr>
+                        <td><kbd class="kbd-key">u</kbd> (Undo)</td>
+                        <td>Instance screen</td>
+                        <td>Restores the <code>WorkflowSnapshot</code> taken before the last action command. (Cannot recall irreversible distributed external calls like bank EFTs).</td>
+                    </tr>
+                    <tr>
+                        <td><kbd class="kbd-key">c</kbd> (History)</td>
+                        <td>Instance screen</td>
+                        <td>Lists the full <code>WorkItemAction</code> command execution history executed on this instance.</td>
+                    </tr>
+                    <tr>
+                        <td><kbd class="kbd-key">5</kbd> (Change Actor)</td>
+                        <td>Workflow main menu</td>
+                        <td>Switches the active participant within the current scenario's participant roster.</td>
+                    </tr>
+                    <tr>
+                        <td><kbd class="kbd-key">9</kbd> (Deadlines)</td>
+                        <td>Workflow main menu</td>
+                        <td>Inspects active task deadlines and advances the simulated clock (in hours) to trigger SLA escalations.</td>
+                    </tr>
+                    <tr>
+                        <td><kbd class="kbd-key">0</kbd> (Back / Exit)</td>
+                        <td>Any menu</td>
+                        <td>Returns to the previous menu or exits cleanly from the top-level industry selector.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- SECTION 9: 30-MIN DEMO RUNBOOK -->
+        <section id="presentation-runbook">
+            <h2 class="section-title">9. 30-Minute Demo &amp; Presentation Runbook (ADKMNPT Deck)</h2>
+            <p>
+                This runbook aligns directly with the presentation slide deck (<strong><code>docs/ADKMNPT.pdf</code></strong>):
+            </p>
+
+            <div class="timeline">
+                <div class="timeline-step">
+                    <h4>Minute 00–04: Team Intro &amp; Problem Statement (Slides 1–5)</h4>
+                    <p>Introduce Team ADKMNPT. State the core problem: organizations rely on disconnected manual processes. Present TIVIDY: generic, industry-independent WfMS adhering to WfMC standard. Highlight the Core Axiom: Processes are Data, not Code.</p>
+                </div>
+                <div class="timeline-step gold">
+                    <h4>Minute 04–08: Architecture &amp; UML Patterns (Slides 6–12)</h4>
+                    <p>Walk through the TIVIDY layered system architecture. Present the 14 GoF patterns grouped by architectural clusters (Builder &amp; Memento; Composite, Decorator, Strategy &amp; CoR; Observer, Singleton &amp; Mediator; Iterator).</p>
+                </div>
+                <div class="timeline-step green">
+                    <h4>Minute 08–14: Scenario 1 Live Execution — Education (Slides 13–15)</h4>
+                    <p>Start University Admissions. Execute happy path. Demonstrate Identity Rejection (surname: <code>Wrong</code>). Demonstrate Appeal Branch (reject funding documents). Show Undo (<kbd class="kbd-key">u</kbd>) restoring the previous state snapshot.</p>
+                </div>
+                <div class="timeline-step red">
+                    <h4>Minute 14–20: Scenario 2 Live Execution — Logistics (Slides 16–18)</h4>
+                    <p><em>(Your presentation part)</em>: Demonstrate Tracking API failure with waybill <code>WB9999</code> &rarr; show automatic task escalation to <code>EscalatedState</code>. Demonstrate catastrophic rejection &rarr; show <code>DependencyMediator</code> aborting all downstream stages. Demonstrate carrier hub routing failure on unserved hub <code>Polokwane</code>.</p>
+                </div>
+                <div class="timeline-step">
+                    <h4>Minute 20–23: Multi-Industry Generality Demo (Healthcare, Insurance, Manufacturing)</h4>
+                    <p>Briefly open Healthcare, Insurance, and Manufacturing to prove to examiners that the same engine handles 5 distinct domains from text definition files without code modifications.</p>
+                </div>
+                <div class="timeline-step green">
+                    <h4>Minute 23–26: Technical Pillars &amp; Test Suite (Slides 28–30)</h4>
+                    <p>Run <code>./tividy_tests</code> showing <strong>172 passing test cases and 1694 assertions</strong> with 0 failures! Explain memory management (zero leaks, RAII, Meyers' Singleton), Docker containerization, and Doxygen documentation.</p>
+                </div>
+                <div class="timeline-step gold">
+                    <h4>Minute 26–30: Marker Q&amp;A &amp; Pattern Defense</h4>
+                    <p>Address examiner technical challenges using the Top 12 Defense Answers below.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 10: TOUGH MARKER QUESTIONS -->
+        <section id="tough-questions">
+            <h2 class="section-title">10. Tough Marker Q&amp;A (Top 12 Questions &amp; Defense Answers)</h2>
+
+            <div class="qa-box">
+                <div class="qa-header">Q1: Can undoLast() undo an external bank payment EFT or courier dispatch?</div>
+                <div class="qa-body">
+                    <p class="quote">"No. External distributed network calls produce irreversible external side effects. TIVIDY's Memento pattern (WorkflowSnapshot) restores the exact internal state of the instance: item states, assignees, and mediator progress. This allows the participant to correct the input data and retry without corrupting workflow integrity, while the immutable AuditLogger retains an unalterable history of the external call."</p>
+                </div>
+            </div>
+
+            <div class="qa-box">
+                <div class="qa-header">Q2: What is the fundamental difference between your Observer and Mediator patterns?</div>
+                <div class="qa-body">
+                    <p class="quote">"Observer (EventDispatcher) is a one-way, decoupled broadcast mechanism for passive telemetry (AuditLogger, NotificationService, MonitoringService). Observers never alter or dictate workflow control flow. Mediator (DependencyMediator) is a bidirectional coordinator: it inspects rule conditions, synchronizes parallel joins, decides which branches activate, and actively commands tasks to become available or cancel."</p>
+                </div>
+            </div>
+
+            <div class="qa-box">
+                <div class="qa-header">Q3: Why do WorkItemDecorator and SubProcess both inherit from WorkItem?</div>
+                <div class="qa-body">
+                    <p class="quote">"This demonstrates the classic synergy between Composite and Decorator. Because WorkItemDecorator IS-A WorkItem, a decorator can wrap any leaf Task or composite SubProcess transparently. SubProcess::replaceChild() swaps an unadorned child with its decorated wrapper without disturbing tree traversal, parent-child ownership, or depth-first iterators."</p>
+                </div>
+            </div>
+
+            <div class="qa-box">
+                <div class="qa-header">Q4: How does your Singleton guarantee thread-safety and avoid memory leaks?</div>
+                <div class="qa-body">
+                    <p class="quote">"EventDispatcher is implemented as a C++11 Meyers' Singleton (using a function-local static variable). Under C++11 standard §6.7 [stmt.dcl], initialization of a local static variable is guaranteed thread-safe by the compiler and runtime. Because it is statically allocated rather than heap-allocated with raw `new`, its destructor is automatically called at program termination, eliminating memory leaks."</p>
+                </div>
+            </div>
+
+            <div class="qa-box">
+                <div class="qa-header">Q5: How does DependencyMediator handle complex parallel joins?</div>
+                <div class="qa-body">
+                    <p class="quote">"When a task or sub-process has multiple incoming dependency rules, the mediator tracks their status. It requires every incoming rule to reach a terminal decision (Satisfied or Dead). If at least one rule is Satisfied, the target item is made Available via makeAvailable(). If all incoming branches died (e.g. through rejections), the mediator automatically cancels the downstream item to prevent orphaned tasks."</p>
+                </div>
+            </div>
+
+            <div class="qa-box">
+                <div class="qa-header">Q6: What happens if an external service fails or times out?</div>
+                <div class="qa-body">
+                    <p class="quote">"Task::executeService() catches the failure from the adapter. Rather than throwing an unhandled exception or permanently killing the business process with a rejection, the engine calls target->escalate(). InProgressState transitions into EscalatedState, increments the escalation counter, and fires an ESCALATED event. The task remains safely inspectable, allowing an authorized supervisor to intervene or re-attempt."</p>
+                </div>
+            </div>
+
+            <div class="qa-box">
+                <div class="qa-header">Q7: How does Chain of Responsibility integrate with the Strategy pattern for task routing?</div>
+                <div class="qa-body">
+                    <p class="quote">"ApprovalRouting implements the RoutingStrategy interface. Internally, instead of a simple role lookup, it holds a pointer to the head of an ApprovalHandler chain. When canClaim() or route() is invoked, ApprovalRouting creates an ApprovalRequest and passes it down the chain. Each ConcreteApprovalHandler evaluates financial or authority thresholds (e.g. ThresholdRule) to determine whether it can handle the request or pass it to the next tier."</p>
+                </div>
+            </div>
+
+            <div class="qa-box">
+                <div class="qa-header">Q8: Why did you separate .definition from .scenario files?</div>
+                <div class="qa-body">
+                    <p class="quote">"Separation of Concerns. The .definition file represents the pure, reusable business process topology (WfMC process model). The .scenario file represents the organizational binding: human participant rosters, user credentials, and interactive UI prompt configurations. This allows the exact same process definition to be deployed across different branches or departments with completely different human rosters without touching the workflow definition."</p>
+                </div>
+            </div>
+
+            <div class="qa-box">
+                <div class="qa-header">Q9: How do you prevent memory leaks when cloning composite trees?</div>
+                <div class="qa-body">
+                    <p class="quote">"Every WorkItem subclass implements an explicit virtual destructor. SubProcess manages its child pointers via RAII and deletes all owned children upon destruction. In addition, WorkItemDecorator takes ownership of its wrapped component and deletes it in its destructor. When WorkflowInstance is deleted, its root SubProcess recursively frees the entire composite tree."</p>
+                </div>
+            </div>
+
+            <div class="qa-box">
+                <div class="qa-header">Q10: Why are WorkItemAction objects commands rather than simple methods on WorkflowEngine?</div>
+                <div class="qa-body">
+                    <p class="quote">"Encapsulating user operations into Command objects (ClaimAction, StartAction, CompleteAction, RejectAction, DelegateAction, CancelAction) decouples the invoker from the execution logic. It allows commands to be validated before execution, logged into an execution history log, decorated with snapshots for transactional Memento rollback, and executed across different client interfaces (TUI, REST API, or automated test runners)."</p>
+                </div>
+            </div>
+
+            <div class="qa-box">
+                <div class="qa-header">Q11: How does TIVIDY support SLA deadlines and time-based escalations?</div>
+                <div class="qa-body">
+                    <p class="quote">"Tasks can be assigned an SLA deadline in hours via the blueprint (<code>deadline | id | hours</code>). TividyWorkflowFacade exposes <code>advanceClock(hours)</code>, which triggers the engine to scan all running instances. If a task in Available or InProgress has exceeded its deadline, it is automatically escalated, incrementing its escalation level and notifying the monitoring observers."</p>
+                </div>
+            </div>
+
+            <div class="qa-box">
+                <div class="qa-header">Q12: How do you prove that your engine handles multiple industries generically?</div>
+                <div class="qa-body">
+                    <p class="quote">"Our repository contains 5 completely distinct industries: University Admissions (Education), Shipment Exceptions (Logistics), Hospital Admissions (Healthcare), Insurance Claims (Insurance), and Production Orders (Manufacturing). All 5 load, validate, route, execute, escalate, and terminate on the exact same compiled C++ engine binary without a single hardcoded `if-industry` branch."</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 11: TEAM ROLES -->
+        <section id="team-roles">
+            <h2 class="section-title">11. Team Contribution Roster (Team ADKMNPT)</h2>
+            <p>Team ADKMNPT consists of 7 contributors, each taking primary architectural ownership of specific GoF pattern clusters and system components:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Team Member</th>
+                        <th>Student #</th>
+                        <th>GitHub ID</th>
+                        <th>Primary Architectural Ownership &amp; Deliverables</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Patrick Simuyemba</strong></td>
+                        <td>u25632354</td>
+                        <td><code>patrickkaleo</code></td>
+                        <td>Builder pattern (Director, Builders, Definition Parser), 5 Industry definitions &amp; scenarios, Docker setup, CI/CD pipeline, Memory management.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Angela Ramaboea</strong></td>
+                        <td>u25445392</td>
+                        <td><code>AngelaHope</code></td>
+                        <td>State pattern (WorkItemState hierarchy, 8 discrete states), Adapter pattern (4 external service adapters), Interactive TUI rewrite, Roles &amp; Delegation engine.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Enock Nyamweya</strong></td>
+                        <td>u25619871</td>
+                        <td><code>edn</code></td>
+                        <td>Strategy pattern (RoleBased, DataRule, Approval routing), Observer pattern (EventDispatcher listeners), Meyers' Singleton, Command &amp; Facade integration.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Angelo Anthony</strong></td>
+                        <td>u25573552</td>
+                        <td><code>jensen-rgb</code></td>
+                        <td>Composite pattern (WorkItem, SubProcess, Task), Mediator pattern (DependencyMediator &amp; rules), Chain of Responsibility, Depth-First &amp; Approval Iterators.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Ntando Dlamini</strong></td>
+                        <td>u25591267</td>
+                        <td><code>Ntando / NMDSK31</code></td>
+                        <td>Memento pattern (WorkflowSnapshot, HistoryLog), UML Class, State, and Sequence diagrams synchronization.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Agreement Mokgwatsane</strong></td>
+                        <td>u25042239</td>
+                        <td><code>Tebogo Mokgwatsane</code></td>
+                        <td>Decorator pattern (WorkItemDecorator, PriorityDecorator, AuditDecorator), unit test suites, documentation &amp; verification.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Katlego Sentsho</strong></td>
+                        <td>u24876489</td>
+                        <td><code>kat2005-sen</code></td>
+                        <td>Facade pattern (TividyWorkflowFacade), Command pattern (WorkItemAction hierarchy &amp; execution), Presentation deck (ADKMNPT.pdf), submission packaging.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- SECTION 12: VERIFICATION & SUBMISSION ARTIFACTS -->
+        <section id="verification">
+            <h2 class="section-title">12. Project Verification &amp; Submission Structure</h2>
+            <p>
+                The repository is organized according to professional C++ software engineering standards and the COS 214 Practical 6 submission requirements:
+            </p>
+
+            <div class="card-grid">
+                <div class="card">
+                    <h4>Submission Structure</h4>
+                    <ul>
+                        <li><code>submission/code/include/</code> — Complete public C++ headers with full Doxygen comments.</li>
+                        <li><code>submission/code/src/</code> — Complete C++ source files.</li>
+                        <li><code>submission/code/tests/</code> — Doctest suites.</li>
+                        <li><code>submission/doc/</code> — Practical 6 final report (<code>TIVIDY_Practical6_Report.docx</code>), sequence diagrams, and lifecycle state diagrams.</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>Presentation &amp; Specification</h4>
+                    <ul>
+                        <li><code>docs/ADKMNPT.pdf</code> — Full 30-slide presentation deck.</li>
+                        <li><code>docs/TIVIDY_Generic_Workflow_Specification.docx</code> — Detailed system specification document.</li>
+                        <li><code>docs/tui/</code> — Complete set of full-color interactive TUI screenshots.</li>
+                        <li>Visual Paradigm diagrams: <code>class_diagram.vpp</code>, <code>state_diagram.vpp</code>, <code>activity_diagram_*.vpp</code>.</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>Build &amp; Test Automation</h4>
+                    <ul>
+                        <li><code>make</code> / <code>make run</code> — Compiles and launches the interactive TUI (<code>./tividy</code>).</li>
+                        <li><code>make test</code> — Runs the 172-test doctest suite (<code>./tividy_tests</code>).</li>
+                        <li><code>docker compose run --rm tividy</code> — Builds and runs the interactive TUI in Docker.</li>
+                        <li><code>docker compose run --rm tests</code> — Executes the automated test suite in an isolated Ubuntu container.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="callout green">
+                <div class="callout-title">✅ Test Suite Status: 100% Passing</div>
+                <code>[doctest] test cases: 172 | 172 passed | 0 failed | 0 skipped</code><br>
+                <code>[doctest] assertions: 1694 | 1694 passed | 0 failed</code><br>
+                All 172 test cases across Builder, Composite, Decorator, Adapter, Facade, State, Strategy, Observer, Mediator, Chain of Responsibility, Command, Memento, and Iterators pass without a single failure or memory leak!
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // Smooth scrolling and active navigation indicator
+        document.querySelectorAll('nav.sidebar a').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href');
+                const target = document.querySelector(targetId);
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth' });
+                    document.querySelectorAll('nav.sidebar a').forEach(a => a.classList.remove('active'));
+                    this.classList.add('active');
+                }
+            });
+        });
+
+        // Intersection Observer to highlight active sidebar section during scroll
+        window.addEventListener('DOMContentLoaded', () => {
+            const sections = document.querySelectorAll('section');
+            const navLinks = document.querySelectorAll('nav.sidebar a');
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const id = entry.target.getAttribute('id');
+                        navLinks.forEach(link => {
+                            if (link.getAttribute('href') === `#${id}`) {
+                                link.classList.add('active');
+                            } else {
+                                link.classList.remove('active');
+                            }
+                        });
+                    }
+                });
+            }, { rootMargin: '-20% 0px -70% 0px' });
+
+            sections.forEach(section => observer.observe(section));
+        });
+    </script>
+</body>
+</html>
