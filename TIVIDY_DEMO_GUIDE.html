@@ -19,6 +19,7 @@
             --accent-gold: #d29922;
             --accent-red: #f85149;
             --accent-teal: #39c5bb;
+            --accent-orange: #f0883e;
             --border-color: #30363d;
             --code-bg: #0d1117;
             --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -42,7 +43,7 @@
 
         /* Sidebar Navigation */
         nav.sidebar {
-            width: 320px;
+            width: 330px;
             background-color: var(--bg-secondary);
             border-right: 1px solid var(--border-color);
             position: fixed;
@@ -87,7 +88,7 @@
             color: var(--text-secondary);
             text-decoration: none;
             border-radius: 6px;
-            font-size: 0.88rem;
+            font-size: 0.86rem;
             transition: all 0.2s;
         }
 
@@ -116,12 +117,17 @@
             color: var(--accent-gold);
         }
 
+        nav.sidebar .badge.purple {
+            background-color: rgba(188, 140, 255, 0.2);
+            color: var(--accent-purple);
+        }
+
         /* Main Content Container */
         main.content {
-            margin-left: 320px;
+            margin-left: 330px;
             padding: 40px 60px;
-            max-width: 1250px;
-            width: calc(100% - 320px);
+            max-width: 1300px;
+            width: calc(100% - 330px);
         }
 
         header.hero {
@@ -147,7 +153,7 @@
             color: var(--text-secondary);
             font-size: 1.05rem;
             margin-bottom: 20px;
-            max-width: 900px;
+            max-width: 950px;
         }
 
         .meta-tags {
@@ -224,6 +230,7 @@
         .callout.red { border-left-color: var(--accent-red); }
         .callout.purple { border-left-color: var(--accent-purple); }
         .callout.teal { border-left-color: var(--accent-teal); }
+        .callout.orange { border-left-color: var(--accent-orange); }
 
         .callout-title {
             font-weight: 700;
@@ -238,6 +245,7 @@
         .callout.red .callout-title { color: var(--accent-red); }
         .callout.purple .callout-title { color: var(--accent-purple); }
         .callout.teal .callout-title { color: var(--accent-teal); }
+        .callout.orange .callout-title { color: var(--accent-orange); }
 
         /* Code Blocks */
         pre {
@@ -398,6 +406,7 @@
         .timeline-step.green::before { background-color: var(--accent-green); }
         .timeline-step.gold::before { background-color: var(--accent-gold); }
         .timeline-step.red::before { background-color: var(--accent-red); }
+        .timeline-step.purple::before { background-color: var(--accent-purple); }
 
         .timeline-step h4 {
             font-size: 1rem;
@@ -510,6 +519,87 @@
         .status-pill.assigned { background-color: rgba(57, 197, 187, 0.2); color: var(--accent-teal); }
         .status-pill.available { background-color: rgba(210, 153, 34, 0.2); color: var(--accent-gold); }
         .status-pill.cancelled { background-color: rgba(110, 118, 129, 0.2); color: var(--text-muted); }
+
+        /* Mindmap Visual Styling */
+        .mindmap-board {
+            background-color: #0b0f14;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 28px;
+            margin: 24px 0;
+            position: relative;
+            overflow-x: auto;
+        }
+
+        .mindmap-tier {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 24px;
+            position: relative;
+        }
+
+        .mindmap-tier-title {
+            text-align: center;
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .mindmap-node {
+            background-color: var(--bg-card);
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px 18px;
+            min-width: 220px;
+            max-width: 280px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            position: relative;
+            transition: all 0.2s;
+        }
+
+        .mindmap-node:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+        }
+
+        .mindmap-node.creational { border-color: var(--accent-purple); }
+        .mindmap-node.structural { border-color: var(--accent-blue); }
+        .mindmap-node.behavioural { border-color: var(--accent-gold); }
+        .mindmap-node.input { border-color: var(--accent-green); }
+        .mindmap-node.governance { border-color: var(--accent-orange); }
+
+        .mindmap-node-header {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .mindmap-node.creational .mindmap-node-header { color: var(--accent-purple); }
+        .mindmap-node.structural .mindmap-node-header { color: var(--accent-blue); }
+        .mindmap-node.behavioural .mindmap-node-header { color: var(--accent-gold); }
+        .mindmap-node.input .mindmap-node-header { color: var(--accent-green); }
+        .mindmap-node.governance .mindmap-node-header { color: var(--accent-orange); }
+
+        .mindmap-node-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .connector-down {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 1.4rem;
+            margin: -12px 0 12px 0;
+            user-select: none;
+        }
     </style>
 </head>
 <body>
@@ -517,20 +607,24 @@
     <!-- SIDEBAR NAVIGATION -->
     <nav class="sidebar">
         <h2>⚡ TIVIDY Navigator</h2>
-        <p class="subtitle">COS 214 Project Defense Guide (Team ADKMNPT)</p>
+        <p class="subtitle">COS 214 Practical 6 Complete Defense Guide</p>
         <ul>
             <li><a href="#overview">1. Executive Overview</a></li>
-            <li><a href="#blueprint-architecture">2. The Blueprint Files (.definition & .scenario)</a></li>
-            <li><a href="#generic-vs-specific">3. What Makes It Generic? <span class="badge green">5 Industries</span></a></li>
-            <li><a href="#patterns">4. The 14 GoF Design Patterns <span class="badge">14</span></a></li>
-            <li><a href="#state-lifecycle">5. WorkItem State Machine <span class="badge">8 States</span></a></li>
-            <li><a href="#scenarios">6. Industry Contexts &amp; Scenarios</a></li>
-            <li><a href="#logistics-fail" style="color: var(--accent-gold); font-weight: bold;">★ 7. Logistics Failure & Recovery <span class="badge gold">Demo</span></a></li>
-            <li><a href="#tui-runbook">8. Interactive TUI Controls & Shortcuts</a></li>
-            <li><a href="#presentation-runbook">9. 30-Min Demo & Presentation Runbook</a></li>
-            <li><a href="#tough-questions">10. Tough Marker Q&A <span class="badge">Top 12</span></a></li>
-            <li><a href="#team-roles">11. Team Contribution Roster <span class="badge">ADKMNPT</span></a></li>
-            <li><a href="#verification">12. Verification & Submission Structure</a></li>
+            <li><a href="#mindmap" style="color: var(--accent-purple); font-weight: bold;">★ 2. System Mindmap &amp; Object Graph <span class="badge purple">Visual</span></a></li>
+            <li><a href="#blueprint-architecture">3. The Blueprint Files (.definition &amp; .context)</a></li>
+            <li><a href="#tui-architecture" style="color: var(--accent-teal); font-weight: bold;">4. Generic TUI Architecture Deep Dive <span class="badge">Engine</span></a></li>
+            <li><a href="#new-situation-guide" style="color: var(--accent-green); font-weight: bold;">5. How to Add a New Generic Situation <span class="badge green">Guide</span></a></li>
+            <li><a href="#generic-vs-specific">6. What Makes It Generic? (5 Workflows)</a></li>
+            <li><a href="#patterns">7. The 14 GoF Design Patterns <span class="badge">14</span></a></li>
+            <li><a href="#state-lifecycle">8. WorkItem State Machine <span class="badge">8 States</span></a></li>
+            <li><a href="#scenarios">9. Ready-to-Run Production Contexts</a></li>
+            <li><a href="#logistics-fail" style="color: var(--accent-gold); font-weight: bold;">★ 10. Logistics Failure &amp; Recovery <span class="badge gold">Demo</span></a></li>
+            <li><a href="#tui-runbook">11. Interactive TUI Controls &amp; Shortcuts</a></li>
+            <li><a href="#presentation-runbook">12. 30-Min Demo &amp; Presentation Runbook</a></li>
+            <li><a href="#marks-guide" style="color: var(--accent-orange); font-weight: bold;">13. Top Marks Scoring Strategy <span class="badge gold">Rubric</span></a></li>
+            <li><a href="#tough-questions">14. Tough Marker Q&amp;A <span class="badge">Top 15</span></a></li>
+            <li><a href="#team-roles">15. Team Contribution Roster <span class="badge">ADKMNPT</span></a></li>
+            <li><a href="#verification">16. Verification &amp; Submission Structure</a></li>
         </ul>
     </nav>
 
@@ -539,14 +633,14 @@
 
         <header class="hero">
             <h1>TIVIDY: <span class="highlight">Generic Workflow Engine</span></h1>
-            <p>A comprehensive architectural, conceptual, and live demonstration guide for the COS 214 Practical 6 project defense by <strong>Team ADKMNPT</strong>.</p>
+            <p>An exhaustive architectural, conceptual, and live demonstration guide for the COS 214 Practical 6 project defense by <strong>Team ADKMNPT</strong>.</p>
             <div class="meta-tags">
-                <span class="meta-tag highlight">Language: <strong>C++11</strong></span>
+                <span class="meta-tag highlight">Language: <strong>C++11 Standard</strong></span>
                 <span class="meta-tag success">Unit Tests: <strong>172 Passing / 1694 Assertions (0 Failures)</strong></span>
                 <span class="meta-tag">GoF Patterns: <strong>14 Distinct Patterns</strong></span>
-                <span class="meta-tag">Target Industries: <strong>5 Ready to Run</strong></span>
-                <span class="meta-tag">Presentation Deck: <strong>ADKMNPT.pdf</strong></span>
-                <span class="meta-tag">Build & Run: <strong>Makefile + Docker</strong></span>
+                <span class="meta-tag">Target Industries: <strong>5 Workflows + Distance Learning</strong></span>
+                <span class="meta-tag">Presentation Deck: <strong>ADKMNPT.pdf (30 Slides)</strong></span>
+                <span class="meta-tag">Build &amp; Run: <strong>Makefile + Docker Container</strong></span>
             </div>
         </header>
 
@@ -554,13 +648,13 @@
         <section id="overview">
             <h2 class="section-title">1. Executive Architectural Overview</h2>
             <p>
-                <strong>TIVIDY</strong> is a generic Workflow Management System (WfMS) adhering to the standard Workflow Management Coalition (WfMC) architectural reference model.
-                Its primary responsibility is to define, validate, execute, inspect, and recover automated business processes composed of human tasks, automated services, decision gates, and multi-tier approval hierarchies.
+                <strong>TIVIDY</strong> is a generic Workflow Management System (WfMS) adhering strictly to the standard Workflow Management Coalition (WfMC) architectural reference model.
+                Its core purpose is to define, validate, instantiate, execute, inspect, and recover automated business processes composed of human tasks, automated external services, dynamic decision branches, and multi-tier organizational approval hierarchies.
             </p>
 
             <div class="callout gold">
-                <div class="callout-title">🌟 The Core Axiom of TIVIDY</div>
-                Processes are <strong>DATA</strong>, not <strong>CODE</strong>. There are no classes called <code>UniversityAdmissionTask</code>, <code>HospitalSurgeryTask</code>, or <code>ShipmentRerouteTask</code>. All business logic, control flows, task hierarchies, and routing rules are declared externally in declarative text files. The exact same compiled C++ executable interprets these files using pure polymorphic GoF patterns without requiring recompilation.
+                <div class="callout-title">🌟 The Foundational Axiom of TIVIDY</div>
+                Processes are <strong>DATA</strong>, not <strong>CODE</strong>. There are no hardcoded classes called <code>UniversityAdmissionTask</code>, <code>HospitalSurgeryTask</code>, <code>ShipmentRerouteTask</code>, or <code>InsuranceClaimTask</code>. All business logic, control flows, task hierarchies, and routing rules are declared externally in declarative text files. The exact same compiled C++ executable interprets these files using pure polymorphic GoF patterns without requiring recompilation or relinking.
             </div>
 
             <p>The system lifecycle follows five distinct operational phases:</p>
@@ -588,15 +682,150 @@
             </div>
         </section>
 
-        <!-- SECTION 2: THE BLUEPRINT ARCHITECTURE -->
+        <!-- SECTION 2: SYSTEM MINDMAP & OBJECT GRAPH -->
+        <section id="mindmap">
+            <h2 class="section-title" style="color: var(--accent-purple);">★ 2. System Mindmap &amp; Object Graph: How Everything Connects</h2>
+            <p>
+                This visual mindmap illustrates the complete object relationship model across both static definitions and dynamic runtime instances in TIVIDY.
+                Notice how every design pattern fulfills a specific decoupling role in the architecture:
+            </p>
+
+            <div class="mindmap-board">
+                <!-- TIER 1: DECLARATIVE BLUEPRINTS -->
+                <div class="mindmap-tier-title">Tier 1: Declarative Input Files (Data Layer)</div>
+                <div class="mindmap-tier">
+                    <div class="mindmap-node input">
+                        <div class="mindmap-node-header">definitions/*.definition</div>
+                        <div class="mindmap-node-desc">Structural process tree, dependency rules, routing policies, service tags, and decorator annotations.</div>
+                    </div>
+                    <div class="mindmap-node input">
+                        <div class="mindmap-node-header">context/*.context</div>
+                        <div class="mindmap-node-desc">Human participant rosters, starter roles, input form fields, completion prompts, and allowed outcomes.</div>
+                    </div>
+                </div>
+
+                <div class="connector-down">&darr; &darr; parsed by Builder &amp; Loaded by TUI &darr; &darr;</div>
+
+                <!-- TIER 2: FACADE & ENGINE SUBSYSTEM -->
+                <div class="mindmap-tier-title">Tier 2: Unified Access &amp; Subsystem Orchestration</div>
+                <div class="mindmap-tier">
+                    <div class="mindmap-node structural">
+                        <div class="mindmap-node-header">TividyWorkflowFacade <span class="role-badge">Facade</span></div>
+                        <div class="mindmap-node-desc">Single entry point for client TUI and tests. Coordinates builders, directories, engine commands, and listeners.</div>
+                    </div>
+                    <div class="mindmap-node creational">
+                        <div class="mindmap-node-header">WorkflowDirector <span class="role-badge">Builder</span></div>
+                        <div class="mindmap-node-desc">Drives <code>FileWorkflowDefinitionBuilder</code> to assemble immutable <code>WorkflowDefinition</code> blueprints.</div>
+                    </div>
+                    <div class="mindmap-node structural">
+                        <div class="mindmap-node-header">ServiceRegistry <span class="role-badge">Adapter Target</span></div>
+                        <div class="mindmap-node-desc">Registry holding concrete external service adapters (ID, Bank, Courier, Carrier).</div>
+                    </div>
+                    <div class="mindmap-node structural">
+                        <div class="mindmap-node-header">ParticipantDirectory</div>
+                        <div class="mindmap-node-desc">Stores isolated participant rosters per context. Maps users to organizational roles.</div>
+                    </div>
+                </div>
+
+                <div class="connector-down">&darr; creates running instances via Prototype clone() &darr;</div>
+
+                <!-- TIER 3: WORKFLOW INSTANCE CORE -->
+                <div class="mindmap-tier-title">Tier 3: Isolated Runtime Instance Environment</div>
+                <div class="mindmap-tier">
+                    <div class="mindmap-node creational">
+                        <div class="mindmap-node-header">WorkflowDefinition <span class="role-badge">Prototype</span></div>
+                        <div class="mindmap-node-desc">Immutable shared blueprint. Holds the master Composite tree. Deep-clones instances on demand.</div>
+                    </div>
+                    <div class="mindmap-node behavioural">
+                        <div class="mindmap-node-header">WorkflowInstance</div>
+                        <div class="mindmap-node-desc">Isolated runtime context. Owns its own <code>InstanceData</code>, root <code>SubProcess</code>, and <code>DependencyMediator</code>.</div>
+                    </div>
+                    <div class="mindmap-node behavioural">
+                        <div class="mindmap-node-header">DependencyMediator <span class="role-badge">Mediator</span></div>
+                        <div class="mindmap-node-desc">Coordinates work items. Evaluates <code>DependencyRule</code>s on completion/rejection. Prunes dead branches.</div>
+                    </div>
+                    <div class="mindmap-node behavioural">
+                        <div class="mindmap-node-header">InstanceData</div>
+                        <div class="mindmap-node-desc">Dynamic key-value form store. Carries user inputs and external service responses across tasks.</div>
+                    </div>
+                </div>
+
+                <div class="connector-down">&darr; manages recursive composite structure &darr;</div>
+
+                <!-- TIER 4: COMPOSITE WORKITEM TREE & DECORATORS -->
+                <div class="mindmap-tier-title">Tier 4: WorkItem Composite Tree &amp; Decorators</div>
+                <div class="mindmap-tier">
+                    <div class="mindmap-node structural">
+                        <div class="mindmap-node-header">SubProcess <span class="role-badge">Composite</span></div>
+                        <div class="mindmap-node-desc">Composite node. Manages child collections (Tasks or nested SubProcesses). Propagates lifecycle actions.</div>
+                    </div>
+                    <div class="mindmap-node structural">
+                        <div class="mindmap-node-header">WorkItemDecorator <span class="role-badge">Decorator</span></div>
+                        <div class="mindmap-node-desc">Wraps a WorkItem transparently: <code>PriorityDecorator</code> (urgency weights) &amp; <code>AuditDecorator</code> (logging).</div>
+                    </div>
+                    <div class="mindmap-node structural">
+                        <div class="mindmap-node-header">Task <span class="role-badge">Leaf</span></div>
+                        <div class="mindmap-node-desc">Atomic work item. Delegates lifecycle to State, assignment to Strategy, and execution to Service Adapters.</div>
+                    </div>
+                </div>
+
+                <div class="connector-down">&darr; tasks delegate behaviors polymorphically &darr;</div>
+
+                <!-- TIER 5: PLUGGABLE TASK BEHAVIORS -->
+                <div class="mindmap-tier-title">Tier 5: Pluggable Task Policies (State, Strategy, CoR, Adapter)</div>
+                <div class="mindmap-tier">
+                    <div class="mindmap-node behavioural">
+                        <div class="mindmap-node-header">WorkItemState <span class="role-badge">State (8 States)</span></div>
+                        <div class="mindmap-node-desc">Strict state machine: Created, Available, Assigned, InProgress, Completed, Rejected, Escalated, Cancelled.</div>
+                    </div>
+                    <div class="mindmap-node behavioural">
+                        <div class="mindmap-node-header">RoutingStrategy <span class="role-badge">Strategy</span></div>
+                        <div class="mindmap-node-desc">Algorithms: <code>RoleBasedRouting</code> (roles), <code>DataRuleRouting</code> (form data), <code>ApprovalRouting</code> (CoR).</div>
+                    </div>
+                    <div class="mindmap-node behavioural">
+                        <div class="mindmap-node-header">ApprovalHandler <span class="role-badge">Chain of Resp.</span></div>
+                        <div class="mindmap-node-desc">Tiered authority chain. Evaluates <code>ApprovalRule</code> thresholds (e.g. &le;50k, &le;150k, committee).</div>
+                    </div>
+                    <div class="mindmap-node structural">
+                        <div class="mindmap-node-header">ExternalService <span class="role-badge">Adapter</span></div>
+                        <div class="mindmap-node-desc">Translates legacy third-party APIs into standard <code>ServiceRequest / ServiceResult</code> calls.</div>
+                    </div>
+                </div>
+
+                <div class="connector-down">&darr; governance, recovery &amp; telemetry &darr;</div>
+
+                <!-- TIER 6: GOVERNANCE, TELEMETRY & TRAVERSAL -->
+                <div class="mindmap-tier-title">Tier 6: Commands, Telemetry, Undo &amp; Iteration</div>
+                <div class="mindmap-tier">
+                    <div class="mindmap-node governance">
+                        <div class="mindmap-node-header">WorkItemAction <span class="role-badge">Command</span></div>
+                        <div class="mindmap-node-desc">Encapsulates actions: Claim, Start, Complete, Reject, Delegate, Cancel. Stored in execution history.</div>
+                    </div>
+                    <div class="mindmap-node governance">
+                        <div class="mindmap-node-header">WorkflowSnapshot <span class="role-badge">Memento</span></div>
+                        <div class="mindmap-node-desc">Captures full internal state before each action. Enables transactional rollback via <code>undoLast()</code>.</div>
+                    </div>
+                    <div class="mindmap-node creational">
+                        <div class="mindmap-node-header">EventDispatcher <span class="role-badge">Singleton / Subject</span></div>
+                        <div class="mindmap-node-desc">C++11 Meyers' Singleton. One-way broadcast to <code>AuditLogger</code>, <code>NotificationService</code>, <code>MonitoringService</code>.</div>
+                    </div>
+                    <div class="mindmap-node behavioural">
+                        <div class="mindmap-node-header">DepthFirstWorkItemIterator <span class="role-badge">Iterator</span></div>
+                        <div class="mindmap-node-desc">Pre-order traversal of composite tree without exposing internal child collection representations.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: THE BLUEPRINT ARCHITECTURE -->
         <section id="blueprint-architecture">
-            <h2 class="section-title">2. The Blueprint Files Explained (.definition &amp; .context)</h2>
+            <h2 class="section-title">3. The Blueprint Files Explained (.definition &amp; .context)</h2>
             <p>
                 In TIVIDY, business workflows are decoupled into two distinct declarative file types stored in <code>definitions/</code> and <code>context/</code>:
             </p>
             <ul>
                 <li><strong><code>.definition</code> files</strong>: Structural workflow topology (processes, tasks, dependencies, routing, service bindings, decorators, deadlines).</li>
-                <li><strong><code>.context</code> files</strong>: Contextual scenario parameters (industry name, allowed starter role, human participants with roles, and UI field prompts).</li>
+                <li><strong><code>.context</code> files</strong>: Organizational binding parameters (industry name, allowed starter role, human participants with roles, and UI field prompts).</li>
             </ul>
 
             <h3 class="subsection-title">A. The .definition File Syntax</h3>
@@ -736,9 +965,122 @@
 <span class="token-keyword">TASK_FIELD</span>|<span class="token-id">CHECK_ID</span>|<span class="token-param">surname</span>|<span class="token-string">Patient surname</span></code></pre>
         </section>
 
-        <!-- SECTION 3: GENERIC VS SPECIFIC -->
+        <!-- SECTION 4: GENERIC TUI ARCHITECTURE DEEP DIVE -->
+        <section id="tui-architecture">
+            <h2 class="section-title" style="color: var(--accent-teal);">4. Generic TUI Architecture Deep Dive</h2>
+            <p>
+                In earlier prototypes, user interfaces in academic projects often rely on hardcoded switch statements tailored to specific scenarios.
+                In TIVIDY, <strong>the interactive Terminal User Interface (<code>src/main.cpp</code>) was completely re-engineered into a 100% generic, metadata-driven presentation layer</strong> that operates exclusively through <code>TividyWorkflowFacade</code>:
+            </p>
+
+            <div class="card-grid">
+                <div class="card">
+                    <h4>Dynamic Discovery &amp; Binding</h4>
+                    <p>At startup, <code>Tui::initialise()</code> scans the physical folders <code>definitions/</code> and <code>context/</code> via POSIX directory traversal. It parses every <code>.definition</code> via <code>facade.registerDefinitionFromFile()</code>, loads every <code>.context</code>, matches them by workflow ID, and links descriptions via <code>facade.definitionDescription()</code>. The C++ code knows zero workflow names!</p>
+                </div>
+                <div class="card">
+                    <h4>Isolated Participant Rosters</h4>
+                    <p>Each context automatically creates its own participant roster in <code>ParticipantDirectory</code> using the file stem (e.g. <code>education</code>, <code>logistics</code>, <code>healthcare</code>). Participant IDs and role names are completely partitioned, allowing identical user IDs or roles across completely different industries without namespace collisions.</p>
+                </div>
+                <div class="card">
+                    <h4>Dynamic Form &amp; Task Prompts</h4>
+                    <p>Instance initiation prompts are dynamically generated from <code>FIELD</code> entries in the context file. When completing tasks, <code>TASK_FIELD</code> entries dynamically generate prompt fields. Decision choices are rendered from <code>OUTCOMES</code> lines. If no outcomes are specified, it falls back to a free-form outcome prompt.</p>
+                </div>
+                <div class="card">
+                    <h4>The "Refusal Inspection" Principle</h4>
+                    <p>Unlike fragile UIs that hide disabled buttons, TIVIDY deliberately keeps <strong>all six actions selectable</strong> (Claim, Start, Complete, Reject, Delegate, Cancel). When an invalid action is chosen, the engine's <code>WorkItemState</code> or <code>RoutingStrategy</code> rejects it, and the TUI prints the exact invariant explanation (e.g., <em>"Refused by the engine: task is in AvailableState, cannot complete"</em>). This directly proves to markers that business invariants are strictly enforced by the engine core, not masked by the UI!</p>
+                </div>
+            </div>
+
+            <div class="callout teal">
+                <div class="callout-title">🖥️ TUI Navigation Tree Visualization</div>
+                The TUI recursively traverses the composite tree using <code>collectRows()</code> to draw standard branch box-drawing characters:
+                <pre><code>#   Work item                    State          Assignee        Outcome
+1   Hospital Admission           ▶ InProgress   -               
+2   ├─ Patient Intake            ✓ Completed    -               completed
+3   │  ├─ Register Patient       ✓ Completed    Amahle Dlamini  done
+4   │  └─ Verify Patient Identity✓ Completed    Amahle Dlamini  verified
+5   ├─ Triage                    ▶ InProgress   -               
+6   │  ├─ Assess Acuity ★2       ✓ Completed    Lindiwe Khumalo done
+7   │  └─ Assign Clinician ★2  ▸ ● Assigned     Dr Carla Venter 
+8   └─ Disposition               ○ Created      -               </code></pre>
+                Notice: <kbd class="kbd-key">▸</kbd> highlights actionable items for the active actor; <kbd class="kbd-key">★</kbd> shows priority decorator weights; and composite stages are highlighted in purple while leaf tasks are displayed in plain text.
+            </div>
+        </section>
+
+        <!-- SECTION 5: HOW TO ADD A NEW GENERIC SITUATION -->
+        <section id="new-situation-guide">
+            <h2 class="section-title" style="color: var(--accent-green);">5. Tutorial: How to Add a New Generic Situation (Step-by-Step)</h2>
+            <p>
+                Examiners frequently ask: <em>&ldquo;How would you add a brand new industry like Retail Returns or IT Incident Management? Show me what code changes are required.&rdquo;</em>
+                Your answer: <strong>&ldquo;Zero C++ engine code changes. We just create two declarative text files.&rdquo;</strong>
+            </p>
+
+            <div class="timeline">
+                <div class="timeline-step green">
+                    <h4>Step 1: Create the Topology Blueprint in <code>definitions/retail_returns.definition</code></h4>
+                    <p>Define the stages, atomic tasks, control flow rules, routing, and decorators:</p>
+                    <pre><code><span class="token-keyword">DEFINITION</span>
+<span class="token-id">RETAIL_RETURN</span>|<span class="token-string">Retail Merchandise Return and Refund</span>|<span class="token-param">1</span>
+
+<span class="token-keyword">WORKITEMS</span>
+<span class="token-keyword">process</span>|<span class="token-id">RETURN_PROCESS</span>|<span class="token-param">-</span>|<span class="token-string">Merchandise Return Pipeline</span>
+<span class="token-keyword">process</span>|<span class="token-id">RECEIVING</span>|<span class="token-id">RETURN_PROCESS</span>|<span class="token-string">Customer Receiving</span>
+<span class="token-keyword">task</span>|<span class="token-id">SCAN_RECEIPT</span>|<span class="token-id">RECEIVING</span>|<span class="token-string">Scan Purchase Receipt</span>
+<span class="token-keyword">task</span>|<span class="token-id">INSPECT_ITEM</span>|<span class="token-id">RECEIVING</span>|<span class="token-string">Physical Item Inspection</span>
+<span class="token-keyword">process</span>|<span class="token-id">SETTLEMENT</span>|<span class="token-id">RETURN_PROCESS</span>|<span class="token-string">Return Settlement</span>
+<span class="token-keyword">task</span>|<span class="token-id">ISSUE_REFUND</span>|<span class="token-id">SETTLEMENT</span>|<span class="token-string">Issue Cash or Store Credit</span>
+<span class="token-keyword">task</span>|<span class="token-id">RESTOCK_ITEM</span>|<span class="token-id">SETTLEMENT</span>|<span class="token-string">Return Item to Inventory</span>
+
+<span class="token-keyword">DEPENDENCIES</span>
+<span class="token-id">SCAN_RECEIPT</span>|<span class="token-id">INSPECT_ITEM</span>|<span class="token-param">*</span>
+<span class="token-id">RECEIVING</span>|<span class="token-id">SETTLEMENT</span>|<span class="token-param">*</span>
+<span class="token-id">INSPECT_ITEM</span>|<span class="token-id">ISSUE_REFUND</span>|<span class="token-param">pass</span>
+<span class="token-id">ISSUE_REFUND</span>|<span class="token-id">RESTOCK_ITEM</span>|<span class="token-param">*</span>
+
+<span class="token-keyword">ROUTING</span>
+<span class="token-id">SCAN_RECEIPT</span>|<span class="token-keyword">role</span>|<span class="token-param">ServiceDeskClerk</span>
+<span class="token-id">INSPECT_ITEM</span>|<span class="token-keyword">role</span>|<span class="token-param">InventorySpecialist</span>
+<span class="token-id">ISSUE_REFUND</span>|<span class="token-keyword">data</span>|<span class="token-param">returnType</span>|<span class="token-param">StoreManager</span>|<span class="token-string">cash</span>|<span class="token-param">StoreManager</span>|<span class="token-string">credit</span>|<span class="token-param">ServiceDeskClerk</span>
+<span class="token-id">RESTOCK_ITEM</span>|<span class="token-keyword">role</span>|<span class="token-param">StockHandler</span>
+
+<span class="token-keyword">EXTRAS</span>
+<span class="token-keyword">priority</span>|<span class="token-id">INSPECT_ITEM</span>|<span class="token-param">1</span>
+<span class="token-keyword">deadline</span>|<span class="token-id">ISSUE_REFUND</span>|<span class="token-param">2</span></code></pre>
+                </div>
+
+                <div class="timeline-step purple">
+                    <h4>Step 2: Create the Organizational Context in <code>context/retail.context</code></h4>
+                    <p>Define the human participants, roles, startup questions, and completion outcome buttons:</p>
+                    <pre><code><span class="token-keyword">INDUSTRY</span>|<span class="token-string">Retail</span>
+<span class="token-keyword">WORKFLOW</span>|<span class="token-id">RETAIL_RETURN</span>
+<span class="token-keyword">STARTED_BY</span>|<span class="token-param">ServiceDeskClerk</span>
+<span class="token-keyword">EXPECTED</span>|<span class="token-string">A refunded customer and a restocked inventory item. Damaged goods reject inspection and terminate the return.</span>
+<span class="token-keyword">PARTICIPANT</span>|<span class="token-id">ret-clerk</span>|<span class="token-string">Alice Green</span>|<span class="token-param">ServiceDeskClerk</span>
+<span class="token-keyword">PARTICIPANT</span>|<span class="token-id">ret-specialist</span>|<span class="token-string">Bob Miller</span>|<span class="token-param">InventorySpecialist</span>
+<span class="token-keyword">PARTICIPANT</span>|<span class="token-id">ret-manager</span>|<span class="token-string">Carol Danvers</span>|<span class="token-param">StoreManager</span>
+<span class="token-keyword">PARTICIPANT</span>|<span class="token-id">ret-stock</span>|<span class="token-string">Dave Batista</span>|<span class="token-param">StockHandler</span>
+<span class="token-keyword">OUTCOMES</span>|<span class="token-id">INSPECT_ITEM</span>|<span class="token-string">pass,damaged</span>
+<span class="token-keyword">FIELD</span>|<span class="token-param">receiptNumber</span>|<span class="token-string">Original receipt / order number</span>
+<span class="token-keyword">FIELD</span>|<span class="token-param">returnType</span>|<span class="token-string">Refund method (cash or credit)</span>
+<span class="token-keyword">TASK_FIELD</span>|<span class="token-id">ISSUE_REFUND</span>|<span class="token-param">refundAmount</span>|<span class="token-string">Amount to be refunded in Rands</span></code></pre>
+                </div>
+
+                <div class="timeline-step gold">
+                    <h4>Step 3 (Optional): Register an External Service Adapter (If Connecting to 3rd-Party APIs)</h4>
+                    <p>If <code>SCAN_RECEIPT</code> connects to an external ERP database, create an <code>ERPAdapter</code> implementing <code>ExternalService</code> and register it in <code>Tui::initialise()</code> with <code>facade.addService(new ERPAdapter())</code>. If the workflow relies solely on human tasks and rules, <strong>no C++ code is needed at all</strong>.</p>
+                </div>
+
+                <div class="timeline-step">
+                    <h4>Step 4: Launch <code>./tividy</code></h4>
+                    <p>The generic TUI immediately detects <code>retail_returns.definition</code> and <code>retail.context</code>, adds <strong>Retail</strong> as Option 6 on the entry menu, binds the participants to their roles, and executes the complete workflow flawlessly!</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 6: GENERIC VS SPECIFIC -->
         <section id="generic-vs-specific">
-            <h2 class="section-title">3. What Makes Code "Generic" vs. "Non-Generic"?</h2>
+            <h2 class="section-title">6. What Makes Code "Generic" vs. "Non-Generic"?</h2>
             <p>
                 In the COS 214 project defense, examiners will repeatedly test whether your engine is genuinely generic or merely a facade over hardcoded domain logic. Here is the rigorous architectural evidence:
             </p>
@@ -761,7 +1103,7 @@
                         <li>All control flow is governed by generic <code>DependencyRule</code> tuples evaluated by <code>DependencyMediator</code>.</li>
                         <li>Routing strategies operate purely on generic string roles and dynamic <code>InstanceData</code> key-value mappings.</li>
                         <li><strong>5 Diverse Industries</strong> run on the exact same compiled binary (<code>./tividy</code>) without changing one line of C++ code!</li>
-                        <li>New workflows are added by simply dropping a <code>.definition</code> and a <code>.scenario</code> file into the directories.</li>
+                        <li>New workflows are added by simply dropping a <code>.definition</code> and a <code>.context</code> file into the directories.</li>
                     </ul>
                 </div>
             </div>
@@ -776,9 +1118,9 @@
             </div>
         </section>
 
-        <!-- SECTION 4: THE 14 GOF DESIGN PATTERNS -->
+        <!-- SECTION 7: THE 14 GOF DESIGN PATTERNS -->
         <section id="patterns">
-            <h2 class="section-title">4. The 14 GoF Design Patterns in TIVIDY</h2>
+            <h2 class="section-title">7. The 14 GoF Design Patterns in TIVIDY</h2>
             <p>The project specification requires a minimum of 10 patterns (at least 2 creational, 2 structural, and 2 behavioural). TIVIDY implements <strong>14 GoF patterns</strong> with clear architectural justification:</p>
 
             <details open>
@@ -895,9 +1237,9 @@
             </details>
         </section>
 
-        <!-- SECTION 5: STATE LIFECYCLE -->
+        <!-- SECTION 8: STATE LIFECYCLE -->
         <section id="state-lifecycle">
-            <h2 class="section-title">5. WorkItem State Machine &amp; Lifecycle</h2>
+            <h2 class="section-title">8. WorkItem State Machine &amp; Invariants</h2>
             <p>Every <code>WorkItem</code> delegates its lifecycle to an instance of <code>WorkItemState</code>. Transitions are strictly enforced:</p>
 
             <table>
@@ -971,9 +1313,9 @@
             </table>
         </section>
 
-        <!-- SECTION 6: THE 5 INDUSTRY SCENARIOS -->
+        <!-- SECTION 9: PRODUCTION CONTEXTS -->
         <section id="scenarios">
-            <h2 class="section-title">6. Industry Contexts &amp; Scenarios (5 Workflows + Distance Learning)</h2>
+            <h2 class="section-title">9. Ready-to-Run Production Contexts (5 Workflows + Distance Learning)</h2>
             <p>
                 TIVIDY comes pre-configured with <strong>5 diverse industry blueprints and organizational context files</strong> in <code>definitions/</code> and <code>context/</code>. Every scenario runs on the exact same engine classes:
             </p>
@@ -1047,9 +1389,9 @@
             </div>
         </section>
 
-        <!-- SECTION 7: LOGISTICS FAIL DEEP DIVE -->
+        <!-- SECTION 10: LOGISTICS FAIL DEEP DIVE -->
         <section id="logistics-fail">
-            <h2 class="section-title" style="color: var(--accent-gold);">★ 7. Masterclass: Logistics Failure &amp; Exception Handling (Live Demo Segment)</h2>
+            <h2 class="section-title" style="color: var(--accent-gold);">★ 10. Masterclass: Logistics Failure &amp; Exception Handling (Live Demo Segment)</h2>
             <p>
                 This section is designed specifically for <strong>your live presentation segment</strong>. In real-world enterprise workflows, failure handling separates toy demonstrations from production-grade engineering. 
                 In TIVIDY, when an external API fails, a parcel is destroyed, or a carrier has no capacity, the engine does not crash or corrupt its state—it executes polymorphic recovery, cascading branch aborts, and automatic task escalations.
@@ -1078,13 +1420,13 @@
             <div class="timeline">
                 <div class="timeline-step gold">
                     <h4>Step 1: Start Instance with Bad Waybill</h4>
-                    <p>From Main Menu: Choose <code>4</code> (<em>Logistics — Shipment Exception</em>).</p>
-                    <p>Select <code>Bongani Dube</code> (WarehouseClerk) &rarr; Choose <code>1</code> (<em>Start a new instance</em>).</p>
+                    <p>From Main Menu: Choose <code>Logistics — Shipment Exception</code>.</p>
+                    <p>Select <code>Bongani Dube</code> (WarehouseClerk) &rarr; Choose <code>2</code> (<em>Start a workflow instance</em>).</p>
                     <p>At the <code>waybill</code> prompt, type <code>WB9999</code>.</p>
                 </div>
                 <div class="timeline-step">
                     <h4>Step 2: Log Exception (Normal Advance)</h4>
-                    <p>Choose <code>Log Exception</code> &rarr; Choose <code>2</code> (<em>Start work</em>) &rarr; Re-open item &rarr; Choose <code>3</code> (<em>Complete</em>).</p>
+                    <p>Open <code>Log Exception</code> &rarr; Choose <code>2</code> (<em>Start work</em>) &rarr; Re-open item &rarr; Choose <code>3</code> (<em>Complete</em>).</p>
                     <p><code>Log Exception</code> finishes as <code>Completed</code>, opening <code>Classify Severity</code> for <strong>Kagiso Molefe</strong>.</p>
                 </div>
                 <div class="timeline-step red">
@@ -1117,7 +1459,7 @@ ESCALATED   Classify Severity   level 1</code></pre>
             <div class="timeline">
                 <div class="timeline-step">
                     <h4>Step 1: Start Fresh Logistics Instance</h4>
-                    <p>From Main Menu: Choose <code>4</code> &rarr; <code>1</code> &rarr; Accept default waybill (<code>WB1002</code>).</p>
+                    <p>Start new Logistics instance &rarr; Accept default waybill (<code>WB1002</code>).</p>
                 </div>
                 <div class="timeline-step red">
                     <h4>Step 2: Reject Log Exception</h4>
@@ -1177,9 +1519,9 @@ ESCALATED   Classify Severity   level 1</code></pre>
             </table>
         </section>
 
-        <!-- SECTION 8: TUI CONTROLS & SHORTCUTS -->
+        <!-- SECTION 11: TUI CONTROLS & SHORTCUTS -->
         <section id="tui-runbook">
-            <h2 class="section-title">8. Interactive TUI Controls &amp; Shortcuts</h2>
+            <h2 class="section-title">11. Interactive TUI Controls &amp; Shortcuts</h2>
             <p>
                 The TIVIDY Terminal User Interface (TUI) is an interactive, full-color terminal experience built directly on top of <code>TividyWorkflowFacade</code>:
             </p>
@@ -1219,8 +1561,18 @@ ESCALATED   Classify Severity   level 1</code></pre>
                         <td>Lists the full <code>WorkItemAction</code> command execution history executed on this instance.</td>
                     </tr>
                     <tr>
-                        <td><kbd class="kbd-key">5</kbd> (Change Actor)</td>
-                        <td>Workflow main menu</td>
+                        <td><kbd class="kbd-key">d</kbd> (Data)</td>
+                        <td>Instance screen</td>
+                        <td>Inspects live key-value <code>InstanceData</code> and all external service responses stored on this instance.</td>
+                    </tr>
+                    <tr>
+                        <td><kbd class="kbd-key">h</kbd> (Audit)</td>
+                        <td>Instance screen</td>
+                        <td>Inspects chronological audit events specifically logged for this instance by <code>AuditLogger</code>.</td>
+                    </tr>
+                    <tr>
+                        <td><kbd class="kbd-key">p</kbd> / <kbd class="kbd-key">5</kbd> (Change Actor)</td>
+                        <td>Main menu / Instance</td>
                         <td>Switches the active participant within the current scenario's participant roster.</td>
                     </tr>
                     <tr>
@@ -1229,7 +1581,7 @@ ESCALATED   Classify Severity   level 1</code></pre>
                         <td>Inspects active task deadlines and advances the simulated clock (in hours) to trigger SLA escalations.</td>
                     </tr>
                     <tr>
-                        <td><kbd class="kbd-key">0</kbd> (Back / Exit)</td>
+                        <td><kbd class="kbd-key">0</kbd> / <kbd class="kbd-key">b</kbd> (Back / Exit)</td>
                         <td>Any menu</td>
                         <td>Returns to the previous menu or exits cleanly from the top-level industry selector.</td>
                     </tr>
@@ -1237,9 +1589,9 @@ ESCALATED   Classify Severity   level 1</code></pre>
             </table>
         </section>
 
-        <!-- SECTION 9: 30-MIN DEMO RUNBOOK -->
+        <!-- SECTION 12: 30-MIN DEMO RUNBOOK -->
         <section id="presentation-runbook">
-            <h2 class="section-title">9. 30-Minute Demo &amp; Presentation Runbook (ADKMNPT Deck)</h2>
+            <h2 class="section-title">12. 30-Minute Demo &amp; Presentation Runbook (ADKMNPT Deck)</h2>
             <p>
                 This runbook aligns directly with the presentation slide deck (<strong><code>docs/ADKMNPT.pdf</code></strong>):
             </p>
@@ -1261,7 +1613,7 @@ ESCALATED   Classify Severity   level 1</code></pre>
                     <h4>Minute 14–20: Scenario 2 Live Execution — Logistics (Slides 16–18)</h4>
                     <p><em>(Your presentation part)</em>: Demonstrate Tracking API failure with waybill <code>WB9999</code> &rarr; show automatic task escalation to <code>EscalatedState</code>. Demonstrate catastrophic rejection &rarr; show <code>DependencyMediator</code> aborting all downstream stages. Demonstrate carrier hub routing failure on unserved hub <code>Polokwane</code>.</p>
                 </div>
-                <div class="timeline-step">
+                <div class="timeline-step purple">
                     <h4>Minute 20–23: Multi-Industry Generality Demo (Healthcare, Insurance, Manufacturing)</h4>
                     <p>Briefly open Healthcare, Insurance, and Manufacturing to prove to examiners that the same engine handles 5 distinct domains from text definition files without code modifications.</p>
                 </div>
@@ -1271,14 +1623,55 @@ ESCALATED   Classify Severity   level 1</code></pre>
                 </div>
                 <div class="timeline-step gold">
                     <h4>Minute 26–30: Marker Q&amp;A &amp; Pattern Defense</h4>
-                    <p>Address examiner technical challenges using the Top 12 Defense Answers below.</p>
+                    <p>Address examiner technical challenges using the Top 15 Defense Answers below.</p>
                 </div>
             </div>
         </section>
 
-        <!-- SECTION 10: TOUGH MARKER QUESTIONS -->
+        <!-- SECTION 13: TOP MARKS SCORING STRATEGY -->
+        <section id="marks-guide">
+            <h2 class="section-title" style="color: var(--accent-orange);">13. Top Marks Scoring Strategy (Rubric Defense Guide)</h2>
+            <p>
+                To guarantee maximum marks in the final evaluation, align your presentation directly with the core criteria examiners evaluate:
+            </p>
+
+            <div class="card-grid">
+                <div class="card" style="border-left: 4px solid var(--accent-gold);">
+                    <h4 style="color: var(--accent-gold);">1. Architectural Genericity</h4>
+                    <p><strong>Examiner Check:</strong> Did you hardcode business logic into classes?</p>
+                    <p><strong>Defense:</strong> Show <code>definitions/</code> and <code>context/</code>. Demonstrate that adding Retail Returns requires ZERO recompilation of the engine. Emphasize that all 5 shipped industries execute through the exact same <code>Task</code>, <code>SubProcess</code>, and <code>DependencyMediator</code> classes.</p>
+                </div>
+                <div class="card" style="border-left: 4px solid var(--accent-purple);">
+                    <h4 style="color: var(--accent-purple);">2. GoF Pattern Density &amp; Synergy</h4>
+                    <p><strong>Examiner Check:</strong> Are design patterns shoehorned or genuinely working together?</p>
+                    <p><strong>Defense:</strong> Point to pattern synergies: <strong>Composite + Decorator</strong> (decorators wrap tasks inside subprocess trees seamlessly); <strong>State + Command + Memento</strong> (actions encapsulate state transitions and capture pre-execution snapshots); <strong>Strategy + Chain of Responsibility</strong> (ApprovalRouting encapsulates a tiered handler chain).</p>
+                </div>
+                <div class="card" style="border-left: 4px solid var(--accent-red);">
+                    <h4 style="color: var(--accent-red);">3. Failure &amp; Exception Handling</h4>
+                    <p><strong>Examiner Check:</strong> Does your workflow crash or get corrupted on errors?</p>
+                    <p><strong>Defense:</strong> Demonstrate Mode 1 (API outage &rarr; automatic escalation to <code>EscalatedState</code>) and Mode 2 (unhandled fatal rejection &rarr; cascading downstream branch pruning). Point out that the engine never throws unhandled C++ exceptions or leaves orphaned tasks.</p>
+                </div>
+                <div class="card" style="border-left: 4px solid var(--accent-green);">
+                    <h4 style="color: var(--accent-green);">4. Memory Safety &amp; C++11 Concurrency</h4>
+                    <p><strong>Examiner Check:</strong> Do you have memory leaks or unsafe raw pointers?</p>
+                    <p><strong>Defense:</strong> Show RAII in <code>SubProcess</code> (recursive destructor deletes all children); <code>WorkItemDecorator</code> takes ownership of inner wrapped item; <code>EventDispatcher</code> is a thread-safe Meyers' Singleton (zero heap allocation); <code>valgrind --leak-check=full</code> reports clean memory.</p>
+                </div>
+                <div class="card" style="border-left: 4px solid var(--accent-blue);">
+                    <h4 style="color: var(--accent-blue);">5. Testing &amp; Verification</h4>
+                    <p><strong>Examiner Check:</strong> Is your test suite superficial or rigorous?</p>
+                    <p><strong>Defense:</strong> Run <code>./tividy_tests</code>: 172 test cases, 1694 assertions covering pattern contracts, definition validation, scenario rosters, multi-tier approvals, decorator transparency, and runtime integration.</p>
+                </div>
+                <div class="card" style="border-left: 4px solid var(--accent-teal);">
+                    <h4 style="color: var(--accent-teal);">6. DevOps &amp; Engineering Maturity</h4>
+                    <p><strong>Examiner Check:</strong> Is it reproducible across environments?</p>
+                    <p><strong>Defense:</strong> Highlight <code>Dockerfile</code> and <code>docker-compose.yml</code> for isolated execution, GitHub CI/CD workflow running test suites before tagging releases, and comprehensive Doxygen API documentation.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 14: TOUGH MARKER QUESTIONS -->
         <section id="tough-questions">
-            <h2 class="section-title">10. Tough Marker Q&amp;A (Top 12 Questions &amp; Defense Answers)</h2>
+            <h2 class="section-title">14. Tough Marker Q&amp;A (Top 15 Questions &amp; Defense Answers)</h2>
 
             <div class="qa-box">
                 <div class="qa-header">Q1: Can undoLast() undo an external bank payment EFT or courier dispatch?</div>
@@ -1330,9 +1723,9 @@ ESCALATED   Classify Severity   level 1</code></pre>
             </div>
 
             <div class="qa-box">
-                <div class="qa-header">Q8: Why did you separate .definition from .scenario files?</div>
+                <div class="qa-header">Q8: Why did you separate .definition from .context files?</div>
                 <div class="qa-body">
-                    <p class="quote">"Separation of Concerns. The .definition file represents the pure, reusable business process topology (WfMC process model). The .scenario file represents the organizational binding: human participant rosters, user credentials, and interactive UI prompt configurations. This allows the exact same process definition to be deployed across different branches or departments with completely different human rosters without touching the workflow definition."</p>
+                    <p class="quote">"Separation of Concerns. The .definition file represents the pure, reusable business process topology (WfMC process model). The .context file represents the organizational binding: human participant rosters, user credentials, and interactive UI prompt configurations. This allows the exact same process definition to be deployed across different branches or departments with completely different human rosters without touching the workflow definition."</p>
                 </div>
             </div>
 
@@ -1363,11 +1756,32 @@ ESCALATED   Classify Severity   level 1</code></pre>
                     <p class="quote">"Our repository contains 5 completely distinct industries: University Admissions (Education), Shipment Exceptions (Logistics), Hospital Admissions (Healthcare), Insurance Claims (Insurance), and Production Orders (Manufacturing). All 5 load, validate, route, execute, escalate, and terminate on the exact same compiled C++ engine binary without a single hardcoded `if-industry` branch."</p>
                 </div>
             </div>
+
+            <div class="qa-box">
+                <div class="qa-header">Q13: Why did you keep disallowed actions selectable in the TUI?</div>
+                <div class="qa-body">
+                    <p class="quote">"Because hiding disallowed buttons masks whether business logic is enforced by the UI or the engine. By keeping disallowed actions selectable, users and markers can actively attempt illegal operations (such as completing an unstarted task or delegating to an unqualified role) to witness the engine's polymorphic WorkItemState and RoutingStrategy explicitly refuse the action and explain why."</p>
+                </div>
+            </div>
+
+            <div class="qa-box">
+                <div class="qa-header">Q14: How does DepthFirstWorkItemIterator protect against null pointers or circular references?</div>
+                <div class="qa-body">
+                    <p class="quote">"DepthFirstWorkItemIterator traverses the tree pre-order using an explicit std::stack rather than recursion. In our latest patch, it explicitly guards child pointers before pushing them onto the pending stack. WorkItem trees are acyclic directed trees enforced at build-time by FileWorkflowDefinitionBuilder, guaranteeing deterministic, termination-safe iteration."</p>
+                </div>
+            </div>
+
+            <div class="qa-box">
+                <div class="qa-header">Q15: Why are participant rosters isolated per context?</div>
+                <div class="qa-body">
+                    <p class="quote">"In enterprise architectures, different departments or companies have independent directories. By isolating rosters per context in ParticipantDirectory, participant IDs (like 'clerk1') and role names can exist across different scenarios without collisions, while preventing unauthorized cross-department task assignments."</p>
+                </div>
+            </div>
         </section>
 
-        <!-- SECTION 11: TEAM ROLES -->
+        <!-- SECTION 15: TEAM ROLES -->
         <section id="team-roles">
-            <h2 class="section-title">11. Team Contribution Roster (Team ADKMNPT)</h2>
+            <h2 class="section-title">15. Team Contribution Roster (Team ADKMNPT)</h2>
             <p>Team ADKMNPT consists of 7 contributors, each taking primary architectural ownership of specific GoF pattern clusters and system components:</p>
 
             <table>
@@ -1384,7 +1798,7 @@ ESCALATED   Classify Severity   level 1</code></pre>
                         <td><strong>Patrick Simuyemba</strong></td>
                         <td>u25632354</td>
                         <td><code>patrickkaleo</code></td>
-                        <td>Builder pattern (Director, Builders, Definition Parser), 5 Industry definitions &amp; scenarios, Docker setup, CI/CD pipeline, Memory management.</td>
+                        <td>Builder pattern (Director, Builders, Definition Parser), 5 Industry definitions &amp; context files, Docker setup, CI/CD pipeline, Memory management.</td>
                     </tr>
                     <tr>
                         <td><strong>Angela Ramaboea</strong></td>
@@ -1426,9 +1840,9 @@ ESCALATED   Classify Severity   level 1</code></pre>
             </table>
         </section>
 
-        <!-- SECTION 12: VERIFICATION & SUBMISSION ARTIFACTS -->
+        <!-- SECTION 16: VERIFICATION & SUBMISSION ARTIFACTS -->
         <section id="verification">
-            <h2 class="section-title">12. Project Verification &amp; Submission Structure</h2>
+            <h2 class="section-title">16. Project Verification &amp; Submission Structure</h2>
             <p>
                 The repository is organized according to professional C++ software engineering standards and the COS 214 Practical 6 submission requirements:
             </p>
